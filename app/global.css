@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --scrollbar-thumb-color: #556474b6;
+  --scrollbar-track-color: transparent;
+}
+
+/* Global dark mode scrollbar styles */
+body.dark {
+  --scrollbar-thumb-color: #555555;
+  --scrollbar-track-color: transparent;
+}
+
+.react-flow__attribution a {
+  display: none;
+}
+
+* {
+  scrollbar-width: thin;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+}
+
+/* Webkit Browsers (Chrome, Safari) */
+*::-webkit-scrollbar {
+  width: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-color);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-color);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-color);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-color);
+  border-radius: 10px;
+}
+
+.highcharts-no-tooltip {
+  display: block;
+}
+
+.highcharts-button-normal {
+  display: block;
+}
+
+.highcharts-button {
+  display: block;
+}
+
+.highcharts-contextbutton {
+  display: block;
+}
+
+.highcharts-credits {
+  margin: 0 !important;
+  padding: 0% !important;
+  display: none !important;
+}
+
+.highcharts-legend {
+  margin: 0 !important;
+  padding: 0% !important;
+  display: none !important;
+}
+
+.dark .MuiInputBase-input {
+  color: white !important;
+}
+
+.dark .MuiSvgIcon-root {
+  color: white !important;
+}
+
+.MuiInputBase-input:hover {
+  border-color: none !important;
+  box-shadow: none !important;
+}
+
+.font-custom {
+  font-family: serif
+}
+
+
+.slide-up-enter {
+  @apply opacity-0 translate-y-4;
+}
+
+.slide-up-enter-active {
+  @apply opacity-100 translate-y-0 transition-all duration-300 ease-in-out;
+}
+
+.slide-up-exit {
+  @apply opacity-100 translate-y-0;
+}
+
+.slide-up-exit-active {
+  @apply opacity-0 translate-y-4 transition-all duration-300 ease-in-out;
+}
+
+@media print {
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+}
+
+.force-dropup .shadow-darkshadow {
+  top: auto !important;
+  bottom: 100% !important;
+  margin-bottom: 4px !important;
+  z-index: 9999 !important;
+}
+
+.force-dropup .shadow-darkshadow ul {
+  margin-top: 0 !important;
+  bottom: auto !important;
+  top: auto !important;
+}
