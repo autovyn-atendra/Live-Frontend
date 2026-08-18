@@ -10,6 +10,16 @@ import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import Ainput from "@/components/atoms/Input";
+import CustomSelectSearch from "@/components/atoms/Select";
+import {
+  MessageSquareText,
+  BarChart3,
+  PlayCircle,
+  Download,
+  X,
+  FileText,
+  PhoneCall,
+} from "lucide-react";
 
 
 // ============================================================
@@ -89,6 +99,59 @@ type CallHistory = {
   category?: string | null;
 };
 
+type ChatMessage = {
+  side: "left" | "right";
+  message: string;
+  time: string;
+};
+
+type CallRecord = {
+  callId: string;
+  triggeredAt: string;
+  phoneNumber: string;
+  status: string;
+  duration: string;
+  durationSec: number;
+  callChannel?: string;
+  chat?: {
+    messages: ChatMessage[];
+  };
+  summary?: string;
+  category?: string;
+  appointmentSet?: boolean;
+  appointmentDate?: string;
+  appointmentTime?: string;
+  appointmentSlot?: string;
+  transferInfo?: {
+    transferredTo: string;
+    transferStatus: string;
+    transferTime: string;
+  };
+};
+
+type CallHistoryStats = {
+  totalCalls: number;
+  completedCalls: number;
+  busyCalls: number;
+  noAnswerCalls: number;
+  failedCalls: number;
+  appointmentsSet: number;
+  totalDurationSec: number;
+};
+
+type FullCallHistoryResponse = {
+  Status: boolean;
+  Message: string;
+  vehicleInfo: {
+    Veh_Reg_No: string;
+    Cust_Name: string;
+    Cust_Mob: string;
+    Model_Name: string;
+  };
+  stats: CallHistoryStats;
+  calls: CallRecord[];
+};
+
 // ============================================================
 // UTILS
 // ============================================================
@@ -99,6 +162,76 @@ const trimOrUndef = (v: unknown) => { const s = v == null ? "" : String(v).trim(
 const showToast = (msg: string, type: "success" | "error" | "warning" | "info") =>
   Swal.mixin({ toast: true, position: "top-end", showConfirmButton: false, timer: 4000, timerProgressBar: true })
     .fire({ icon: type, title: msg });
+
+const Modal = ({
+  isOpen,
+  onClose,
+  children,
+  widthClass = "max-w-4xl",
+  zIndexClass = " z-50",
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  widthClass?: string;
+  zIndexClass?: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-black/60 p-4`}
+      onClick={onClose}
+    >
+      <div
+        className={`relative max-h-[92vh] w-full ${widthClass} overflow-hidden rounded-lg bg-white shadow-2xl dark:bg-[#111827]`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const CallStatCard = ({
+  label,
+  value,
+  color = "text-[#1F2937] dark:text-white",
+}: {
+  label: string;
+  value: string | number;
+  color?: string;
+}) => (
+  <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-2.5 text-center dark:border-[#374151] dark:bg-[#1F2937]">
+    <p className={`text-[22px] font-bold ${color}`}>{value}</p>
+    <p className="text-[14px] font-medium text-[#6B7280] dark:text-[#9CA3AF]">{label}</p>
+  </div>
+);
+
+const InsightRow = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+}) => (
+  <div className="flex flex-col gap-1 border-b border-[#E5E7EB]/40 pb-2.5 dark:border-[#374151]/40">
+    <span className="text-[15px] font-semibold text-[#6B7280] dark:text-[#9CA3AF]">
+      {label}
+    </span>
+    <span className="text-[18px] font-medium text-[#1F2937] dark:text-[#F3F4F6]">{value ?? "-"}</span>
+  </div>
+);
+
+const getCallStatusColor = (status: string | undefined) => {
+  switch (status?.toUpperCase()) {
+    case "COMPLETED": return "text-[#16A34A]";
+    case "BUSY": return "text-[#CA8A04]";
+    case "NO_ANSWER": return "text-[#6B7280]";
+    case "FAILED": return "text-[#DC2626]";
+    default: return "text-[#4B5563]";
+  }
+};
 
 // ============================================================
 // ✅ CALL HISTORY NORMALIZATION HELPERS
@@ -164,10 +297,10 @@ const extractCallRecords = (body: any): any[] => {
 // ============================================================
 const DueBadge = ({ status }: { status: DueStatus | null }) => {
   const map: Record<string, { label: string; cls: string }> = {
-    DUE_TODAY: { label: "Due Today", cls: "text-yellow border border-yellow dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700" },
-    OVERDUE: { label: "Overdue", cls: "bg-red-100 text-exit border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700" },
-    COMPLETED: { label: "Completed", cls: "bg-[#DCFCE7] text-save border border-green-300 dark:bg-[#14532D]/30 dark:text-[#86EFAC] dark:border-green-700" },
-    UPCOMING: { label: "Upcoming", cls: "bg-[#DBEAFE] text-primary border border-blue-300 dark:bg-[#14532D]/30 dark:text-blue-300 dark:border-blue-700" },
+    DUE_TODAY: { label: "Due Today", cls: "text-[#CA8A04] border border-[#EAB308] dark:bg-[#713F12]/30 dark:text-[#FDE047] dark:border-[#A16207]" },
+    OVERDUE: { label: "Overdue", cls: "bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] dark:bg-[#7F1D1D]/30 dark:text-[#FCA5A5] dark:border-[#B91C1C]" },
+    COMPLETED: { label: "Completed", cls: "bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] dark:bg-[#14532D]/30 dark:text-[#86EFAC] dark:border-[#15803D]" },
+    UPCOMING: { label: "Upcoming", cls: "bg-[#DBEAFE] text-[#1D4ED8] border border-[#93C5FD] dark:bg-[#14532D]/30 dark:text-[#93C5FD] dark:border-[#1D4ED8]" },
     UNKNOWN: { label: "Unknown", cls: "bg-gray-100 text-gray border border-gray-300 dark:bg-[#1F2937] dark:text-[#9CA3AF] dark:border-gray-600" },
   };
   const s = status ? (map[status] ?? map.UNKNOWN) : map.UNKNOWN;
@@ -176,28 +309,28 @@ const DueBadge = ({ status }: { status: DueStatus | null }) => {
 
 const ReminderStatusBadge = ({ status }: { status: string | null }) => {
   const map: Record<string, string> = {
-    PENDING: "bg-orange-100 text-yellow border border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",
-    SENT: "bg-[#DBEAFE] text-primary border border-blue-300 dark:bg-[#14532D]/30 dark:text-blue-300 dark:border-blue-700",
-    FOLLOWUP: "bg-purple-100 text-[#7E22CE] border border-purple-300 dark:bg-[#581C87]/30 dark:text-[#D8B4FE] dark:border-purple-700",
-    APPOINTMENT_BOOKED: "bg-cyan-100 text-cyan-700 border border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-700",
+    PENDING: "bg-[#FFEDD5] text-[#CA8A04] border border-[#FDBA74] dark:bg-[#7C2D12]/30 dark:text-[#FDBA74] dark:border-[#C2410C]",
+    SENT: "bg-[#DBEAFE] text-[#1D4ED8] border border-[#93C5FD] dark:bg-[#14532D]/30 dark:text-[#93C5FD] dark:border-[#1D4ED8]",
+    FOLLOWUP: "bg-[#F3E8FF] text-[#7E22CE] border border-[#D8B4FE] dark:bg-[#581C87]/30 dark:text-[#D8B4FE] dark:border-[#7E22CE]",
+    APPOINTMENT_BOOKED: "bg-[#CFFAFE] text-[#0E7490] border border-[#67E8F9] dark:bg-[#164E63]/30 dark:text-[#67E8F9] dark:border-[#0E7490]",
     CLOSED: "bg-gray-100 text-gray border border-gray-300 dark:bg-[#1F2937] dark:text-[#9CA3AF] dark:border-gray-600",
-    FAILED: "bg-red-100 text-exit border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700",
+    FAILED: "bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] dark:bg-[#7F1D1D]/30 dark:text-[#FCA5A5] dark:border-[#B91C1C]",
   };
   const cls = status ? (map[status] ?? "bg-gray-100 text-gray border border-gray-300") : "bg-gray-100 text-[#9CA3AF] border border-gray-200";
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[18px] font-semibold whitespace-nowrap ${cls}`}>{status ?? "—"}</span>;
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap ${cls}`}>{status ?? "—"}</span>;
 };
 
 // ✅ Call Status Badge
 const CallStatusBadge = ({ status }: { status: string | null | undefined }) => {
   const map: Record<string, string> = {
-    COMPLETED: "bg-[#DCFCE7] text-green-700 border border-green-300 dark:bg-[#14532D]/30 dark:text-green-300",
-    INITIATED: "bg-[#DBEAFE] text-blue-700 border border-blue-300 dark:bg-[#1E3A8A]/30 dark:text-blue-300",
-    FAILED: "bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-300",
+    COMPLETED: "bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] dark:bg-[#14532D]/30 dark:text-[#86EFAC]",
+    INITIATED: "bg-[#DBEAFE] text-[#1D4ED8] border border-[#93C5FD] dark:bg-[#1E3A8A]/30 dark:text-[#93C5FD]",
+    FAILED: "bg-[#FEE2E2] text-[#B91C1C] border border-[#FCA5A5] dark:bg-[#7F1D1D]/30 dark:text-[#FCA5A5]",
     NO_ANSWER: "bg-gray-100 text-gray-600 border border-gray-300 dark:bg-[#1F2937] dark:text-gray-300",
-    IN_PROGRESS: "bg-yellow-100 text-yellow-700 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300",
+    IN_PROGRESS: "bg-[#FEF3C7] text-[#B45309] border border-[#FCD34D] dark:bg-[#78350F]/30 dark:text-[#FDE68A]",
   };
   const cls = status ? (map[status] ?? "bg-gray-100 text-gray-600 border border-gray-300") : "bg-gray-100 text-[#9CA3AF] border border-gray-200";
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[16px] font-semibold whitespace-nowrap ${cls}`}>{status ?? "—"}</span>;
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap ${cls}`}>{status ?? "—"}</span>;
 };
 
 // ============================================================
@@ -206,7 +339,7 @@ const CallStatusBadge = ({ status }: { status: string | null | undefined }) => {
 const InfoRow = ({ label, value, highlight, valueClass }: { label: string; value: React.ReactNode; highlight?: boolean; valueClass?: string }) => (
   <div className="flex justify-between items-center py-2.5 border-b last:border-0 border-[#E5E7EB] dark:border-[#1E293B]">
     <span className="text-[18px] text-[#6B7280] dark:text-[#9CA3AF] min-w-[140px] shrink-0 font-medium">{label}</span>
-    <span className={`text-[18px] text-right font-semibold break-all ml-2 ${highlight ? "text-[#1D4ED8] dark:text-[#60A5FA]" : "text-[#111827] dark:text-white"} ${valueClass ?? ""}`}>{value ?? "—"}</span>
+    <span className={`text-[18px] text-center font-semibold break-all ml-2 ${highlight ? "text-[#1D4ED8] dark:text-[#60A5FA]" : "text-[#111827] dark:text-white"} ${valueClass ?? ""}`}>{value ?? "—"}</span>
   </div>
 );
 
@@ -230,19 +363,19 @@ const ActionBtn = ({ label, active, color, onClick, disabled }: { label: string;
     },
     amber: {
       base: "bg-white text-[#D97706] border border-[#FCD34D] hover:border-[#D97706] dark:bg-transparent dark:text-[#FBBF24] dark:border-[#92400E]",
-      act: "bg-[#FFFBEB] text-[#B45309] text-[20px] border-2 border-[#D97706] dark:bg-[#78350F]/20 dark:border-amber-500",
+      act: "bg-[#FFFBEB] text-[#B45309] text-[20px] border-2 border-[#D97706] dark:bg-[#78350F]/20 dark:border-[#F59E0B]",
     },
     red: {
       base: "bg-white text-[#DC2626] border border-[#FCA5A5] hover:border-[#DC2626] dark:bg-transparent dark:text-[#F87171] dark:border-[#991B1B]",
-      act: "bg-[#FEF2F2] text-[#DC2626] text-[20px] border-2 border-[#DC2626] dark:bg-[#7F1D1D]/20 dark:border-red-500",
+      act: "bg-[#FEF2F2] text-[#DC2626] text-[20px] border-2 border-[#DC2626] dark:bg-[#7F1D1D]/20 dark:border-[#EF4444]",
     },
     green: {
       base: "bg-white text-[#16A34A] border border-[#86EFAC] hover:border-[#16A34A] dark:bg-transparent dark:text-[#4ADE80] dark:border-[#166534]",
-      act: "bg-[#F0FDF4] text-[#15803D] text-[20px] border-2 border-[#16A34A] dark:bg-[#14532D]/20 dark:border-green-500",
+      act: "bg-[#F0FDF4] text-[#15803D] text-[20px] border-2 border-[#16A34A] dark:bg-[#14532D]/20 dark:border-[#22C55E]",
     },
     purple: {
-      base: "bg-white text-[#7C3AED] border border-[#C4B5FD] hover:border-[#7C3AED] dark:bg-transparent dark:text-[#A78BFA] dark:border-purple-800",
-      act: "bg-[#FAF5FF] text-[#7C3AED] text-[20px] border-2 border-[#7C3AED] dark:bg-[#581C87]/20 dark:border-purple-500",
+      base: "bg-white text-[#7C3AED] border border-[#C4B5FD] hover:border-[#7C3AED] dark:bg-transparent dark:text-[#A78BFA] dark:border-[#6B21A8]",
+      act: "bg-[#FAF5FF] text-[#7C3AED] text-[20px] border-2 border-[#7C3AED] dark:bg-[#581C87]/20 dark:border-[#A855F7]",
     },
   };
   const c = cfg[color] ?? cfg.gray;
@@ -260,7 +393,7 @@ const ActionBtn = ({ label, active, color, onClick, disabled }: { label: string;
 
 const Field = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
   <div className="flex flex-col gap-1">
-    <label className="text-[14px] font-semibold text-[#374151] dark:text-[#D1D5DB]">
+    <label className="text-lg font-semibold text-[#374151] dark:text-[#D1D5DB]">
       {label}{required && <span className="text-[#EF4444] ml-0.5">*</span>}
     </label>
     {children}
@@ -308,7 +441,7 @@ const StatCard = ({ label, children, color }: { label: string; children: React.R
   };
   return (
     <div className={`rounded-xl border p-4 text-center ${colors[color] ?? colors.gray}`}>
-      <div className="text-[25px] font-semibold text-[#9CA3AF] dark:text-[#6B7280] mb-2 uppercase tracking-[0.1em]">{label}</div>
+      <div className="text-xl font-semibold text-[#9CA3AF] dark:text-[#6B7280] mb-2  tracking-[0.1em]">{label}</div>
       {children}
     </div>
   );
@@ -322,21 +455,27 @@ const NoAnswerForm = ({ onSubmit, loading }: { onSubmit: (d: string, t: string, 
   const [time, setTime] = useState("");
   const [remark, setRemark] = useState("No answer – auto follow-up scheduled");
   return (
-    <div className="rounded-xl border border-[#E5E7EB] dark:border-[#374151] bg-white dark:bg-[#111827]/60 overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#F9FAFB] dark:bg-[#1F2937]/60 border-b border-[#E5E7EB] dark:border-[#374151]">
+    <div className="rounded-xl border border-[#E5E7EB] dark:border-[#374151] bg-white dark:bg-[#111827]/60 overflow-visible relative z-30">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#F9FAFB] dark:bg-[#1F2937]/60 border-b border-[#E5E7EB] dark:border-[#374151] rounded-t-xl">
         <div className="w-9 h-9 rounded-full bg-[#F3F4F6] dark:bg-[#374151] flex items-center justify-center text-base">📵</div>
         <div>
           <p className="text-[18px] font-bold text-[#111827] dark:text-white">No Answer</p>
           <p className="text-[16px] text-[#6B7280] dark:text-[#9CA3AF]">Schedule next follow-up automatically.</p>
         </div>
       </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Ainput title="Next Follow-up Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
-        <Ainput title="Preferred Time" type="time" name="time" labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={time} handleInputChange={(_, v) => setTime(v)} onInput={() => { }} redlabel="" />
-        <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-40">
+        <div className="relative z-50">
+          <Ainput title="Next Follow-up Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
+        </div>
+        <div className="relative z-40">
+          <Ainput title="Preferred Time" type="time" name="time" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={time} handleInputChange={(_, v) => setTime(v)} onInput={() => { }} redlabel="" />
+        </div>
+        <div className="relative z-30">
+          <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+        </div>
       </div>
       <div className="px-4 pb-4">
         <Button variant="save" onClick={() => onSubmit(date, time, remark)} disabled={loading}>
@@ -352,21 +491,27 @@ const CallLaterForm = ({ onSubmit, loading }: { onSubmit: (d: string, t: string,
   const [time, setTime] = useState("16:00");
   const [remark, setRemark] = useState("Customer asked to call back");
   return (
-    <div className="rounded-xl border border-[#BFDBFE] dark:border-[#1E40AF]/50 bg-white dark:bg-[#111827]/60 overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#EFF6FF] dark:bg-[#1E3A8A]/20 border-b border-[#BFDBFE] dark:border-[#1E40AF]/50">
+    <div className="rounded-xl border border-[#BFDBFE] dark:border-[#1E40AF]/50 bg-white dark:bg-[#111827]/60 overflow-visible relative z-30">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#EFF6FF] dark:bg-[#1E3A8A]/20 border-b border-[#BFDBFE] dark:border-[#1E40AF]/50 rounded-t-xl">
         <div className="w-9 h-9 rounded-full bg-[#BFDBFE] dark:bg-[#1E3A8A]/50 flex items-center justify-center text-base">📞</div>
         <div>
           <p className="text-[18px] font-bold text-[#1D4ED8] dark:text-[#60A5FA]">Call Later</p>
           <p className="text-[14px] text-[#3B82F6] dark:text-[#93C5FD]">Customer requested callback — set date & time.</p>
         </div>
       </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Ainput title="Call Back Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
-        <Ainput title="Call Back Time" type="time" name="time" labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={time} handleInputChange={(_, v) => setTime(v)} onInput={() => { }} redlabel="" />
-        <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-40">
+        <div className="relative z-50">
+          <Ainput title="Call Back Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
+        </div>
+        <div className="relative z-40">
+          <Ainput title="Call Back Time" type="time" name="time" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={time} handleInputChange={(_, v) => setTime(v)} onInput={() => { }} redlabel="" />
+        </div>
+        <div className="relative z-30">
+          <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+        </div>
       </div>
       <div className="px-4 pb-4">
         <Button variant="save" onClick={() => onSubmit(date, time, remark)} disabled={loading}>
@@ -383,28 +528,41 @@ const AppointmentForm = ({ onSubmit, loading }: { onSubmit: (d: string, t: strin
   const [status, setStatus] = useState("CONFIRMED");
   const [remark, setRemark] = useState("");
   return (
-    <div className="rounded-xl border border-[#FDE68A] dark:border-[#92400E]/50 bg-white dark:bg-[#111827]/60 overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#FFFBEB] dark:bg-[#78350F]/20 border-b border-[#FDE68A] dark:border-[#92400E]/50">
+    <div className="rounded-xl border border-[#FDE68A] dark:border-[#92400E]/50 bg-white dark:bg-[#111827]/60 overflow-visible relative z-30">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#FFFBEB] dark:bg-[#78350F]/20 border-b border-[#FDE68A] dark:border-[#92400E]/50 rounded-t-xl">
         <div className="w-9 h-9 rounded-full bg-[#FDE68A] dark:bg-[#78350F]/50 flex items-center justify-center text-base">📅</div>
         <div>
           <p className="text-[18px] font-bold text-[#D97706] dark:text-[#FBBF24]">Book Appointment</p>
           <p className="text-[14px] text-[#B45309] dark:text-amber-400/70">Set date, time and confirm the appointment.</p>
         </div>
       </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Ainput title="Appointment Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
-        <Ainput title="Appointment Time" type="time" name="time" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={time} handleInputChange={(_, v) => setTime(v)} onInput={() => { }} />
-        <Field label="Status">
-          <select className={selectCls} value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="CONFIRMED">CONFIRMED</option>
-            <option value="PENDING">PENDING</option>
-            <option value="CANCELLED">CANCELLED</option>
-          </select>
-        </Field>
-        <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-40">
+        <div className="relative z-50">
+          <Ainput title="Appointment Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
+        </div>
+        <div className="relative z-40">
+          <Ainput title="Appointment Time" type="time" name="time" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={time} handleInputChange={(_, v) => setTime(v)} onInput={() => { }} />
+        </div>
+        <div className="relative z-30">
+          <CustomSelectSearch
+            title="Status"
+            name="status"
+            selectedValue={status}
+            handleInputChange={(_, val) => setStatus(val)}
+            options={[
+              { label: "CONFIRMED", value: "CONFIRMED" },
+              { label: "PENDING", value: "PENDING" },
+              { label: "CANCELLED", value: "CANCELLED" },
+            ]}
+            labelClass="text-[18px]"
+          />
+        </div>
+        <div className="relative z-20">
+          <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+        </div>
       </div>
       <div className="px-4 pb-4">
         <Button variant="save" onClick={() => onSubmit(date, time, status, remark)} disabled={loading}>
@@ -420,33 +578,52 @@ const CloseForm = ({ onSubmit, loading }: { onSubmit: (cs: string, cr: string, r
   const [resp, setResp] = useState("NOT_INTERESTED");
   const [remark, setRemark] = useState("");
   return (
-    <div className="rounded-xl border border-[#FECACA] dark:border-[#991B1B]/50 bg-white dark:bg-[#111827]/60 overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#FEF2F2] dark:bg-[#7F1D1D]/20 border-b border-[#FECACA] dark:border-[#991B1B]/50">
+    <div className="rounded-xl border border-[#FECACA] dark:border-[#991B1B]/50 bg-white dark:bg-[#111827]/60 overflow-visible relative z-30">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#FEF2F2] dark:bg-[#7F1D1D]/20 border-b border-[#FECACA] dark:border-[#991B1B]/50 rounded-t-xl">
         <div className="w-9 h-9 rounded-full bg-[#FECACA] dark:bg-[#7F1D1D]/50 flex items-center justify-center text-base">❌</div>
         <div>
           <p className="text-[18px] font-bold text-[#DC2626] dark:text-[#F87171]">Close Reminder</p>
           <p className="text-[14px] text-[#EF4444] dark:text-red-400/70">Permanently close this reminder — reason required.</p>
         </div>
       </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Field label="Call Status" required>
-          <select className={selectCls} value={callStatus} onChange={e => setCallStatus(e.target.value)}>
-            <option value="CONNECTED">CONNECTED</option>
-            <option value="NO_ANSWER">NO ANSWER</option>
-            <option value="WRONG_NUMBER">WRONG NUMBER</option>
-            <option value="DND">DND</option>
-            <option value="NOT_REACHABLE">NOT REACHABLE</option>
-          </select>
-        </Field>
-        <Field label="Customer Response" required>
-          <select className={selectCls} value={resp} onChange={e => setResp(e.target.value)}>
-            <option value="NOT_INTERESTED">NOT INTERESTED</option>
-            <option value="ALREADY_DONE_OUTSIDE">ALREADY DONE OUTSIDE</option>
-            <option value="AGREED">AGREED</option>
-            <option value="CALL_LATER">CALL LATER</option>
-          </select>
-        </Field>
-        <Field label="Remark"><input type="text" className={inputCls} value={remark} onChange={e => setRemark(e.target.value)} placeholder="Optional" /></Field>
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-40">
+        <div className="relative z-50">
+          <CustomSelectSearch
+            title="Call Status"
+            name="callStatus"
+            selectedValue={callStatus}
+            handleInputChange={(_, val) => setCallStatus(val)}
+            options={[
+              { label: "CONNECTED", value: "CONNECTED" },
+              { label: "NO ANSWER", value: "NO_ANSWER" },
+              { label: "WRONG NUMBER", value: "WRONG_NUMBER" },
+              { label: "DND", value: "DND" },
+              { label: "NOT REACHABLE", value: "NOT_REACHABLE" },
+            ]}
+            redlabel="*"
+            labelClass="text-[18px]"
+          />
+        </div>
+        <div className="relative z-40">
+          <CustomSelectSearch
+            title="Customer Response"
+            name="resp"
+            selectedValue={resp}
+            handleInputChange={(_, val) => setResp(val)}
+            options={[
+              { label: "NOT INTERESTED", value: "NOT_INTERESTED" },
+              { label: "ALREADY DONE OUTSIDE", value: "ALREADY_DONE_OUTSIDE" },
+              { label: "AGREED", value: "AGREED" },
+              { label: "CALL LATER", value: "CALL_LATER" },
+            ]}
+            redlabel="*"
+            labelClass="text-[18px]"
+          />
+        </div>
+        <div className="relative z-30">
+          <Ainput title="Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+        </div>
       </div>
       <div className="px-4 pb-4">
         <Button variant="print" onClick={() => onSubmit(callStatus, resp, remark)} disabled={loading}>
@@ -462,21 +639,27 @@ const CompleteForm = ({ onSubmit, loading, lastKM }: { onSubmit: (d: string, km:
   const [km, setKm] = useState("");
   const [remark, setRemark] = useState("");
   return (
-    <div className="rounded-xl border border-[#86EFAC] dark:border-[#14532D]/50 bg-white dark:bg-[#111827]/60 overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#F0FDF4] dark:bg-[#14532D]/20 border-b border-[#86EFAC] dark:border-[#14532D]/50">
+    <div className="rounded-xl border border-[#86EFAC] dark:border-[#14532D]/50 bg-white dark:bg-[#111827]/60 overflow-visible relative z-30">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#F0FDF4] dark:bg-[#14532D]/20 border-b border-[#86EFAC] dark:border-[#14532D]/50 rounded-t-xl">
         <div className="w-9 h-9 rounded-full bg-[#86EFAC] dark:bg-[#14532D]/50 flex items-center justify-center text-base">✅</div>
         <div>
           <p className="text-[18px] font-bold text-[#15803D] dark:text-[#4ADE80]">Complete Service</p>
           {lastKM != null && <p className="text-[14px] text-[#16A34A] dark:text-green-400/70">Last KM: {fmtNum(lastKM)} — enter current KM.</p>}
         </div>
       </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Ainput title="Service Completed Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
-        <Ainput title="Completed KM" type="number" name="km" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={km} handleInputChange={(_, v) => setKm(v)} onInput={() => { }} />
-        <Ainput title="Service Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
-          value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-40">
+        <div className="relative z-50">
+          <Ainput title="Service Completed Date" type="date" name="date" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={date} handleInputChange={(_, v) => setDate(v)} onInput={() => { }} />
+        </div>
+        <div className="relative z-40">
+          <Ainput title="Completed KM" type="number" name="km" redlabel="*" required labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={km} handleInputChange={(_, v) => setKm(v)} onInput={() => { }} />
+        </div>
+        <div className="relative z-30">
+          <Ainput title="Service Remark" type="text" name="remark" labelClass="text-[18px]" className="!h-10 !text-[18px]"
+            value={remark} handleInputChange={(_, v) => setRemark(v)} onInput={() => { }} redlabel="" />
+        </div>
       </div>
       <div className="px-4 pb-4">
         <Button variant="save" onClick={() => onSubmit(date, Number(km), remark)} disabled={loading}>
@@ -698,7 +881,7 @@ const AICallTab = ({
           align-items: center;
           gap: 6px;
         ">
-          🤖 An AI agent will call this customer right now.
+          🤖 An AI agent will call this customer center now.
         </div>
       </div>
     `,
@@ -1081,7 +1264,7 @@ const AICallTab = ({
                       </span> */}
                       <span className="text-[18px] text-[#6B7280] dark:text-[#9CA3AF]">📱 {call.phoneNumber}</span>
                       {/* {call.category && (
-                        <span className="text-[16px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF5FF] dark:bg-[#581C87]/20 text-purple-600 dark:text-[#D8B4FE] border border-purple-200 dark:border-purple-800">
+                        <span className="text-[16px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF5FF] dark:bg-[#581C87]/20 text-[#9333EA] dark:text-[#D8B4FE] border border-[#E9D5FF] dark:border-[#6B21A8]">
                           🏷️ {call.category}
                         </span>
                       )} */}
@@ -1094,14 +1277,14 @@ const AICallTab = ({
                         <Button
                           onClick={() => setScriptOpen(scriptOpen === key ? null : key)}
                           variant="outline"
-                        // className="flex items-center gap-1 px-2.5 py-1 text-[16px] font-semibold rounded-lg bg-purple-100 dark:bg-[#581C87]/30 text-[#7E22CE] dark:text-[#D8B4FE] border border-purple-200 dark:border-purple-800 hover:bg-purple-200 dark:hover:bg-[#581C87]/50 transition-colors"
+                        // className="flex items-center gap-1 px-2.5 py-1 text-[16px] font-semibold rounded-lg bg-[#F3E8FF] dark:bg-[#581C87]/30 text-[#7E22CE] dark:text-[#D8B4FE] border border-[#E9D5FF] dark:border-[#6B21A8] hover:bg-[#E9D5FF] dark:hover:bg-[#581C87]/50 transition-colors"
                         >
                           📜 {scriptOpen === key ? "Hide" : "View"} Script
                         </Button>
                       )}
                       {call.recordingUrl && (
                         <a href={call.recordingUrl} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 px-2.5 py-1 text-[16px] font-semibold rounded-lg bg-[#DCFCE7] dark:bg-[#14532D]/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 hover:bg-green-200 transition-colors">
+                          className="flex items-center gap-1 px-2.5 py-1 text-[16px] font-semibold rounded-lg bg-[#DCFCE7] dark:bg-[#14532D]/30 text-[#15803D] dark:text-[#86EFAC] border border-[#BBF7D0] dark:border-[#166534] hover:bg-[#BBF7D0] transition-colors">
                           🎙️ Recording
                         </a>
                       )}
@@ -1116,7 +1299,7 @@ const AICallTab = ({
 
                   {/* ✅ Transcript / Script Viewer */}
                   {scriptOpen === key && hasTranscript && (
-                    <div className="border-t border-purple-100 dark:border-purple-900/40 bg-[#FAF5FF] dark:bg-[#581C87]/10 px-4 py-4">
+                    <div className="border-t border-[#F3E8FF] dark:border-[#581C87]/40 bg-[#FAF5FF] dark:bg-[#581C87]/10 px-4 py-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <span className="text-[16px]">📜</span>
@@ -1132,7 +1315,7 @@ const AICallTab = ({
                           📋 Copy
                         </button>
                       </div>
-                      <div className="rounded-lg bg-white dark:bg-[#111827] border border-purple-200 dark:border-purple-800 p-3">
+                      <div className="rounded-lg bg-white dark:bg-[#111827] border border-[#E9D5FF] dark:border-[#6B21A8] p-3">
                         <TranscriptViewer turns={call.transcript as TranscriptTurn[]} />
                       </div>
                     </div>
@@ -1156,6 +1339,7 @@ const DetailModal = ({
   detail, detailLoading, activeAction, actionLoading,
   onClose, onSetAction, onNoAnswer, onCallLater,
   onAppointment, onClose2, onComplete, headers,
+  onOpenCallHistory,
 }: {
   detail: ReminderRow | null;
   detailLoading: boolean;
@@ -1169,10 +1353,10 @@ const DetailModal = ({
   onClose2: (cs: string, cr: string, r: string) => void;
   onComplete: (d: string, km: number, r: string) => void;
   headers: Record<string, string>;
+  onOpenCallHistory?: (vehNo: string) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>("info");
   const isCompleted = detail?.Service_Status === "COMPLETED";
-  const router = useRouter();
 
   useEffect(() => {
     setActiveTab("info");
@@ -1189,13 +1373,7 @@ const DetailModal = ({
 
   const handleAllHistoryClick = () => {
     if (!detail?.Veh_Reg_No) return;
-
-    // Vehicle number ko query param ke sath naye page par bhejo
-    router.push(
-      `/autovyn/CRM/customer_vehicle/reminder_history?vehicleNo=${encodeURIComponent(
-        detail.Veh_Reg_No
-      )}`
-    );
+    onOpenCallHistory?.(detail.Veh_Reg_No);
   };
 
   const barColor = isCompleted
@@ -1531,6 +1709,170 @@ const ServiceRemindersPage = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [activeAction, setActiveAction] = useState<ActionType>("NONE");
 
+  // ---------------- Call History Modal States ----------------
+  const [isCallHistoryOpen, setIsCallHistoryOpen] = useState(false);
+  const [isLoadingCallHistory, setIsLoadingCallHistory] = useState(false);
+  const [callHistoryData, setCallHistoryData] = useState<FullCallHistoryResponse | null>(null);
+  const [callHistoryPage, setCallHistoryPage] = useState(1);
+  const callHistoryPageSize = 10;
+
+  // ---------------- Transcript Modal States ----------------
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const [selectedCall, setSelectedCall] = useState<CallRecord | null>(null);
+
+  // ---------------- Insights Modal States ----------------
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+
+  // ---------------- Recording Modal States ----------------
+  const [playingCallId, setPlayingCallId] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
+  const [isLoadingRecording, setIsLoadingRecording] = useState(false);
+
+  const fetchCallHistoryByVehicle = async (vehicleNumber: string) => {
+    if (!vehicleNumber) return;
+    try {
+      setIsLoadingCallHistory(true);
+      setIsCallHistoryOpen(true);
+      setCallHistoryPage(1);
+
+      const response = await axios.post(
+        `${BASE_URL}/Crm/call-history`,
+        { vehicle_number: vehicleNumber },
+        {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code,
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data?.Status) {
+        setCallHistoryData(response.data);
+      } else {
+        showToast("Failed to fetch call history", "error");
+        setCallHistoryData(null);
+      }
+    } catch (err: any) {
+      console.error("Call history error:", err);
+      showToast(err?.response?.data?.message || err?.message || "Error fetching call history", "error");
+      setCallHistoryData(null);
+    } finally {
+      setIsLoadingCallHistory(false);
+    }
+  };
+
+  const closeCallHistoryModal = () => {
+    setIsCallHistoryOpen(false);
+    setCallHistoryData(null);
+    setCallHistoryPage(1);
+  };
+
+  const handlePlayRecording = async (callId: string) => {
+    if (!callId) return;
+    try {
+      setPlayingCallId(callId);
+      setIsRecordingModalOpen(true);
+      setIsLoadingRecording(true);
+      setAudioUrl(null);
+
+      const response = await axios.get(
+        `${BASE_URL}/Crm/GetCallRecordings/${callId}`,
+        {
+          headers: {
+            accept: "*/*",
+            compcode: user?.Comp_Code,
+            name: user?.name,
+          },
+          responseType: "blob",
+        }
+      );
+
+      const contentType = response.headers["content-type"] || "audio/mpeg";
+      const blob = new Blob([response.data], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+    } catch (err: any) {
+      console.error("Recording fetch error:", err);
+      showToast(err?.response?.data?.message || err?.message || "Unable to fetch recording", "error");
+      setIsRecordingModalOpen(false);
+    } finally {
+      setIsLoadingRecording(false);
+    }
+  };
+
+  const closeRecordingModal = () => {
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
+    setIsRecordingModalOpen(false);
+    setAudioUrl(null);
+    setPlayingCallId(null);
+  };
+
+  const openTranscriptModal = (call: CallRecord) => {
+    setSelectedCall(call);
+    setIsTranscriptOpen(true);
+  };
+
+  const closeTranscriptModal = () => {
+    setIsTranscriptOpen(false);
+    setSelectedCall(null);
+  };
+
+  const openInsightsModal = (call: CallRecord) => {
+    setSelectedCall(call);
+    setIsInsightsOpen(true);
+  };
+
+  const closeInsightsModal = () => {
+    setIsInsightsOpen(false);
+    setSelectedCall(null);
+  };
+
+  const handleDownloadTranscript = () => {
+    if (!selectedCall?.chat?.messages?.length) return;
+
+    const formattedTranscript = selectedCall.chat.messages
+      .map(
+        (msg) =>
+          `[${msg.time}] ${msg.side === "right" ? "Agent/AI" : "Customer"}: ${msg.message}`
+      )
+      .join("\n");
+
+    const blob = new Blob([formattedTranscript], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `transcript_${selectedCall.callId}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const totalCallPages = Math.ceil(
+    (callHistoryData?.calls?.length || 0) / callHistoryPageSize
+  );
+
+  const paginatedCalls = useMemo(() => {
+    if (!callHistoryData?.calls) return [];
+    const start = (callHistoryPage - 1) * callHistoryPageSize;
+    return callHistoryData.calls.slice(start, start + callHistoryPageSize);
+  }, [callHistoryData, callHistoryPage]);
+
+  const callsShowingFrom =
+    callHistoryData?.calls?.length === 0
+      ? 0
+      : (callHistoryPage - 1) * callHistoryPageSize + 1;
+
+  const callsShowingTo = Math.min(
+    callHistoryPage * callHistoryPageSize,
+    callHistoryData?.calls?.length || 0
+  );
+
   useEffect(() => {
     const lc = (user as any)?.Loc_Code ?? (user as any)?.branch ?? "";
     setALocCode(String(lc));
@@ -1545,6 +1887,9 @@ const ServiceRemindersPage = () => {
     fromDate: trimOrUndef(aFromDate),
     toDate: trimOrUndef(aToDate),
     filterDateType: aDateFilterType, // ✅ NEW — "reminder" | "due"
+    emp_code: (user as any)?.EMPCODE || (user as any)?.emp_code || (user as any)?.user_code || (user as any)?.id || undefined,
+    emp_dms_code: (user as any)?.emp_dms_code || undefined,
+    user_code: (user as any)?.id || (user as any)?.user_code || (user as any)?.EMPCODE || undefined,
   }), [page, pageSize, aSearch, aLocCode, aDueToday, aOverdue, aFromDate, aToDate, aDateFilterType, user]);
 
   const fetchData = useCallback(async () => {
@@ -1555,6 +1900,9 @@ const ServiceRemindersPage = () => {
           accept: "application/json",
           compcode: user?.Comp_Code,
           name: user?.name,
+          user_code: (user as any)?.id || (user as any)?.user_code,
+          emp_code: (user as any)?.EMPCODE || (user as any)?.emp_code,
+          emp_dms_code: (user as any)?.emp_dms_code,
           "Content-Type": "application/json",
         }
       });
@@ -1729,16 +2077,16 @@ const ServiceRemindersPage = () => {
     { Header: "Customer", accessor: "Cust_Name" },
     { Header: "Mobile", accessor: "Cust_Mob" },
     { Header: "Model", accessor: "Model_Name" },
-    { Header: "Last Svc", accessor: "Last_Service_Date", cellAlign: "center", Cell: ({ value }: any) => <span className="text-[16px]">{fmtDate(value)}</span> },
-    { Header: "Last KM", accessor: "Last_Service_KM", cellAlign: "right", Cell: ({ value }: any) => <span className="text-[16px] font-mono">{fmtNum(value)}</span> },
-    { Header: "Rem Date", accessor: "Reminder_Date", cellAlign: "center", Cell: ({ value }: any) => <span className="text-[16px]">{fmtDate(value)}</span> },
-    { Header: "Due Date", accessor: "Final_Due_Date", cellAlign: "center", Cell: ({ value }: any) => <span className="text-[16px] font-semibold">{fmtDate(value)}</span> },
+    { Header: "Last Svc", accessor: "Last_Service_Date", cellAlign: "center", Cell: ({ value }: any) => <span className=" ">{fmtDate(value)}</span> },
+    { Header: "Last KM", accessor: "Last_Service_KM", cellAlign: "center", Cell: ({ value }: any) => <span className=" font-mono">{fmtNum(value)}</span> },
+    { Header: "Rem Date", accessor: "Reminder_Date", cellAlign: "center", Cell: ({ value }: any) => <span className="">{fmtDate(value)}</span> },
+    { Header: "Due Date", accessor: "Final_Due_Date", cellAlign: "center", Cell: ({ value }: any) => <span className=" font-semibold">{fmtDate(value)}</span> },
     {
       Header: "Days Left", accessor: "Days_Until_Due", cellAlign: "center",
-      Cell: ({ value }: any) => value == null ? <span className="text-[#9CA3AF] text-[16px]">—</span>
-        : value < 0 ? <span className="text-[#EF4444] text-[16px] font-bold">{Math.abs(value)}d late</span>
-          : value === 0 ? <span className="text-[#CA8A04] text-[16px] font-bold">Today</span>
-            : <span className="text-[#16A34A] text-[16px] font-semibold">{value}d</span>
+      Cell: ({ value }: any) => value == null ? <span className="text-[#9CA3AF] ">—</span>
+        : value < 0 ? <span className="text-[#EF4444] font-bold">{Math.abs(value)}d late</span>
+          : value === 0 ? <span className="text-[#CA8A04]  font-bold">Today</span>
+            : <span className="text-[#16A34A] font-semibold">{value}d</span>
     },
     { Header: "Due Status", accessor: "Due_Status", cellAlign: "center", Cell: ({ value }: any) => <DueBadge status={value} /> },
     { Header: "Status", accessor: "Reminder_Status", cellAlign: "center", Cell: ({ value }: any) => <ReminderStatusBadge status={value} /> },
@@ -1751,7 +2099,7 @@ const ServiceRemindersPage = () => {
     {
       Header: "Action", accessor: "action", cellAlign: "center",
       Cell: ({ row }: any) => (
-        <button className="px-3 py-1 text-[16px] font-semibold rounded-lg bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE] border border-blue-200 dark:bg-[#14532D]/20 dark:text-[#60A5FA] dark:border-blue-800 transition-colors" onClick={() => openDetail(row.original.UTD)}>View →</button>
+        <button className="px-2 py-0.5 font-semibold rounded-lg bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE] border border-blue-200 dark:bg-[#14532D]/20 dark:text-[#60A5FA] dark:border-blue-800 transition-colors" onClick={() => openDetail(row.original.UTD)}>View →</button>
       )
     },
   ], []); // eslint-disable-line
@@ -1769,7 +2117,7 @@ const ServiceRemindersPage = () => {
             <div className="flex items-center gap-3">
               <Image src="/Payrollicon/Excel_Import.png" alt="" width={25} height={25} />
               <div>
-                <h1 className="text-[16px] md:text-base font-bold uppercase text-white dark:text-[#37a9dd] tracking-wide">Service Reminders</h1>
+                <h1 className="text-[24px] md:text-[22px] font-bold uppercase text-white dark:text-[#37a9dd] tracking-wide">Service Reminder View</h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   {totalRecords > 0 && <span className="text-[18px] text-white/60">{totalRecords.toLocaleString("en-IN")} records</span>}
                   {overdueCount > 0 && <span className="text-[16px] font-bold bg-[#EF4444] text-white rounded-full px-2 py-0.5">{overdueCount} overdue</span>}
@@ -1868,6 +2216,8 @@ const ServiceRemindersPage = () => {
           onServerPageChange={(p: number) => setPage(p)}
           onServerPageSizeChange={(s: number) => { setPageSize(s); setPage(1); }}
           onRowDoubleClick={(r: ReminderRow) => openDetail(r.UTD)}
+          size='text-lg'
+
         />
       </div>
 
@@ -1880,6 +2230,8 @@ const ServiceRemindersPage = () => {
           onNoAnswer={submitNoAnswer} onCallLater={submitCallLater}
           onAppointment={submitAppointment} onClose2={submitClose}
           onComplete={submitComplete}
+          onOpenCallHistory={(vehNo) => fetchCallHistoryByVehicle(vehNo)}
+
           headers={{
             accept: "application/json",
             compcode: user?.Comp_Code,
@@ -1889,7 +2241,399 @@ const ServiceRemindersPage = () => {
         />
       )}
 
+      {/* ============================================================
+          CALL HISTORY MODAL (In-modal for All Call History)
+      ============================================================ */}
+      <Modal
+        isOpen={isCallHistoryOpen}
+        onClose={closeCallHistoryModal}
+        widthClass="max-w-7xl"
+        zIndexClass="z-[9999]"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#193A69] px-4 py-3 dark:bg-black">
+          <div>
+            <h2 className="text-[20px] font-bold text-white dark:text-[#37a9dd]">
+              {callHistoryData?.vehicleInfo?.Veh_Reg_No || "Call History"}
+            </h2>
+            <p className="text-[16px] text-[#E5E7EB] dark:text-[#9CA3AF]">
+              {callHistoryData?.vehicleInfo?.Cust_Name} •{" "}
+              {callHistoryData?.vehicleInfo?.Cust_Mob} •{" "}
+              {callHistoryData?.vehicleInfo?.Model_Name}
+            </p>
+          </div>
+          <button
+            onClick={closeCallHistoryModal}
+            className="rounded-full p-1 text-white hover:bg-white/20"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="max-h-[80vh] overflow-y-auto">
+          {isLoadingCallHistory ? (
+            <div className="flex items-center justify-center p-10">
+              <HashloaderComponent isLoading={true} />
+            </div>
+          ) : (
+            <>
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3 border-b border-[#E5E7EB] p-4 dark:border-[#374151] sm:grid-cols-3 md:grid-cols-7">
+                <CallStatCard
+                  label="Total Calls"
+                  value={callHistoryData?.stats?.totalCalls ?? 0}
+                />
+                <CallStatCard
+                  label="Completed"
+                  value={callHistoryData?.stats?.completedCalls ?? 0}
+                  color="text-[#16A34A]"
+                />
+                <CallStatCard
+                  label="Busy"
+                  value={callHistoryData?.stats?.busyCalls ?? 0}
+                  color="text-[#CA8A04]"
+                />
+                <CallStatCard
+                  label="No Answer"
+                  value={callHistoryData?.stats?.noAnswerCalls ?? 0}
+                  color="text-[#6B7280]"
+                />
+                <CallStatCard
+                  label="Failed"
+                  value={callHistoryData?.stats?.failedCalls ?? 0}
+                  color="text-[#DC2626]"
+                />
+                <CallStatCard
+                  label="Appointments"
+                  value={callHistoryData?.stats?.appointmentsSet ?? 0}
+                  color="text-[#2563EB]"
+                />
+                <CallStatCard
+                  label="Total Duration"
+                  value={`${Math.round(
+                    (callHistoryData?.stats?.totalDurationSec ?? 0) / 60
+                  )} min`}
+                />
+              </div>
+
+              {/* Calls Table */}
+              <div className="overflow-x-auto p-4">
+                <table className="w-full min-w-[900px] text-left text-[17px]">
+                  <thead>
+                    <tr className="border-b border-[#E5E7EB] text-[17px] font-bold uppercase text-[#6B7280] dark:border-[#374151] dark:text-[#9CA3AF]">
+                      <th className="px-2 py-2">Time</th>
+                      <th className="px-2 py-2">To Phone Number</th>
+                      <th className="px-2 py-2">Status</th>
+                      <th className="px-2 py-2">Duration</th>
+                      <th className="px-2 py-2">Channel</th>
+                      <th className="px-2 py-2 text-center">Recording</th>
+                      <th className="px-2 py-2 text-center">Transcript</th>
+                      <th className="px-2 py-2 text-center">Summary</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedCalls.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-2 py-6 text-center text-[#9CA3AF] text-[17px]"
+                        >
+                          No calls found
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedCalls.map((call) => (
+                        <tr
+                          key={call.callId}
+                          className="border-b border-[#E5E7EB]/50 hover:bg-[#F9FAFB] dark:border-[#374151]/50 dark:hover:bg-[#1F2937]"
+                        >
+                          <td className="px-2 py-3 text-[17px]">{call.triggeredAt || "-"}</td>
+                          <td className="px-2 py-3 text-[17px]">{call.phoneNumber || "-"}</td>
+                          <td className="px-2 py-3 text-[17px]">
+                            <span
+                              className={`flex items-center gap-1 font-semibold ${getCallStatusColor(
+                                call.status
+                              )}`}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-current" />
+                              {call.status?.toLowerCase()}
+                            </span>
+                          </td>
+                          <td className="px-2 py-3 text-[17px]">
+                            {call.duration ||
+                              (call.durationSec
+                                ? `${call.durationSec} sec`
+                                : "-")}
+                          </td>
+                          <td className="px-2 py-3 text-center">
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[13px] font-bold ${call.callChannel === "MANUAL_CALL"
+                                ? "bg-[#FFEDD5] text-[#C2410C]"
+                                : "bg-[#F3E8FF] text-[#7E22CE]"
+                                }`}
+                            >
+                              {call.callChannel === "MANUAL_CALL" ? "Manual" : "AI Call"}
+                            </span>
+                          </td>
+                          <td className="px-2 py-3 text-center">
+                            <button
+                              title="Play Recording"
+                              onClick={() => handlePlayRecording(call.callId)}
+                              className="text-[#2563EB] hover:text-[#1E40AF]"
+                            >
+                              <PlayCircle size={18} />
+                            </button>
+                          </td>
+                          <td className="px-2 py-3 text-center">
+                            <button
+                              title="View Transcript"
+                              onClick={() => openTranscriptModal(call)}
+                              disabled={!call.chat?.messages?.length}
+                              className={
+                                call.chat?.messages?.length
+                                  ? "text-[#4F46E5] hover:text-[#3730A3]"
+                                  : "cursor-not-allowed text-[#D1D5DB] dark:text-[#4B5563]"
+                              }
+                            >
+                              <MessageSquareText size={18} />
+                            </button>
+                          </td>
+                          <td className="px-2 py-3 text-center">
+                            <button
+                              title="View Insights"
+                              onClick={() => openInsightsModal(call)}
+                              className="text-[#9333EA] hover:text-[#6B21A8]"
+                            >
+                              <BarChart3 size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Pagination */}
+                {callHistoryData?.calls?.length ? (
+                  <div className="mt-4 flex items-center justify-between text-[16px] text-[#6B7280] dark:text-[#9CA3AF]">
+                    <span>
+                      Showing {callsShowingFrom} to {callsShowingTo} of{" "}
+                      {callHistoryData.calls.length} results
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={callHistoryPage <= 1}
+                        onClick={() =>
+                          setCallHistoryPage((p) => Math.max(1, p - 1))
+                        }
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={callHistoryPage >= totalCallPages}
+                        onClick={() =>
+                          setCallHistoryPage((p) =>
+                            Math.min(totalCallPages, p + 1)
+                          )
+                        }
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* TRANSCRIPT MODAL */}
+      <Modal
+        isOpen={isTranscriptOpen}
+        onClose={closeTranscriptModal}
+        widthClass="max-w-md"
+        zIndexClass="z-[999999999]"
+      >
+        <div className="flex items-center justify-between bg-[#4F46E5] px-4 py-3 text-white">
+          <h3 className="flex items-center gap-2 text-[18px] font-semibold">
+            <MessageSquareText size={20} />
+            Call Transcript
+          </h3>
+          <div className="flex items-center gap-3">
+            <button
+              title="Download Transcript"
+              onClick={handleDownloadTranscript}
+              className="hover:opacity-80"
+            >
+              <Download size={20} />
+            </button>
+            <button
+              title="Close"
+              onClick={closeTranscriptModal}
+              className="hover:opacity-80"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto bg-[#F3F4F6] p-3 dark:bg-[#1F2937]">
+          {selectedCall?.chat?.messages?.length ? (
+            selectedCall.chat.messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex ${msg.side === "right" ? "justify-end" : "justify-start"
+                  }`}
+              >
+                <div
+                  className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-[17px] shadow ${msg.side === "right"
+                    ? "bg-[#DCFCE7] text-[#1F2937] dark:bg-[#BBF7D0]"
+                    : "bg-white text-[#1F2937] dark:bg-[#374151] dark:text-[#F3F4F6]"
+                    }`}
+                >
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {msg.message}
+                  </p>
+                  <span className="mt-1 block text-right text-[13px] text-[#9CA3AF]">
+                    {msg.time}
+                  </span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="py-10 text-center text-[17px] text-[#9CA3AF]">
+              No transcript available
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      {/* INSIGHTS MODAL */}
+      <Modal
+        isOpen={isInsightsOpen}
+        onClose={closeInsightsModal}
+        widthClass="max-w-lg"
+        zIndexClass="z-[999999999]"
+      >
+        <div className="flex items-center justify-between border-b bg-[#4F46E5] text-white border-[#E5E7EB] px-4 py-3 dark:border-[#374151]">
+          <h3 className="flex items-center gap-2 text-[18px] font-bold">
+            <BarChart3 size={20} className="text-white" />
+            Call Insights
+          </h3>
+          <button onClick={closeInsightsModal} className="hover:opacity-80">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4 text-[17px]">
+          <InsightRow label="Category" value={selectedCall?.category || "-"} />
+          <InsightRow label="Summary" value={selectedCall?.summary || "-"} />
+          <InsightRow
+            label="Appointment Set"
+            value={selectedCall?.appointmentSet ? "Yes" : "No"}
+          />
+          {selectedCall?.appointmentSet && (
+            <>
+              <InsightRow
+                label="Appointment Date"
+                value={fmtDate(selectedCall?.appointmentDate)}
+              />
+              <InsightRow
+                label="Appointment Time"
+                value={selectedCall?.appointmentTime || "-"}
+              />
+              <InsightRow
+                label="Slot"
+                value={selectedCall?.appointmentSlot || "-"}
+              />
+            </>
+          )}
+          {selectedCall?.transferInfo && (
+            <>
+              <InsightRow
+                label="Transferred To"
+                value={selectedCall.transferInfo.transferredTo}
+              />
+              <InsightRow
+                label="Transfer Status"
+                value={selectedCall.transferInfo.transferStatus}
+              />
+              <InsightRow
+                label="Transfer Time"
+                value={selectedCall.transferInfo.transferTime}
+              />
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* RECORDING MODAL */}
+      <Modal
+        isOpen={isRecordingModalOpen}
+        onClose={closeRecordingModal}
+        widthClass="max-w-md"
+        zIndexClass="z-[999999999]"
+      >
+        <div className="flex items-center justify-between bg-[#2563EB] px-4 py-3 text-white">
+          <h3 className="flex items-center gap-2 text-[18px] font-semibold">
+            <PlayCircle size={20} />
+            Call Recording
+          </h3>
+          <button onClick={closeRecordingModal} className="hover:opacity-80">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex min-h-[150px] flex-col items-center justify-center gap-4 p-6">
+          {isLoadingRecording ? (
+            <div className="flex flex-col items-center gap-2">
+              <HashloaderComponent isLoading={true} />
+              <p className="text-[17px] text-[#9CA3AF]">Loading recording...</p>
+            </div>
+          ) : audioUrl ? (
+            <>
+              <audio controls autoPlay className="w-full">
+                <source src={audioUrl} type="audio/mpeg" />
+                Your browser does not support the audio element.
+              </audio>
+
+              <a
+                href={audioUrl}
+                download={`recording_${playingCallId}.mp3`}
+                className="flex items-center gap-1 text-[17px] text-[#2563EB] font-medium hover:underline"
+              >
+                <Download size={18} />
+                Download Recording
+              </a>
+            </>
+          ) : (
+            <p className="text-[17px] text-[#9CA3AF]">No recording available</p>
+          )}
+        </div>
+      </Modal>
+
       <HashloaderComponent isLoading={isLoading} />
+
+      {/* ── Global CSS override for DatePicker z-index inside Modal & Forms ── */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .react-datepicker-popper {
+            z-index: 99999 !important;
+          }
+          .react-datepicker-wrapper {
+            width: 100%;
+          }
+          .react-datepicker {
+            z-index: 99999 !important;
+          }
+        `
+      }} />
     </div>
   );
 };

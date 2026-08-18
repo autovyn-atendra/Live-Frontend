@@ -726,7 +726,7 @@ const CustomerVehicleImportPage = () => {
                   width={25}
                   height={25}
                 />
-                Customer Vehicle Excel Import
+                Service Data Import
               </h1>
             </div>
 

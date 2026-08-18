@@ -1021,7 +1021,7 @@ const DashboardPage = () => {
             iconType="help"
           />
           <MetricCard
-            label="MASTER VEH."
+            label="Active VEH."
             value={totals?.totalMasterVehiclesActive ?? 0}
             onClick={()=>(router.push("/autovyn/CRM/customer_vehicle/view"))}
             color="purple"

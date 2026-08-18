@@ -429,7 +429,6 @@ const Page = () => {
         fetchData();
     }, [fetchData]);
 
-    // Apply: copy draft -> applied, reset to page 1
     const handleApplyClick = () => {
         setAppliedSearch(search);
         setAppliedFromDate(fromDate);
@@ -438,7 +437,7 @@ const Page = () => {
     };
 
     // Reset all: clear drafts + applied, reset page & pageSize
-    const handleResetFilters = () => {
+    const handleResetFilters = async () => {
         setSearch("");
         setAppliedSearch("");
         setFromDate("");
@@ -447,7 +446,54 @@ const Page = () => {
         setAppliedToDate("");
         setPage(1);
         setPageSize(10);
+
+        if (searchParams?.get("vehicleNo")) {
+            router.replace("/autovyn/CRM/customer_vehicle/reminder_history");
+        }
+
+        try {
+            setIsLoading(true);
+            const res: GetAllResponse = await getAllCustomerVehicles({
+                page: 1,
+                pageSize: 10,
+                search: undefined,
+                Loc_Code: user?.branch,
+                fromDate: undefined,
+                toDate: undefined,
+            });
+
+            if (!res?.success) {
+                setRows([]);
+                setTotalPages(1);
+                setTotalRecords(0);
+            } else {
+                setRows(Array.isArray(res.data) ? res.data : []);
+                setTotalPages(res?.pagination?.totalPages || 1);
+                setTotalRecords(res?.pagination?.totalRecords || 0);
+            }
+            showSideAlert("Filters reset successfully", "success");
+        } catch (err: any) {
+            console.error("Reset fetch error:", err);
+            setRows([]);
+            setTotalPages(1);
+            setTotalRecords(0);
+        } finally {
+            setIsLoading(false);
+        }
     };
+
+    // const handleRefresh = async () => {
+    //     setAppliedSearch(search);
+    //     setAppliedFromDate(fromDate);
+    //     setAppliedToDate(toDate);
+        
+    //     await fetchData();
+    //     const vehicleNoFromUrl = searchParams?.get("vehicleNo");
+    //     if (vehicleNoFromUrl) {
+    //         await fetchCallHistoryByVehicle(vehicleNoFromUrl);
+    //     }
+    //     showSideAlert("Refreshed successfully", "success");
+    // };
 
     // Enter key applies (no API calls on each keystroke)
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -533,7 +579,7 @@ const Page = () => {
         setCallHistoryPage(1);
 
         if (searchParams?.get("vehicleNo")) {
-            router.replace("/autovyn/CRM/customer_vehicle/reminders");
+            router.replace("/autovyn/CRM/customer_vehicle/reminder_history");
         }
     };
 
@@ -695,9 +741,9 @@ const Page = () => {
                 const isCompleted = String(value).toUpperCase() === "COMPLETED";
                 return (
                     <span
-                        className={`rounded-full px-2 py-1 text-xs font-bold ${isCompleted
+                        className={`rounded-full px-2 py-1  font-bold ${isCompleted
                             ? "bg-[#DCFCE7] text-[#15803D]"
-                            : "bg-yellow-100 text-[#A16207]"
+                            : "bg-[#FEF3C7] text-[#A16207]"
                             }`}
                     >
                         {value || "-"}
@@ -728,18 +774,18 @@ const Page = () => {
                                     width={25}
                                     height={25}
                                 />
-                                Vehicles SERVICE REMINDER HISTORY
+                                 SERVICE REMINDER HISTORY
                             </h1>
                         </div>
 
                         <div className="flex flex-wrap justify-between gap-x-2 gap-y-2">
-                            <Button
+                            {/* <Button
                                 variant="outline"
-                                onClick={() => fetchData()}
+                                onClick={handleRefresh}
                                 disabled={isLoading}
                             >
                                 Refresh
-                            </Button>
+                            </Button> */}
 
                             <Button
                                 variant="print"
@@ -761,8 +807,10 @@ const Page = () => {
                                 type="text"
                                 name="search"
                                 value={search}
+                                labelClass="text-[18px]"
+                                className="!h-10 !text-[18px]"
                                 handleInputChange={(_, value) => setSearch(value)}
-                                onInput={() => {}}
+                                onInput={() => { }}
                                 onKeyDown={handleKeyDown}
                                 redlabel=""
                                 disabled={isLoading}
@@ -775,9 +823,11 @@ const Page = () => {
                                 title="From Date"
                                 type="date"
                                 name="fromDate"
+                                labelClass="text-[18px]"
+                                className="!h-10 !text-[18px]"
                                 value={fromDate}
                                 handleInputChange={(_, value) => setFromDate(value)}
-                                onInput={() => {}}
+                                onInput={() => { }}
                                 redlabel=""
                                 disabled={isLoading}
                             />
@@ -788,9 +838,11 @@ const Page = () => {
                                 title="To Date"
                                 type="date"
                                 name="toDate"
+                                labelClass="text-[18px]"
+                                className="!h-10 !text-[18px]"
                                 value={toDate}
                                 handleInputChange={(_, value) => setToDate(value)}
-                                onInput={() => {}}
+                                onInput={() => { }}
                                 redlabel=""
                                 disabled={isLoading}
                             />
@@ -799,6 +851,7 @@ const Page = () => {
                         <div className="flex gap-2">
                             <Button
                                 variant="save"
+                                size='lg'
                                 onClick={handleApplyClick}
                                 disabled={isLoading}
                             >
@@ -807,6 +860,7 @@ const Page = () => {
 
                             <Button
                                 variant="print"
+                                size='lg'
                                 onClick={handleResetFilters}
                                 disabled={isLoading}
                             >
@@ -820,10 +874,11 @@ const Page = () => {
             {/* DATA TABLE */}
             <div className="col-span-12 mt-0 rounded-b border border-borderColor bg-white p-2 shadow dark:border-borderColor-dark dark:bg-black md:p-4">
                 <DataTable
-                    title="Customer Vehicles"
+                    // title="Customer Vehicles"
                     columns={columns}
                     selectValue="Cust_Vehi_UTD"
                     data={rows}
+                    size="text-lg"
                     height={450}
                     filterPosition="FilterData"
                     enableColumnFilters={true}

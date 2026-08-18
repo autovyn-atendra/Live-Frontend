@@ -7,6 +7,8 @@ import DataTable from "@/components/Templates/ServiceTable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import axios from "axios";
 import { Edit, Settings2, Lock, Unlock, Clock } from "lucide-react";
+import Ainput from "@/components/atoms/Input";
+import CustomSelectSearch from "@/components/atoms/Select";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 
 // ============================================================
@@ -105,7 +107,7 @@ const formatTimeForDisplay = (time24: string | null): string => {
   return `${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
 };
 
-// ── Try to normalize old text-based time values back into "HH:MM"
+// ── Try to normalize old text-lgd time values back into "HH:MM"
 //    for the <input type="time"> value prop. If it doesn't match a
 //    known pattern, just return empty so the picker starts blank. ──
 const normalizeTimeForInput = (value: string | null): string => {
@@ -148,20 +150,20 @@ const StatusBadge = ({ status }: { status: number | null }) => (
 // ============================================================
 const inputCls =
   "h-9 w-full rounded border border-[#D1D5DB] dark:border-[#4B5563] " +
-  "bg-white dark:bg-[#0d1117] px-3 text-sm text-[#1F2937] dark:text-white " +
+  "bg-white dark:bg-[#0d1117] px-3 text-lg text-[#1F2937] dark:text-white " +
   "focus:outline-none focus:ring-2 focus:ring-[#EFF6FF]0 focus:border-transparent " +
   "placeholder:text-[#9CA3AF]dark:placeholder:text-[#4B5563] transition-shadow disabled:opacity-60";
 
 const selectCls =
   "h-9 w-full rounded border border-[#D1D5DB] dark:border-[#4B5563] " +
-  "bg-white dark:bg-[#0d1117] px-3 text-sm text-[#1F2937] dark:text-white " +
+  "bg-white dark:bg-[#0d1117] px-3 text-lg text-[#1F2937] dark:text-white " +
   "focus:outline-none focus:ring-2 focus:ring-[#EFF6FF]0 transition-shadow " +
   "cursor-pointer disabled:opacity-60";
 
 // ── Time input style — same base + relative for clock icon spacing ──
 const timeInputCls =
   "h-9 w-full rounded border border-[#D1D5DB] dark:border-[#4B5563] " +
-  "bg-white dark:bg-[#0d1117] px-3 text-sm text-[#1F2937] dark:text-white " +
+  "bg-white dark:bg-[#0d1117] px-3 text-lg text-[#1F2937] dark:text-white " +
   "focus:outline-none focus:ring-2 focus:ring-[#EFF6FF]0 focus:border-transparent " +
   "transition-shadow disabled:opacity-60 cursor-pointer " +
   "[&::-webkit-calendar-picker-indicator]:cursor-pointer " +
@@ -185,7 +187,7 @@ const Field = ({
       {required && <span className="text-[#EF4444] ml-0.5">*</span>}
     </label>
     {children}
-    {error && <p className="text-[10px] text-[#EF4444] leading-tight">{error}</p>}
+    {error && <p className="text-lg text-[#EF4444] leading-tight">{error}</p>}
   </div>
 );
 
@@ -541,10 +543,10 @@ export default function ReminderConfigPage() {
         accessor: "Loc_Name",
         Cell: ({ row }: any) => (
           <div className="min-w-[100px]">
-            <div className="text-xs font-semibold text-[#193A69] dark:text-[#93C5FD] whitespace-nowrap">
+            <div className=" font-semibold text-[#193A69] dark:text-[#93C5FD] whitespace-nowrap">
               {row.original.Loc_Name || "—"}
             </div>
-            {/* <div className="text-[10px] text-[#9CA3AF]">
+            {/* <div className="text-lg text-[#9CA3AF]">
               Code: {row.original.Loc_Code || "—"}
             </div> */}
           </div>
@@ -555,11 +557,11 @@ export default function ReminderConfigPage() {
         accessor: "Service_Center_Name",
         Cell: ({ row }: any) => (
           <div className="min-w-[130px]">
-            <div className="text-xs font-medium text-[#1F2937] dark:text-[#E5E7EB]">
+            <div className=" font-medium text-[#1F2937] dark:text-[#E5E7EB]">
               {row.original.Service_Center_Name || "—"}
             </div>
             {row.original.Service_Center_Address && (
-              <div className="text-[10px] text-[#9CA3AF]truncate max-w-[160px]">
+              <div className=" text-[#9CA3AF]truncate max-w-[160px]">
                 {row.original.Service_Center_Address}
               </div>
             )}
@@ -570,7 +572,7 @@ export default function ReminderConfigPage() {
         Header: "Working Hours",
         accessor: "Working_Hours",
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
             {value || "—"}
           </span>
         ),
@@ -579,7 +581,7 @@ export default function ReminderConfigPage() {
         Header: "Sales Exec",
         accessor: "Sales_Exec_Number",
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
             {value || "—"}
           </span>
         ),
@@ -590,7 +592,7 @@ export default function ReminderConfigPage() {
         cellAlign: "center" as const,
         // ✅ Display formatted time (e.g. "10:00 AM") even though DB may store "HH:MM"
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
             {formatTimeForDisplay(value)}
           </span>
         ),
@@ -600,7 +602,7 @@ export default function ReminderConfigPage() {
         accessor: "Slot2_Time",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
             {formatTimeForDisplay(value)}
           </span>
         ),
@@ -610,7 +612,7 @@ export default function ReminderConfigPage() {
         accessor: "Slot3_Time",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
             {formatTimeForDisplay(value)}
           </span>
         ),
@@ -620,7 +622,7 @@ export default function ReminderConfigPage() {
         accessor: "Callback_Time",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]whitespace-nowrap">
             {formatTimeForDisplay(value)}
           </span>
         ),
@@ -629,7 +631,7 @@ export default function ReminderConfigPage() {
         Header: "Campaign ID",
         accessor: "Campaign_Id",
         Cell: ({ value }: any) => (
-          <span className="text-xs font-mono text-[#4B5563] dark:text-[#9CA3AF]">
+          <span className=" font-mono text-[#4B5563] dark:text-[#9CA3AF]">
             {value || "—"}
           </span>
         ),
@@ -639,7 +641,7 @@ export default function ReminderConfigPage() {
         accessor: "Max_Attempts_Per_Day",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-[#4B5563] dark:text-[#9CA3AF]">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]">
             {value ?? "—"}
           </span>
         ),
@@ -649,7 +651,7 @@ export default function ReminderConfigPage() {
         accessor: "Call_Delay_Ms",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs font-mono text-[#4B5563] dark:text-[#9CA3AF]">
+          <span className=" font-mono text-[#4B5563] dark:text-[#9CA3AF]">
             {value ?? "—"}
           </span>
         ),
@@ -665,10 +667,10 @@ export default function ReminderConfigPage() {
         accessor: "Created_At",
         cellAlign: "center" as const,
         Cell: ({ row }: any) => (
-          <div className="text-[11px] text-[#6B7280] whitespace-nowrap">
+          <div className=" text-[#6B7280] whitespace-nowrap">
             <div>{row.original.Created_At || "—"}</div>
             {row.original.Created_By && (
-              <div className="text-[10px] text-[#9CA3AF]">
+              <div className="text-lg text-[#9CA3AF]">
                 {row.original.Created_By}
               </div>
             )}
@@ -684,22 +686,22 @@ export default function ReminderConfigPage() {
             <button
               onClick={() => openEdit(row.original)}
               title="Edit"
-              className="p-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE]
+              className="p-1.5 text-lg rounded bg-[#EFF6FF] hover:bg-[#DBEAFE]
                 dark:bg-[#1E3A8A]/30 dark:hover:bg-[#1E3A8A]/50
                 text-[#2563EB] dark:text-[#60A5FA] transition-colors"
             >
-              <Edit size={13} />
+              <Edit size={16} />
             </button>
 
             <button
               onClick={() => handleToggle(row.original)}
               title={row.original.status === 1 ? "Deactivate" : "Activate"}
-              className={`p-1.5 rounded transition-colors ${row.original.status === 1
+              className={`p-1.5 text-lg rounded transition-colors ${row.original.status === 1
                   ? "[#FEF2F2] hover:bg-[#FEE2E2] dark:bg-[#7F1D1D]/30 dark:hover:bg-[#7F1D1D]/50 text-[#EF4444] dark:text-[#F87171]"
                   : "bg-[#F0FDF4] hover:bg-[#DCFCE7] dark:bg-[#14532D]/30 dark:hover:bg-[#14532D]/50 text-[#16A34A] dark:text-[#4ADE80]"
                 }`}
             >
-              {row.original.status === 1 ? <Lock size={13} /> : <Unlock size={13} />}
+              {row.original.status === 1 ? <Lock size={16} /> : <Unlock size={13} />}
             </button>
           </div>
         ),
@@ -718,20 +720,20 @@ export default function ReminderConfigPage() {
         <div className="flex items-center gap-2 min-w-0">
           <Settings2 className="h-5 w-5 text-white shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-base font-bold text-white leading-tight truncate">
+            <h1 className="text-2xl font-bold text-white leading-tight uppercase truncate">
               Reminder Config
             </h1>
             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
               {rows.length > 0 && (
-                <span className="text-[10px] text-white/50">
+                <span className="text-lg text-white/50">
                   {rows.length} total
                 </span>
               )}
-              <span className="text-[10px] font-bold bg-[#F0FDF4]0/90 text-white rounded-full px-1.5 py-0.5">
+              <span className="text-lg font-bold bg-[#F0FDF4]0/90 text-white rounded-full px-1.5 py-0.5">
                 {activeCount} active
               </span>
               {inactiveCount > 0 && (
-                <span className="text-[10px] font-bold bg-[#6B7280]/80 text-white rounded-full px-1.5 py-0.5">
+                <span className="text-lg font-bold bg-[#6B7280]/80 text-white rounded-full px-1.5 py-0.5">
                   {inactiveCount} inactive
                 </span>
               )}
@@ -743,7 +745,7 @@ export default function ReminderConfigPage() {
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={fetchConfigs}
             disabled={isLoading || formLoading}
           >
@@ -751,14 +753,14 @@ export default function ReminderConfigPage() {
           </Button>
 
           {formMode === "edit" && (
-            <Button variant="print" size="sm" onClick={resetToCreate} disabled={formLoading}>
+            <Button variant="print" size="lg" onClick={resetToCreate} disabled={formLoading}>
               + New Config
             </Button>
           )}
 
           <Button
             variant="save"
-            size="sm"
+            size="lg"
             onClick={handleSubmit}
             loading={formLoading}
             disabled={formLoading || isLoading}
@@ -770,7 +772,7 @@ export default function ReminderConfigPage() {
 
       {/* ══ MULTI-LOCATION WARNING ══ */}
       {isMultiLocationUser && (
-        <div className="border border-[#FDE047] bg-[#FEFCE8] dark:bg-[#713F12]/20 dark:border-[#A16207] rounded-md p-3 text-sm text-[#A16207]dark:text-[#FDE047] flex items-start gap-2">
+        <div className="border border-[#FDE047] bg-[#FEFCE8] dark:bg-[#713F12]/20 dark:border-[#A16207] rounded-md p-3 text-lg text-[#A16207]dark:text-[#FDE047] flex items-start gap-2">
           <span className="text-lg leading-none">⚠️</span>
           <div>
             <p className="font-semibold">Multiple branches detected</p>
@@ -786,136 +788,183 @@ export default function ReminderConfigPage() {
 
       {/* ══ FORM SECTION ══ */}
       <div className="border rounded-md p-3 sm:p-4 bg-white dark:bg-[#0d1117]">
-        <h2 className="text-sm font-bold text-[#193A69] dark:text-white mb-3 uppercase tracking-wide">
+        <h2 className="text-lg font-bold text-[#193A69] dark:text-white mb-3 uppercase tracking-wide">
           {formMode === "edit" ? `Edit Config (UTD: ${editUTD})` : "New Reminder Config"}
           {userSingleLocation && (
-            <span className="ml-2 text-[10px] font-normal text-[#9CA3AF]normal-case">
+            <span className="ml-2 text-lg font-normal text-[#9CA3AF]normal-case">
               (Branch Code: {userSingleLocation})
             </span>
           )}
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3 mb-4">
-          <Field label="Service Center Name" required error={formErrors.Service_Center_Name}>
-            <input
+          <div>
+            <Ainput
+              title="Service Center Name"
               type="text"
-              className={
-                inputCls +
-                (formErrors.Service_Center_Name ? " !border-[#F87171] focus:!ring-[#F87171]" : "")
-              }
+              name="Service_Center_Name"
               value={form.Service_Center_Name}
-              onChange={(e) => handleFieldChange("Service_Center_Name", e.target.value)}
-              placeholder="e.g. Main Service Center"
+              handleInputChange={(_, val) => handleFieldChange("Service_Center_Name", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              redlabel="*"
+              required
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+            {formErrors.Service_Center_Name && (
+              <p className="text-lg text-[#EF4444] leading-tight mt-1">{formErrors.Service_Center_Name}</p>
+            )}
+          </div>
 
-          <Field label="Service Center Address">
-            <input
+          <div>
+            <Ainput
+              title="Service Center Address"
               type="text"
-              className={inputCls}
+              name="Service_Center_Address"
               value={form.Service_Center_Address}
-              onChange={(e) => handleFieldChange("Service_Center_Address", e.target.value)}
-              placeholder="e.g. 123, Main Road"
+              handleInputChange={(_, val) => handleFieldChange("Service_Center_Address", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          <Field label="Campaign ID">
-            <input
+          <div>
+            <Ainput
+              title="Campaign ID"
               type="text"
-              className={inputCls}
+              name="Campaign_Id"
               value={form.Campaign_Id}
-              onChange={(e) => handleFieldChange("Campaign_Id", e.target.value)}
-              placeholder="Campaign ID"
+              handleInputChange={(_, val) => handleFieldChange("Campaign_Id", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          <Field label="Working Hours">
-            <input
+          <div>
+            <Ainput
+              title="Working Hours"
               type="text"
-              className={inputCls}
+              name="Working_Hours"
               value={form.Working_Hours}
-              onChange={(e) => handleFieldChange("Working_Hours", e.target.value)}
-              placeholder="09:00 AM - 06:00 PM"
+              handleInputChange={(_, val) => handleFieldChange("Working_Hours", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
         </div>
 
         <div className="border-t border-dashed border-[#E5E7EB] dark:border-[#374151] mb-4" />
 
         {/* ── Slot Times — Clock Picker ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3 mb-4">
-          <Field label="Sales Exec Number">
-            <input
+          <div>
+            <Ainput
+              title="Sales Exec Number"
               type="text"
-              className={inputCls}
+              name="Sales_Exec_Number"
               value={form.Sales_Exec_Number}
-              onChange={(e) => handleFieldChange("Sales_Exec_Number", e.target.value)}
-              placeholder="Mobile number"
-              maxLength={15}
+              handleInputChange={(_, val) => handleFieldChange("Sales_Exec_Number", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          {/* ✅ Slot 1 — Clock Picker */}
-          <TimeField
-            label="Slot 1 Time"
-            value={form.Slot1_Time}
-            onChange={(v) => handleFieldChange("Slot1_Time", v)}
-            disabled={formLoading}
-          />
+          {/* ✅ Slot 1 — Time Picker */}
+          <div>
+            <Ainput
+              title="Slot 1 Time"
+              type="time"
+              name="Slot1_Time"
+              value={form.Slot1_Time}
+              handleInputChange={(_, val) => handleFieldChange("Slot1_Time", val)}
+              onInput={() => {}}
+              disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
+            />
+          </div>
 
-          {/* ✅ Slot 2 — Clock Picker */}
-          <TimeField
-            label="Slot 2 Time"
-            value={form.Slot2_Time}
-            onChange={(v) => handleFieldChange("Slot2_Time", v)}
-            disabled={formLoading}
-          />
+          {/* ✅ Slot 2 — Time Picker */}
+          <div>
+            <Ainput
+              title="Slot 2 Time"
+              type="time"
+              name="Slot2_Time"
+              value={form.Slot2_Time}
+              handleInputChange={(_, val) => handleFieldChange("Slot2_Time", val)}
+              onInput={() => {}}
+              disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
+            />
+          </div>
 
-          {/* ✅ Slot 3 — Clock Picker */}
-          <TimeField
-            label="Slot 3 Time"
-            value={form.Slot3_Time}
-            onChange={(v) => handleFieldChange("Slot3_Time", v)}
-            disabled={formLoading}
-          />
+          {/* ✅ Slot 3 — Time Picker */}
+          <div>
+            <Ainput
+              title="Slot 3 Time"
+              type="time"
+              name="Slot3_Time"
+              value={form.Slot3_Time}
+              handleInputChange={(_, val) => handleFieldChange("Slot3_Time", val)}
+              onInput={() => {}}
+              disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
+            />
+          </div>
 
-          {/* ✅ Callback Time — Clock Picker */}
-          <TimeField
-            label="Callback Time"
-            value={form.Callback_Time}
-            onChange={(v) => handleFieldChange("Callback_Time", v)}
-            disabled={formLoading}
-          />
+          {/* ✅ Callback Time — Time Picker */}
+          <div>
+            <Ainput
+              title="Callback Time"
+              type="time"
+              name="Callback_Time"
+              value={form.Callback_Time}
+              handleInputChange={(_, val) => handleFieldChange("Callback_Time", val)}
+              onInput={() => {}}
+              disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
+            />
+          </div>
 
-          <Field label="Max Attempts Per Day">
-            <input
+          <div>
+            <Ainput
+              title="Max Attempts Per Day"
               type="number"
-              className={inputCls}
+              name="Max_Attempts_Per_Day"
               value={form.Max_Attempts_Per_Day}
-              onChange={(e) => handleFieldChange("Max_Attempts_Per_Day", e.target.value)}
-              placeholder="e.g. 3"
-              min={1}
-              max={10}
+              handleInputChange={(_, val) => handleFieldChange("Max_Attempts_Per_Day", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          <Field label="Call Delay (ms)">
-            <input
+          <div>
+            <Ainput
+              title="Call Delay (ms)"
               type="number"
-              className={inputCls}
+              name="Call_Delay_Ms"
               value={form.Call_Delay_Ms}
-              onChange={(e) => handleFieldChange("Call_Delay_Ms", e.target.value)}
-              placeholder="e.g. 2000"
-              min={500}
+              handleInputChange={(_, val) => handleFieldChange("Call_Delay_Ms", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
         </div>
 
         {formMode === "edit" && (
@@ -958,18 +1007,21 @@ export default function ReminderConfigPage() {
       {/* ══ FILTER SECTION ══ */}
       <div className="border rounded-md p-3 sm:p-4 bg-white dark:bg-[#0d1117]">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3 items-end">
-          <Field label="Filter by Status">
-            <select
-              className={selectCls}
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+          <div>
+            <CustomSelectSearch
+              title="Filter by Status"
+              name="filterStatus"
+              selectedValue={filterStatus}
+              handleInputChange={(_, val) => setFilterStatus(val)}
+              options={[
+                { label: "All Status", value: "" },
+                { label: "Active", value: "1" },
+                { label: "Inactive", value: "0" },
+              ]}
               disabled={isLoading}
-            >
-              <option value="">All Status</option>
-              <option value="1">Active</option>
-              <option value="0">Inactive</option>
-            </select>
-          </Field>
+              labelClass="text-[18px]"
+            />
+          </div>
 
           <div className="flex gap-2 sm:col-span-2 items-end">
             <Button
@@ -1003,6 +1055,7 @@ export default function ReminderConfigPage() {
             selectValue="UTD"
             data={rows}
             height={440}
+            size="text-lg"
             filterPosition="FilterData"
             enableColumnFilters={true}
             numericFilterColumns={["UTD", "Max_Attempts_Per_Day", "Call_Delay_Ms"]}

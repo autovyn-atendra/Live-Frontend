@@ -223,32 +223,89 @@ const TransferExecutiveTasksPage = () => {
             return;
         }
 
+        const fromName = fromEmployee?.FULL_NAME?.trim() || fromEmpCode;
+        const toName = toEmployee?.FULL_NAME?.trim() || toEmpCode;
+        const taskCount = selectedTasks.length;
+        const utdPreview = selectedCustVehiUTDs.slice(0, 5).join(", ");
+        const remainingCount = selectedCustVehiUTDs.length > 5 ? selectedCustVehiUTDs.length - 5 : 0;
+
         const confirmResult = await Swal.fire({
-            title: "Confirm Transfer",
-            html: `
-        Transfer <b>${selectedTasks.length}</b> selected task(s) from<br/>
-        <b style="color:#e74c3c">
-          ${fromEmployee?.FULL_NAME?.trim() || fromEmpCode}
-        </b>
-        <br/>to<br/>
-        <b style="color:#27ae60">
-          ${toEmployee?.FULL_NAME?.trim() || toEmpCode}
-        </b>
-        <br/><br/>
-        <small style="color:#666">
-          Cust_Vehi UTDs: ${selectedCustVehiUTDs.slice(0, 5).join(", ")}
-          ${selectedCustVehiUTDs.length > 5
-                    ? ` ... +${selectedCustVehiUTDs.length - 5} more`
-                    : ""}
-        </small>
-        <br/>Do you want to continue?
-      `,
-            icon: "warning",
+            title: "",
+            width: "540px",
+            padding: "1.5rem",
+          
+            background: "#ffffff",
             showCancelButton: true,
-            confirmButtonText: "Yes, Transfer",
+            confirmButtonText: "Yes, Transfer Tasks ➔",
             cancelButtonText: "Cancel",
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
+            confirmButtonColor: "#f59e0b",
+            cancelButtonColor: "#64748b",
+            customClass: {
+                popup: "rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 dark:bg-slate-950",
+                confirmButton: "px-7 py-3 font-extrabold rounded-xl text-base shadow-lg cursor-pointer tracking-wide",
+                cancelButton: "px-6 py-3 font-bold rounded-xl text-base cursor-pointer mr-3",
+            },
+            html: `
+            <div style="text-align: left; font-family: inherit; width: 100%;">
+              <!-- Header Icon & Title -->
+              <div style="text-align: center; margin-bottom: 16px;">
+                <div style="width: 56px; height: 56px; margin: 0 auto 10px; background: #fffbebf5; border: 1px solid #fef3c7; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #d97706;">
+                  <svg style="width: 28px; height: 28px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                  </svg>
+                </div>
+                <h3 style="font-size: 26px; font-weight: 800; color: #1e293b; margin: 0 0 4px;">Confirm Task Transfer</h3>
+                <p style="font-size: 18px; color: #64748b; margin: 0;">Are you sure you want to reassign the selected customer tasks?</p>
+              </div>
+
+              <!-- Main Detail Box -->
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 8px;">
+                
+                <!-- Task Count Header -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="font-size: 17px; font-weight: 700; color: #64748b;">TOTAL SELECTION</span>
+                  <span style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 17px; font-weight: 800; padding: 3px 10px; border-radius: 20px;">
+                    📦 ${taskCount} ${taskCount === 1 ? "Task" : "Tasks"}
+                  </span>
+                </div>
+
+                <!-- From & To Transfer Section -->
+                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                  
+                  <!-- From Executive -->
+                  <div style="flex: 1; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 10px; text-align: center; min-width: 0; overflow: hidden;">
+                    <span style="display: block; font-size: 10px; font-weight: 800; color: #e11d48; text-transform: uppercase; margin-bottom: 3px;">FROM EXECUTIVE</span>
+                    <div style="font-size: 17px; font-weight: 800; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${fromName}">
+                      ${fromName}
+                    </div>
+                    <div style="font-size: 10px; font-weight: 600; color: #64748b; font-family: monospace; margin-top: 2px;">
+                      (${fromEmpCode})
+                    </div>
+                  </div>
+
+                  <!-- Arrow Indicator -->
+                  <div style="width: 32px; height: 32px; min-width: 32px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #475569; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    ➔
+                  </div>
+
+                  <!-- To Executive -->
+                  <div style="flex: 1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 10px; text-align: center; min-width: 0; overflow: hidden;">
+                    <span style="display: block; font-size: 10px; font-weight: 800; color: #059669; text-transform: uppercase; margin-bottom: 3px;">TO EXECUTIVE</span>
+                    <div style="font-size: 17px; font-weight: 800; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${toName}">
+                      ${toName}
+                    </div>
+                    <div style="font-size: 10px; font-weight: 600; color: #64748b; font-family: monospace; margin-top: 2px;">
+                      (${toEmpCode})
+                    </div>
+                  </div>
+
+                </div>
+
+                
+
+              </div>
+            </div>
+          `,
         });
 
         if (!confirmResult.isConfirmed) return;
@@ -330,7 +387,7 @@ const TransferExecutiveTasksPage = () => {
             accessor: "Reminder_Status",
             cellAlign: "center",
             Cell: ({ value }: any) => (
-                <span className="rounded-full px-2 py-1 text-xs font-bold bg-yellow-100 text-yellow-700">
+                <span className="rounded-full px-2 py-1  font-bold bg-[#FEF3C7] text-[#B45309]">
                     {value || "-"}
                 </span>
             ),
@@ -354,7 +411,7 @@ const TransferExecutiveTasksPage = () => {
                                 width={25}
                                 height={25}
                             />
-                            Transfer Service Executive Tasks
+                            CRE Transfer Work
                         </h1>
 
                         <Button
@@ -377,6 +434,8 @@ const TransferExecutiveTasksPage = () => {
                         <CustomSelectSearch
                             title="Select From Executive"
                             name="fromExecutive"
+                            className="text-lg"
+                            labelClass="text-lg"
                             placeholder="Select source executive..."
                             options={fromEmployeeOptions}
                             selectedValue={fromEmpCode}
@@ -398,6 +457,8 @@ const TransferExecutiveTasksPage = () => {
                         <CustomSelectSearch
                             title="Select To Executive"
                             name="toExecutive"
+                             className="text-lg"
+                            labelClass="text-lg"
                             placeholder="Select destination executive..."
                             options={toEmployeeOptions}
                             selectedValue={toEmpCode}
@@ -414,6 +475,7 @@ const TransferExecutiveTasksPage = () => {
                     {pendingTasks.length > 0 && (
                         <Button
                             variant="outline"
+                            size='lg'
                             onClick={() => {
                                 const allSelected =
                                     selectedTasks.length === pendingTasks.length;
@@ -454,6 +516,7 @@ const TransferExecutiveTasksPage = () => {
                     <Button
                         variant="save"
                         onClick={handleTransfer}
+                        size="lg"
                         disabled={
                             isTransferring ||
                             !fromEmpCode ||
@@ -463,12 +526,13 @@ const TransferExecutiveTasksPage = () => {
                     >
                         {isTransferring
                             ? "Transferring..."
-                            : `Transfer ${selectedTasks.length} Task(s)`}
+                            : `Transfer ${selectedTasks.length} Task`}
                     </Button>
 
                     {/* RESET BUTTON */}
                     <Button
                         variant="print"
+                         size="lg"
                         onClick={() => {
                             setFromEmpCode("");
                             setToEmpCode("");
@@ -498,6 +562,7 @@ const TransferExecutiveTasksPage = () => {
                     selectValue="Cust_Vehi_UTD"
                     data={pendingTasks}
                     height={400}
+                    size="text-lg"
                     filterPosition="FilterData"
                     enableColumnFilters={true}
                     numericFilterColumns={["Cust_Vehi_UTD", "Reminder_UTD"]}

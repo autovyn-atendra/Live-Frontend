@@ -125,6 +125,9 @@ export const getAllCustomerVehicles = async (
     Loc_Code?: string;
     Model_Name?: string;
     status?: string | number;
+    emp_code?: string;
+    emp_dms_code?: string;
+    user_code?: string | number;
   }
 ) => {
   const response = await axios.post(

@@ -42,7 +42,7 @@ export default auth((req) => {
   const { nextUrl } = req;
   if ((nextUrl.pathname == "/" && !isLoggedIn))
     return null;
-  if (nextUrl.pathname === "/registrationform"|| nextUrl.pathname==='/autovyn/sales/MGA_Approval/MGADetails' || nextUrl.pathname =="/autovyn/payroll/interview/zoom"||nextUrl.pathname=="/profile"|| nextUrl.pathname=="/autovyn/payroll/Recruitment_Process/Interview_QRCode"|| nextUrl.pathname=="/autovyn/payroll/Recruitment_Process/Shortlisted_Candidate"||nextUrl.pathname=="/autovyn/payroll/Recruitment_Process/Candidate_Registratio_Form"|| nextUrl.pathname=="/autovyn/preSales/quotation/De-Allot"||
+  if (nextUrl.pathname.includes("/service-appointment") || nextUrl.pathname === "/registrationform"|| nextUrl.pathname==='/autovyn/sales/MGA_Approval/MGADetails' || nextUrl.pathname =="/autovyn/payroll/interview/zoom"||nextUrl.pathname=="/profile"|| nextUrl.pathname=="/autovyn/payroll/Recruitment_Process/Interview_QRCode"|| nextUrl.pathname=="/autovyn/payroll/Recruitment_Process/Shortlisted_Candidate"||nextUrl.pathname=="/autovyn/payroll/Recruitment_Process/Candidate_Registratio_Form"|| nextUrl.pathname=="/autovyn/preSales/quotation/De-Allot"||
     (nextUrl.pathname.split("/").filter(Boolean).length === 2 && isLoggedIn)|| nextUrl.pathname === "/privacy-policy"  || nextUrl.pathname === "/terms"  || nextUrl.pathname === "/data-deletion"  || (nextUrl.pathname.split("/").filter(Boolean).length === 3 && isLoggedIn)) {
     return; // No redirect, allow access
   }
@@ -63,6 +63,7 @@ export default auth((req) => {
   // console.log('Matching URLs:', matchingUrls);
   if (
     !matchingUrls.includes(nextUrl.pathname) &&
+    !nextUrl.pathname.includes("/service-appointment") &&
     nextUrl.pathname !== "/autovyn" &&
     nextUrl.pathname !== "/branch" &&
     nextUrl.pathname !== "/profile" &&

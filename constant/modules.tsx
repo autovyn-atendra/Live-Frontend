@@ -281,6 +281,11 @@ export const treeData = [
             key: "23.1.9",
             url: "/autovyn/CRM/customer_vehicle/Transfer_work",
           },
+          {
+            title: "Service Reminder Appointment Booking |",
+            key: "23.1.10",
+            url: "/autovyn/CRM/customer_vehicle/service-appointment",
+          },
         ]
       },
       {
@@ -365,6 +370,31 @@ export const treeData = [
             key: "13.1.2",
             url: "/autovyn/ai/knowledge",
           }
+        ],
+      },
+    ]
+  },
+  {
+    title: "Meta",
+    url: "/autovyn/meta",
+    ShortCut: "alt+m",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "14",
+    children: [
+      {
+        title: "Meta Leads|",
+        key: "14.1",
+        url: "/autovyn/meta",
+        children: [
+          {
+            title: "Meta Leads | ",
+            key: "14.1.1",
+            url: "/autovyn/meta",
+          },
         ],
       },
     ]

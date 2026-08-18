@@ -1,6 +1,7 @@
 "use client";
 
 import Ainput from "@/components/atoms/Input";
+import CustomSelectSearch from "@/components/atoms/Select";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -364,27 +365,27 @@ export default function Page() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <h1 className="font-bold sm:text-sm md:text-lg lg:text-xl text-white dark:text-[#37a9dd] flex items-center gap-x-3 uppercase">
               <FaClipboardCheck size={30} title="Presale" />
-              Update Service completed info
+              Regn No. Master
             </h1>
 
             <div className="flex gap-2">
               {!isDataFetched ? (
-                <Button className="ml-1" variant={"update"} onClick={saveNewVehicle}>
+                <Button className="ml-1" size="lg" variant={"update"} onClick={saveNewVehicle}>
                   Save
                 </Button>
               ) : null}
 
               {isDataFetched ? (
-                <Button className="ml-1" variant={"update"} onClick={updateServiceCompletion}>
+                <Button className="ml-1" size="lg" variant={"update"} onClick={updateServiceCompletion}>
                   Update
                 </Button>
               ) : null}
 
-              <Button className="ml-1" variant={"update"} onClick={handleRefresh}>
+              <Button className="ml-1" size="lg" variant={"update"} onClick={handleRefresh}>
                 Refresh
               </Button>
 
-              <Button className="ml-1" variant={"print"} onClick={() => window.history.back()}>
+              <Button className="ml-1" size="lg" variant={"print"} onClick={() => window.history.back()}>
                 Back
               </Button>
             </div>
@@ -399,6 +400,8 @@ export default function Page() {
               title="Vehi Reg No"
               type="text"
               name="Tran_id"
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
               value={formData.Tran_id}
               handleInputChange={handleInputChange}
               disabled={topFormDisabled}
@@ -406,37 +409,62 @@ export default function Page() {
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-9">
-            <Button className="ml-1 md:mt-6 mt-0" variant={"update"} onClick={findByCustId}>
+            <Button className="ml-1 md:mt-9 mt-0" size='lg' variant={"update"} onClick={findByCustId}>
               Click To Get Details
             </Button>
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Customer Name" type="text" name="Cust_Name" value={formData.Cust_Name} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Customer Name" type="text" name="Cust_Name" value={formData.Cust_Name} handleInputChange={handleInputChange} disabled={topFormDisabled} />
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Customer Mobile" type="text" name="Cust_Mob" value={formData.Cust_Mob} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Customer Mobile" type="text" name="Cust_Mob" value={formData.Cust_Mob} handleInputChange={handleInputChange} disabled={topFormDisabled} />
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Model Name" type="text" name="Model_Name" value={formData.Model_Name} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Model Name" type="text" name="Model_Name" value={formData.Model_Name} handleInputChange={handleInputChange} disabled={topFormDisabled} />
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Last Service Date" type="date" name="Last_Service_Date" value={formData.Last_Service_Date} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Last Service Date" type="date" name="Last_Service_Date" value={formData.Last_Service_Date} handleInputChange={handleInputChange} disabled={topFormDisabled} />
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Last Service KM" type="text" name="Last_Service_KM" value={formData.Last_Service_KM} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Last Service KM" type="text" name="Last_Service_KM" value={formData.Last_Service_KM} handleInputChange={handleInputChange} disabled={topFormDisabled} />
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Average Daily KM" type="text" name="Avg_Daily_KM" value={formData.Avg_Daily_KM} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Average Daily KM" type="text" name="Avg_Daily_KM" value={formData.Avg_Daily_KM} handleInputChange={handleInputChange} disabled={topFormDisabled} />
           </div>
 
           <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-            <Ainput height={"7"} title="Current KM" type="text" name="Current_KM" value={formData.Current_KM} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+            <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Current KM" type="text" name="Current_KM" value={formData.Current_KM} handleInputChange={handleInputChange} disabled={topFormDisabled} />
+          </div>
+
+          <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
+            <CustomSelectSearch
+              title="Service Type"
+              name="ServiceType"
+              selectedValue={formData.ServiceType}
+              handleInputChange={handleInputChange}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
+              options={[
+                { label: "Free Service", value: "Free Service" },
+                { label: "Paid Service", value: "Paid Service" },
+                { label: "Running Repair", value: "Running Repair" },
+                { label: "Accidental", value: "Accidental" },
+              ]}
+              disabled={topFormDisabled}
+            />
           </div>
         </div>
 
@@ -453,16 +481,19 @@ export default function Page() {
 
             <div className="grid grid-cols-12 gap-2 md:gap-3 rounded-b p-2 md:p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow">
               <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-                <Ainput height={"7"} title="Current Service Date" type="date" name="Current_Service_Date" value={formData.Current_Service_Date} handleInputChange={handleInputChange} />
+                <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Current Service Date" type="date" name="Current_Service_Date" value={formData.Current_Service_Date} handleInputChange={handleInputChange} />
               </div>
 
               <div className="col-span-12 sm:col-span-6 md:col-span-6 lg:col-span-4 xl:col-span-3">
-                <Ainput height={"7"} title="Current Service KM" type="text" name="Current_Service_KM" value={formData.Current_Service_KM} handleInputChange={handleInputChange} />
+                <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Current Service KM" type="text" name="Current_Service_KM" value={formData.Current_Service_KM} handleInputChange={handleInputChange} />
                 {didAttemptUpdate && currentServiceKmError ? <p className="text-xs mt-1 text-red-600">{currentServiceKmError}</p> : null}
               </div>
 
               <div className="col-span-12 sm:col-span-12 md:col-span-12 lg:col-span-8 xl:col-span-6">
-                <Ainput height={"7"} title="Service Remark" type="text" name="Remark" value={formData.Remark} handleInputChange={handleInputChange} />
+                <Ainput height={"7"} labelClass="text-[18px]"
+              className="!h-10 !text-[18px]" title="Service Remark" type="text" name="Remark" value={formData.Remark} handleInputChange={handleInputChange} />
               </div>
             </div>
           </>

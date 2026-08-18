@@ -41,6 +41,8 @@ interface DataTableProps {
   title?: string;
   height?: number | string;
   size?: string;
+  headerClassName?: string;
+  labelClassName?: string;
   onRowCountChange?: (count: number) => void;
 
   enableColumnFilters?: boolean;
@@ -101,6 +103,8 @@ const DataTable = ({
   title,
   height,
   size,
+  headerClassName,
+  labelClassName,
   onRowCountChange,
   enableColumnFilters = true,
   filterPosition = "header",
@@ -487,7 +491,7 @@ const DataTable = ({
                           <select
                             onChange={(e) => handleFilterChange(accessor, e.target.value)}
                             value={columnFilters[accessor] || "ALL"}
-                            className="w-full text-sm font-semibold text-[#1f2125] dark:text-white border border-borderColor dark:border-borderColor-dark rounded bg-white dark:bg-input px-1 py-2"
+                            className={`w-full font-semibold text-[#1f2125] dark:text-white border border-borderColor dark:border-borderColor-dark rounded bg-white dark:bg-input px-1 py-2 ${labelClassName || size || "text-sm"}`}
                             style={{ lineHeight: "20px" }}
                           >
                             <option value="ALL">{` ${column.render("Header")}`}</option>
@@ -537,9 +541,9 @@ const DataTable = ({
                     <th
                       key={accessor}
                       {...column.getHeaderProps(column.getSortByToggleProps())}
-                      className={`border border-borderColor dark:border-borderColor-dark ${size || "text-sm"} ${
+                      className={`border border-borderColor dark:border-borderColor-dark ${headerClassName || size || "text-sm"} ${
                         column.align === "center" ? "text-center" : "text-left"
-                      } text-left px-2 py-3 text-sm whitespace-nowrap`}
+                      } text-left px-2 py-3 whitespace-nowrap`}
                     >
                       <div className="flex items-center justify-between">
                         <span
@@ -771,9 +775,9 @@ const DataTable = ({
           Previous
         </button>
  <div className="flex items-center gap-2">
-          <span className="text-sm">Page Size:</span>
+          <span className={labelClassName || size || "text-sm"}>Page Size:</span>
           <select
-            className="h-8 rounded border border-borderColor bg-white px-2 text-sm dark:border-borderColor-dark dark:bg-input dark:text-white"
+            className={`h-8 rounded border border-borderColor bg-white px-2 dark:border-borderColor-dark dark:bg-input dark:text-white ${labelClassName || size || "text-sm"}`}
             value={serverMode ? serverPagination?.pageSize || pageSize : pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
           >
@@ -783,7 +787,7 @@ const DataTable = ({
               </option>
             ))}
           </select>
-          <span className="text-sm font-semibold">
+          <span className={`font-semibold ${labelClassName || size || "text-sm"}`}>
           Page{" "}
           <strong>
             {currentPage} of {totalPages}

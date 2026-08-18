@@ -7,6 +7,8 @@ import DataTable from "@/components/Templates/ServiceTable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import axios from "axios";
 import { Edit, Settings2 } from "lucide-react";
+import Ainput from "@/components/atoms/Input";
+import CustomSelectSearch from "@/components/atoms/Select";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 
 // ============================================================
@@ -86,8 +88,8 @@ const StatusBadge = ({ status }: { status: number | null }) => (
   <span
     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold border
     ${status === 1
-        ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700"
-        : "bg-gray-100 text-gray-500 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600"
+        ? "bg-[#DCFCE7] text-[#15803D] border-[#86EFAC] dark:bg-[#14532D]/30 dark:text-[#86EFAC] dark:border-[#15803D]"
+        : "bg-[#F3F4F6] text-[#6B7280] border-[#D1D5DB] dark:bg-[#1F2937] dark:text-[#9CA3AF] dark:border-[#4B5563]"
       }`}
   >
     {status === 1 ? "● Active" : "● Inactive"}
@@ -98,18 +100,18 @@ const StatusBadge = ({ status }: { status: number | null }) => (
 const RuleTypeBadge = ({ type }: { type: string | null }) => {
   const map: Record<string, string> = {
     WHICHEVER_FIRST:
-      "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
+      "bg-[#DBEAFE] text-[#1D4ED8] border-[#93C5FD] dark:bg-[#1E3A8A]/30 dark:text-[#93C5FD] dark:border-[#1D4ED8]",
     KM_ONLY:
-      "bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700",
+      "bg-[#F3E8FF] text-[#7E22CE] border-[#C084FC] dark:bg-[#581C87]/30 dark:text-[#D8B4FE] dark:border-[#7E22CE]",
     DAYS_ONLY:
-      "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700",
+      "bg-[#FEF3C7] text-[#B45309] border-[#FCD34D] dark:bg-[#78350F]/30 dark:text-[#FDE68A] dark:border-[#B45309]",
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold border
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-lg font-semibold border
       ${type
-          ? (map[type] ?? "bg-gray-100 text-gray-600 border-gray-300")
-          : "bg-gray-100 text-gray-400 border-gray-200"
+          ? (map[type] ?? "bg-[#F3F4F6] text-[#4B5563] border-[#D1D5DB]")
+          : "bg-[#F3F4F6] text-[#9CA3AF] border-[#E5E7EB]"
         }`}
     >
       {type ?? "—"}
@@ -121,15 +123,15 @@ const RuleTypeBadge = ({ type }: { type: string | null }) => {
 // SHARED INPUT STYLES
 // ============================================================
 const inputCls =
-  "h-9 w-full rounded border border-gray-300 dark:border-gray-600 " +
-  "bg-white dark:bg-[#0d1117] px-3 text-sm text-gray-800 dark:text-white " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent " +
-  "placeholder:text-gray-400 dark:placeholder:text-gray-600 transition-shadow disabled:opacity-60";
+  "h-9 w-full rounded border border-[#D1D5DB] dark:border-[#4B5563] " +
+  "bg-white dark:bg-[#0d1117] px-3 text-lg text-[#1F2937] dark:text-white " +
+  "focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent " +
+  "placeholder:text-[#9CA3AF] dark:placeholder:text-[#4B5563] transition-shadow disabled:opacity-60";
 
 const selectCls =
-  "h-9 w-full rounded border border-gray-300 dark:border-gray-600 " +
-  "bg-white dark:bg-[#0d1117] px-3 text-sm text-gray-800 dark:text-white " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow " +
+  "h-9 w-full rounded border border-[#D1D5DB] dark:border-[#4B5563] " +
+  "bg-white dark:bg-[#0d1117] px-3 text-lg text-[#1F2937] dark:text-white " +
+  "focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-shadow " +
   "cursor-pointer disabled:opacity-60";
 
 // ── Field wrapper ──────────────────────────────────────────
@@ -145,13 +147,13 @@ const Field = ({
   children: React.ReactNode;
 }) => (
   <div className="flex flex-col gap-1 min-w-0">
-    <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 truncate">
+    <label className="text-lg font-semibold text-[#4B5563] dark:text-[#9CA3AF] truncate">
       {label}
       {required && <span className="text-exit ml-0.5">*</span>}
     </label>
     {children}
     {error && (
-      <p className="text-[10px] text-exit leading-tight">{error}</p>
+      <p className="text-lg text-exit leading-tight">{error}</p>
     )}
   </div>
 );
@@ -422,7 +424,7 @@ export default function Page() {
         accessor: "Service_Interval_KM",
         cellAlign: "right" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <span className=" font-mono text-[#374151] dark:text-[#D1D5DB] whitespace-nowrap">
             {value != null ? `${value.toLocaleString("en-IN")} km` : "—"}
           </span>
         ),
@@ -432,7 +434,7 @@ export default function Page() {
         accessor: "Service_Interval_Days",
         cellAlign: "right" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <span className=" font-mono text-[#374151] dark:text-[#D1D5DB] whitespace-nowrap">
             {value != null ? `${value} days` : "—"}
           </span>
         ),
@@ -448,7 +450,7 @@ export default function Page() {
         accessor: "Reminder_Before_Days_1",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-gray-600 dark:text-gray-400">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]">
             {value != null ? `${value} day` : "—"}
           </span>
         ),
@@ -458,7 +460,7 @@ export default function Page() {
         accessor: "Reminder_Before_Days_2",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-gray-600 dark:text-gray-400">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]">
             {value != null ? `${value} day` : "—"}
           </span>
         ),
@@ -469,9 +471,9 @@ export default function Page() {
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
           <span
-            className={`text-xs font-semibold ${value
-              ? "text-green-600 dark:text-green-400"
-              : "text-gray-400"
+            className={` font-semibold ${value
+              ? "text-[#16A34A] dark:text-[#4ADE80]"
+              : "text-[#9CA3AF]"
               }`}
           >
             {value ? "✓" : "✗"}
@@ -483,7 +485,7 @@ export default function Page() {
         accessor: "Overdue_Reminder_Days",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-xs text-gray-600 dark:text-gray-400">
+          <span className=" text-[#4B5563] dark:text-[#9CA3AF]">
             {value != null ? `${value} day` : "—"}
           </span>
         ),
@@ -499,7 +501,7 @@ export default function Page() {
         accessor: "Created_At",
         cellAlign: "center" as const,
         Cell: ({ value }: any) => (
-          <span className="text-[11px] text-gray-500 whitespace-nowrap">
+          <span className=" text-[#6B7280] whitespace-nowrap">
             {value
               ? new Date(value).toLocaleDateString("en-IN")
               : "—"}
@@ -514,9 +516,9 @@ export default function Page() {
           <div className="flex items-center justify-center gap-1">
             <button
               onClick={() => openEdit(row.original.UTD)}
-              className="p-1.5 rounded bg-blue-50 hover:bg-blue-100
-                dark:bg-blue-900/30 dark:hover:bg-blue-900/50
-                text-blue-600 dark:text-blue-400 transition-colors"
+              className="p-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE]
+                dark:bg-[#1E3A8A]/30 dark:hover:bg-[#1E3A8A]/50
+                text-[#2563EB] dark:text-[#60A5FA] transition-colors"
               title="Edit"
             >
               <Edit size={13} />
@@ -540,20 +542,20 @@ export default function Page() {
         <div className="flex items-center gap-2 min-w-0">
           <Settings2 className="h-5 w-5 text-white shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-base font-bold text-white leading-tight truncate">
+            <h1 className="text-[24px] font-bold text-white uppercase leading-tight truncate">
               Service Reminder Rules
             </h1>
             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
               {totalRecords > 0 && (
-                <span className="text-[10px] text-white/50">
+                <span className="text-lg text-white/50">
                   {totalRecords.toLocaleString("en-IN")} total
                 </span>
               )}
-              <span className="text-[10px] font-bold bg-green-500/90 text-white rounded-full px-1.5 py-0.5">
+              <span className="text-lg font-bold bg-[#22C55E]/90 text-white rounded-full px-1.5 py-0.5">
                 {activeCount} active
               </span>
               {inactiveCount > 0 && (
-                <span className="text-[10px] font-bold bg-gray-500/80 text-white rounded-full px-1.5 py-0.5">
+                <span className="text-lg font-bold bg-[#6B7280]/80 text-white rounded-full px-1.5 py-0.5">
                   {inactiveCount} inactive
                 </span>
               )}
@@ -564,7 +566,7 @@ export default function Page() {
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={handleRefresh}
             disabled={isLoading || formLoading}
           >
@@ -574,7 +576,7 @@ export default function Page() {
           {formMode === "edit" && (
             <Button
               variant="print"
-              size="sm"
+              size="lg"
               onClick={resetToCreate}
               disabled={formLoading}
             >
@@ -584,7 +586,7 @@ export default function Page() {
 
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={handleSubmit}
             loading={formLoading}
             disabled={formLoading || isLoading}
@@ -601,7 +603,7 @@ export default function Page() {
       {/* ══ FORM SECTION ══ */}
       <div className="border rounded-md p-3 sm:p-4 bg-white dark:bg-[#0d1117]">
 
-        <h2 className="text-sm font-bold text-[#193A69] dark:text-white mb-3 uppercase">
+        <h2 className="text-[22px] font-bold text-[#193A69] dark:text-white mb-3 uppercase">
           {formMode === "edit"
             ? `Edit Service Rule (UTD: ${editUTD})`
             : "New Service Rule"}
@@ -613,14 +615,14 @@ export default function Page() {
 
             {/* Rule Type — display only (always WHICHEVER_FIRST) */}
             <Field label="Rule Type">
-              <div className="h-9 flex items-center px-3 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#1a1f2e]">
+              <div className="py-1 h-[30px]  flex items-center px-3 rounded border border-[#D1D5DB] dark:border-[#4B5563] bg-[#F9FAFB] dark:bg-[#1a1f2e]">
                 <RuleTypeBadge type="WHICHEVER_FIRST" />
               </div>
             </Field>
 
             {/* Status */}
             <Field label="Status">
-              <div className="flex items-center gap-4 h-9 px-3 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#0d1117]">
+              <div className="flex items-center gap-4 h-9 px-3 rounded border border-[#D1D5DB] dark:border-[#4B5563] bg-white dark:bg-[#0d1117]">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
@@ -628,9 +630,9 @@ export default function Page() {
                     checked={form.status === 1}
                     onChange={() => handleFieldChange("status", 1)}
                     disabled={formLoading}
-                    className="accent-green-500"
+                    className="accent-[#22C55E]"
                   />
-                  <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                  <span className="text-xs font-medium text-[#16A34A] dark:text-[#4ADE80]">
                     Active
                   </span>
                 </label>
@@ -641,9 +643,9 @@ export default function Page() {
                     checked={form.status === 0}
                     onChange={() => handleFieldChange("status", 0)}
                     disabled={formLoading}
-                    className="accent-gray-500"
+                    className="accent-[#6B7280]"
                   />
-                  <span className="text-xs font-medium text-gray-500">
+                  <span className="text-xs font-medium text-[#6B7280]">
                     Inactive
                   </span>
                 </label>
@@ -657,7 +659,7 @@ export default function Page() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 mb-4">
             {/* Rule Type — display only */}
             <Field label="Rule Type">
-              <div className="h-9 flex items-center px-3 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#1a1f2e]">
+              <div className="h-9 flex items-center px-3 rounded border border-[#D1D5DB] dark:border-[#4B5563] bg-[#F9FAFB] dark:bg-[#1a1f2e]">
                 <RuleTypeBadge type="WHICHEVER_FIRST" />
               </div>
             </Field>
@@ -665,110 +667,102 @@ export default function Page() {
         )}
 
         {/* Divider */}
-        <div className="border-t border-dashed border-gray-200 dark:border-gray-700 mb-4" />
+        <div className="border-t border-dashed border-[#E5E7EB] dark:border-[#374151] mb-4" />
 
         {/* ── Row 2 : Intervals & Reminders ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
-
-          <Field
-            label="Service Interval (KM)"
-            error={formErrors.Service_Interval_KM}
-          >
-            <input
+          <div>
+            <Ainput
+              title="Service Interval (KM)"
               type="number"
-              className={
-                inputCls +
-                (formErrors.Service_Interval_KM
-                  ? " !border-red-400 focus:!ring-red-400"
-                  : "")
-              }
+              name="Service_Interval_KM"
               value={form.Service_Interval_KM}
-              onChange={e =>
-                handleFieldChange("Service_Interval_KM", e.target.value)
-              }
-              placeholder="e.g. 5000"
-              min={0}
+              handleInputChange={(_, val) => handleFieldChange("Service_Interval_KM", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              redlabel="*"
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+            {formErrors.Service_Interval_KM && (
+              <p className="text-lg text-exit leading-tight mt-1">{formErrors.Service_Interval_KM}</p>
+            )}
+          </div>
 
-          <Field
-            label="Service Interval (Days)"
-            error={formErrors.Service_Interval_Days}
-          >
-            <input
+          <div>
+            <Ainput
+              title="Service Interval (Days)"
               type="number"
-              className={
-                inputCls +
-                (formErrors.Service_Interval_Days
-                  ? " !border-red-400 focus:!ring-red-400"
-                  : "")
-              }
+              name="Service_Interval_Days"
               value={form.Service_Interval_Days}
-              onChange={e =>
-                handleFieldChange("Service_Interval_Days", e.target.value)
-              }
-              placeholder="e.g. 90"
-              min={0}
+              handleInputChange={(_, val) => handleFieldChange("Service_Interval_Days", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              redlabel="*"
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+            {formErrors.Service_Interval_Days && (
+              <p className="text-lg text-exit leading-tight mt-1">{formErrors.Service_Interval_Days}</p>
+            )}
+          </div>
 
-          <Field label="Reminder 1 (Days Before)">
-            <input
+          <div>
+            <Ainput
+              title="Reminder 1 (Days Before)"
               type="number"
-              className={inputCls}
+              name="Reminder_Before_Days_1"
               value={form.Reminder_Before_Days_1}
-              onChange={e =>
-                handleFieldChange("Reminder_Before_Days_1", e.target.value)
-              }
-              placeholder="e.g. 7"
-              min={0}
+              handleInputChange={(_, val) => handleFieldChange("Reminder_Before_Days_1", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          <Field label="Reminder 2 (Days Before)">
-            <input
+          <div>
+            <Ainput
+              title="Reminder 2 (Days Before)"
               type="number"
-              className={inputCls}
+              name="Reminder_Before_Days_2"
               value={form.Reminder_Before_Days_2}
-              onChange={e =>
-                handleFieldChange("Reminder_Before_Days_2", e.target.value)
-              }
-              placeholder="e.g. 3"
-              min={0}
+              handleInputChange={(_, val) => handleFieldChange("Reminder_Before_Days_2", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          <Field label="Overdue Reminder (Days After)">
-            <input
+          <div>
+            <Ainput
+              title="Overdue Reminder (Days After)"
               type="number"
-              className={inputCls}
+              name="Overdue_Reminder_Days"
               value={form.Overdue_Reminder_Days}
-              onChange={e =>
-                handleFieldChange("Overdue_Reminder_Days", e.target.value)
-              }
-              placeholder="e.g. 7"
-              min={0}
+              handleInputChange={(_, val) => handleFieldChange("Overdue_Reminder_Days", val)}
+              onInput={() => {}}
               disabled={formLoading}
+              labelClass="text-[18px]"
+              className="!h-10 !text-[18px]"
             />
-          </Field>
+          </div>
 
-          <Field label="Remind On Due Date">
-            <select
-              className={selectCls}
-              value={form.Reminder_On_Due_Date}
-              onChange={e =>
-                handleFieldChange("Reminder_On_Due_Date", e.target.value)
-              }
+          <div>
+            <CustomSelectSearch
+              title="Remind On Due Date"
+              name="Reminder_On_Due_Date"
+              selectedValue={String(form.Reminder_On_Due_Date)}
+              handleInputChange={(_, val) => handleFieldChange("Reminder_On_Due_Date", val)}
+              options={[
+                { label: "Yes", value: "1" },
+                { label: "No", value: "0" },
+              ]}
               disabled={formLoading}
-            >
-              <option value="1">Yes</option>
-              <option value="0">No</option>
-            </select>
-          </Field>
+              labelClass="text-[18px]"
+            />
+          </div>
         </div>
       </div>
 
@@ -828,12 +822,15 @@ export default function Page() {
       <div className="border p-2 rounded-md bg-white dark:bg-[#0d1117] overflow-hidden">
         <div className="w-full overflow-x-auto">
           <DataTable
-            title={isLoading ? "Loading…" : "Service Rules List"}
+            // title={isLoading ? "Loading…" : "Service Rules List"}
             columns={columns}
             selectValue="UTD"
             data={rows}
             height={440}
             filterPosition="FilterData"
+            size="text-lg"
+            // labelClassName="text-lg"
+
             enableColumnFilters={true}
             numericFilterColumns={[
               "UTD",
