@@ -4,7 +4,7 @@ import Eselect from "@/components/atoms/Eselect";
 import Ainput from "@/components/atoms/Input";
 import SelectSearch from "@/components/atoms/Select";
 import HashloaderComponent from "@/components/Templates/hashloader";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import { useEffect, useState } from "react";
@@ -292,7 +292,7 @@ export default function InsuranceMaster() {
                   <GrUserAdmin size={28} />
                   Insurance Payout Policy Setup
                 </div>
-                <Button variant="print" className="flex items-center gap-x-1" onClick= {()=>history.back()}>
+                <Button variant="print" className="flex items-center gap-x-1" onClick={() => history.back()}>
                   Back
                 </Button>
               </div>

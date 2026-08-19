@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios from "axios";

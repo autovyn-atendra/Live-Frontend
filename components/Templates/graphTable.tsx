@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/dialog2";
 import Highcharts from "highcharts";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HighchartsReact from "highcharts-react-official";
 
 const GraphTable = ({
@@ -28,7 +28,7 @@ const GraphTable = ({
 
   const options = {
     chart: {
-      type: "pie", 
+      type: "pie",
       backgroundColor: "transparent",
       options3d: {
         enabled: true,
@@ -41,7 +41,7 @@ const GraphTable = ({
       style: {
         fontSize: "20px",
         fontWeight: "bold",
-        align:"left",
+        align: "left",
         color: "#999999",
         textTransform: "capitalize",
       },
@@ -88,8 +88,8 @@ const GraphTable = ({
     plotOptions: {
       series: {
         animation: {
-          duration: 2000, 
-          easing: "easeOutBounce", 
+          duration: 2000,
+          easing: "easeOutBounce",
         },
       },
       column: {
@@ -102,7 +102,7 @@ const GraphTable = ({
       pie: {
         depth: "numeric value",
         events: {
-          click: handlePointClick, 
+          click: handlePointClick,
         },
       },
     },
@@ -113,7 +113,7 @@ const GraphTable = ({
       },
     ],
   };
-  const onRowDoubleClick = () => {};
+  const onRowDoubleClick = () => { };
   return (
     <div className="mt-3">
       <div className="w-full h-96 shadow-signUp ">

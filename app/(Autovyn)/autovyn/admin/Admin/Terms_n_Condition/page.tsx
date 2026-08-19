@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FaUsers } from "react-icons/fa";
 import SmallTitle from "@/components/atoms/smallTitle";
 import SelectSearch from "@/components/atoms/Select";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import MediumTitle from "@/components/atoms/MediumTitle";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import { useToast } from "@/components/ui/use-toast";
@@ -406,7 +406,7 @@ const Gatepass = () => {
             await DtlDataView()
             window.location.reload();
         } catch (error) {
-            console.log(error,'error')
+            console.log(error, 'error')
             setIsLoading(false)
             Swal.fire({
                 icon: "error",

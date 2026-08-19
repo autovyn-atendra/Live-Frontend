@@ -1,6 +1,6 @@
 "use client";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { Button } from "@/components/ui/button";
 import { UserCog } from "lucide-react";
 import { useRouter } from "next/navigation";

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import axios from "axios";
 import { Edit, Settings2, Lock, Unlock, Clock } from "lucide-react";
@@ -342,7 +342,7 @@ export default function ReminderConfigPage() {
   }, [filterStatus, userSingleLocation, isMultiLocationUser]);
 
   useEffect(() => {
-     if (!user?.Comp_Code) return;
+    if (!user?.Comp_Code) return;
     if (!isMultiLocationUser && userSingleLocation) {
       fetchConfigs();
     }
@@ -697,8 +697,8 @@ export default function ReminderConfigPage() {
               onClick={() => handleToggle(row.original)}
               title={row.original.status === 1 ? "Deactivate" : "Activate"}
               className={`p-1.5 text-lg rounded transition-colors ${row.original.status === 1
-                  ? "[#FEF2F2] hover:bg-[#FEE2E2] dark:bg-[#7F1D1D]/30 dark:hover:bg-[#7F1D1D]/50 text-[#EF4444] dark:text-[#F87171]"
-                  : "bg-[#F0FDF4] hover:bg-[#DCFCE7] dark:bg-[#14532D]/30 dark:hover:bg-[#14532D]/50 text-[#16A34A] dark:text-[#4ADE80]"
+                ? "[#FEF2F2] hover:bg-[#FEE2E2] dark:bg-[#7F1D1D]/30 dark:hover:bg-[#7F1D1D]/50 text-[#EF4444] dark:text-[#F87171]"
+                : "bg-[#F0FDF4] hover:bg-[#DCFCE7] dark:bg-[#14532D]/30 dark:hover:bg-[#14532D]/50 text-[#16A34A] dark:text-[#4ADE80]"
                 }`}
             >
               {row.original.status === 1 ? <Lock size={16} /> : <Unlock size={13} />}
@@ -805,7 +805,7 @@ export default function ReminderConfigPage() {
               name="Service_Center_Name"
               value={form.Service_Center_Name}
               handleInputChange={(_, val) => handleFieldChange("Service_Center_Name", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               redlabel="*"
               required
@@ -824,7 +824,7 @@ export default function ReminderConfigPage() {
               name="Service_Center_Address"
               value={form.Service_Center_Address}
               handleInputChange={(_, val) => handleFieldChange("Service_Center_Address", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -838,7 +838,7 @@ export default function ReminderConfigPage() {
               name="Campaign_Id"
               value={form.Campaign_Id}
               handleInputChange={(_, val) => handleFieldChange("Campaign_Id", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -852,7 +852,7 @@ export default function ReminderConfigPage() {
               name="Working_Hours"
               value={form.Working_Hours}
               handleInputChange={(_, val) => handleFieldChange("Working_Hours", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -871,7 +871,7 @@ export default function ReminderConfigPage() {
               name="Sales_Exec_Number"
               value={form.Sales_Exec_Number}
               handleInputChange={(_, val) => handleFieldChange("Sales_Exec_Number", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -886,7 +886,7 @@ export default function ReminderConfigPage() {
               name="Slot1_Time"
               value={form.Slot1_Time}
               handleInputChange={(_, val) => handleFieldChange("Slot1_Time", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -901,7 +901,7 @@ export default function ReminderConfigPage() {
               name="Slot2_Time"
               value={form.Slot2_Time}
               handleInputChange={(_, val) => handleFieldChange("Slot2_Time", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -916,7 +916,7 @@ export default function ReminderConfigPage() {
               name="Slot3_Time"
               value={form.Slot3_Time}
               handleInputChange={(_, val) => handleFieldChange("Slot3_Time", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -931,7 +931,7 @@ export default function ReminderConfigPage() {
               name="Callback_Time"
               value={form.Callback_Time}
               handleInputChange={(_, val) => handleFieldChange("Callback_Time", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -945,7 +945,7 @@ export default function ReminderConfigPage() {
               name="Max_Attempts_Per_Day"
               value={form.Max_Attempts_Per_Day}
               handleInputChange={(_, val) => handleFieldChange("Max_Attempts_Per_Day", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -959,7 +959,7 @@ export default function ReminderConfigPage() {
               name="Call_Delay_Ms"
               value={form.Call_Delay_Ms}
               handleInputChange={(_, val) => handleFieldChange("Call_Delay_Ms", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import axios from "axios";
 import {
@@ -286,7 +286,7 @@ const DetailModal = ({
   const [data, setData] = useState<InsuranceDetail | null>();
   const [loading, setLoading] = useState(true);
   const [showHist, setShowHist] = useState(false);
-   console.log("data",data)
+  console.log("data", data)
   // fetch detail
   useEffect(() => {
     let cancelled = false;
@@ -441,14 +441,13 @@ const DetailModal = ({
               <>
                 <div
                   className={`flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 border
-                    ${
-                      data.EXPIRY_STATUS === "EXPIRED"
-                        ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
-                        : data.EXPIRY_STATUS === "EXPIRING_TODAY"
+                    ${data.EXPIRY_STATUS === "EXPIRED"
+                      ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
+                      : data.EXPIRY_STATUS === "EXPIRING_TODAY"
                         ? "bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800"
                         : data.EXPIRY_STATUS === "EXPIRING_SOON"
-                        ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800"
-                        : "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800"
+                          ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800"
+                          : "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800"
                     }`}
                 >
                   <div className="flex items-center gap-2">
@@ -462,9 +461,8 @@ const DetailModal = ({
                     )}
                   </div>
                   <span
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      data.IS_ACTIVE ? "bg-green-500 text-white" : "bg-gray-400 text-white"
-                    }`}
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${data.IS_ACTIVE ? "bg-green-500 text-white" : "bg-gray-400 text-white"
+                      }`}
                   >
                     {data.IS_ACTIVE ? "ACTIVE" : "ARCHIVED"}
                   </span>
@@ -580,9 +578,8 @@ const DetailModal = ({
                             <div>
                               <p className="text-[9px] text-gray-400 uppercase font-semibold">Status</p>
                               <span
-                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                                  h.IS_ACTIVE ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                                }`}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${h.IS_ACTIVE ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                                  }`}
                               >
                                 {h.IS_ACTIVE ? "ACTIVE" : "ARCHIVED"}
                               </span>
@@ -650,7 +647,7 @@ export default function InsuranceRenewalPage() {
 
   // Modal state
   const [selectedUTD, setSelectedUTD] = useState<number | null>(null);
-//   console.log("selectedUTD",selectedUTD)
+  //   console.log("selectedUTD",selectedUTD)
   // Inputs CSS
   const inputCls =
     "h-9 w-full rounded border border-gray-300 dark:border-gray-600 " +
@@ -760,14 +757,14 @@ export default function InsuranceRenewalPage() {
   // Columns
   const columns = useMemo(
     () => [
-    //   {
-    //     Header: "#",
-    //     accessor: "UTD",
-    //     cellAlign: "center" as const,
-    //     Cell: ({ value }: any) => (
-    //       <span className="text-[11px] text-gray-400 font-mono">#{value}</span>
-    //     ),
-    //   },
+      //   {
+      //     Header: "#",
+      //     accessor: "UTD",
+      //     cellAlign: "center" as const,
+      //     Cell: ({ value }: any) => (
+      //       <span className="text-[11px] text-gray-400 font-mono">#{value}</span>
+      //     ),
+      //   },
       {
         Header: "Customer",
         accessor: "CUST_NAME",
@@ -879,27 +876,27 @@ export default function InsuranceRenewalPage() {
           </span>
         ),
       },
-    //   {
-    //     Header: "Doc",
-    //     accessor: "DOC_PATH",
-    //     cellAlign: "center" as const,
-    //     Cell: ({ value }: any) =>
-    //       value ? (
-    //         <a
-    //           href={value}
-    //           target="_blank"
-    //           rel="noopener noreferrer"
-    //           onClick={(e) => e.stopPropagation()}
-    //           className="inline-flex items-center gap-1 text-[10px] text-blue-600
-    //           dark:text-blue-400 hover:underline"
-    //         >
-    //           <ExternalLink size={11} />
-    //           View
-    //         </a>
-    //       ) : (
-    //         <span className="text-gray-400 text-xs">—</span>
-    //       ),
-    //   },
+      //   {
+      //     Header: "Doc",
+      //     accessor: "DOC_PATH",
+      //     cellAlign: "center" as const,
+      //     Cell: ({ value }: any) =>
+      //       value ? (
+      //         <a
+      //           href={value}
+      //           target="_blank"
+      //           rel="noopener noreferrer"
+      //           onClick={(e) => e.stopPropagation()}
+      //           className="inline-flex items-center gap-1 text-[10px] text-blue-600
+      //           dark:text-blue-400 hover:underline"
+      //         >
+      //           <ExternalLink size={11} />
+      //           View
+      //         </a>
+      //       ) : (
+      //         <span className="text-gray-400 text-xs">—</span>
+      //       ),
+      //   },
       {
         Header: "Created",
         accessor: "CREATED_AT",

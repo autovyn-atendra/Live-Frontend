@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import Swal from "sweetalert2";
 import SelectSearch from "@/components/atoms/Select";
 import { useSearchParams } from "next/navigation";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { FaTools } from "react-icons/fa";
 import { GrUserAdmin } from "react-icons/gr";
 import { Card, CardContent } from "@/components/ui/card";
@@ -111,7 +111,7 @@ const PurchaseOrder = ({ className, ...props }: CardProps) => {
         parseFloat(newFormData.Medical || "0") +
         parseFloat(newFormData.DA || "0") +
         parseFloat(newFormData.Washing || "0") +
-        parseFloat(newFormData.Uniform || "0") 
+        parseFloat(newFormData.Uniform || "0")
 
       // ✅ Prevent total > 100 while typing
       if (total > 100) {
@@ -135,7 +135,7 @@ const PurchaseOrder = ({ className, ...props }: CardProps) => {
     },
     {
       Header: "Basic",
-      accessor: "Basic", 
+      accessor: "Basic",
     },
     {
       Header: "HRA",
@@ -166,7 +166,7 @@ const PurchaseOrder = ({ className, ...props }: CardProps) => {
       accessor: "Created_By",
     },
   ];
-  const handleTableClick = (row) => {};
+  const handleTableClick = (row) => { };
 
   const SaveData = async () => {
     const HRA = parseFloat(formData?.HRA || "0");

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import SmallTitle from "@/components/atoms/smallTitle";
 import Ainput from "@/components/atoms/Input";
 import { Button } from "@/components/ui/button";

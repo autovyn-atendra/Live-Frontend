@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios from "axios";
@@ -503,21 +503,21 @@ const EmployeeFaceDataPage = () => {
         cellAlign: "center",
         Cell: ({ row }: any) => row.index + 1,
       },
-    //   {
-    //     Header: "Photo",
-    //     accessor: "DOC_PATH",
-    //     cellAlign: "center",
-    //     // ✅ Use row.original for fullName, value for DOC_PATH
-    //     Cell: ({ value, row }: any) => (
-    //       <div className="flex justify-center">
-    //         <EmpPhoto
-    //           docPath={value ?? null}
-    //           fullName={row?.original?.FULL_NAME ?? ""}
-    //           size="sm"
-    //         />
-    //       </div>
-    //     ),
-    //   },
+      //   {
+      //     Header: "Photo",
+      //     accessor: "DOC_PATH",
+      //     cellAlign: "center",
+      //     // ✅ Use row.original for fullName, value for DOC_PATH
+      //     Cell: ({ value, row }: any) => (
+      //       <div className="flex justify-center">
+      //         <EmpPhoto
+      //           docPath={value ?? null}
+      //           fullName={row?.original?.FULL_NAME ?? ""}
+      //           size="sm"
+      //         />
+      //       </div>
+      //     ),
+      //   },
       {
         Header: "Emp Code",
         accessor: "EMPCODE",
@@ -530,7 +530,7 @@ const EmployeeFaceDataPage = () => {
       { Header: "First Name", accessor: "EMPFIRSTNAME", Cell: ({ value }: any) => value || "—" },
       { Header: "Last Name", accessor: "EMPLASTNAME", Cell: ({ value }: any) => value || "—" },
       { Header: "Mobile", accessor: "MOBILENO", Cell: ({ value }: any) => value || "—" },
-     
+
       {
         Header: "Photo Status",
         accessor: "HAS_DOC",

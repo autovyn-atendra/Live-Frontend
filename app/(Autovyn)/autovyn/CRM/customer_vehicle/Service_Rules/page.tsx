@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import axios from "axios";
 import { Edit, Settings2 } from "lucide-react";
@@ -678,7 +678,7 @@ export default function Page() {
               name="Service_Interval_KM"
               value={form.Service_Interval_KM}
               handleInputChange={(_, val) => handleFieldChange("Service_Interval_KM", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               redlabel="*"
               labelClass="text-[18px]"
@@ -696,7 +696,7 @@ export default function Page() {
               name="Service_Interval_Days"
               value={form.Service_Interval_Days}
               handleInputChange={(_, val) => handleFieldChange("Service_Interval_Days", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               redlabel="*"
               labelClass="text-[18px]"
@@ -714,7 +714,7 @@ export default function Page() {
               name="Reminder_Before_Days_1"
               value={form.Reminder_Before_Days_1}
               handleInputChange={(_, val) => handleFieldChange("Reminder_Before_Days_1", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -728,7 +728,7 @@ export default function Page() {
               name="Reminder_Before_Days_2"
               value={form.Reminder_Before_Days_2}
               handleInputChange={(_, val) => handleFieldChange("Reminder_Before_Days_2", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"
@@ -742,7 +742,7 @@ export default function Page() {
               name="Overdue_Reminder_Days"
               value={form.Overdue_Reminder_Days}
               handleInputChange={(_, val) => handleFieldChange("Overdue_Reminder_Days", val)}
-              onInput={() => {}}
+              onInput={() => { }}
               disabled={formLoading}
               labelClass="text-[18px]"
               className="!h-10 !text-[18px]"

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import SmallTitle from "@/components/atoms/smallTitle";
 import Ainput from "@/components/atoms/Input";
 import { Button } from "@/components/ui/button";
@@ -387,22 +387,22 @@ const Bookingdata = () => {
       ]);
     }
     // Add this in the handleClick function, where other item.id conditions are
-else if (item.id == 665) {
-  setcolumns([
-    { Header: "UTD", accessor: "UTD", align: "center" },
-    { Header: "SR. No.", accessor: "Misc_Code", align: "center" },
-    { Header: "Name", accessor: "Misc_Name", align: "center" },
-    { Header: "Abbreviation Name", accessor: "Misc_Abbr", align: "center" },
-    { 
-      Header: "Can Delete", 
-      accessor: "SPL_REM", 
-      align: "center",
-      Cell: ({ value }) => {
-        return <span>{value === "1" ? "No" : "Yes"}</span>;
-      }
-    },
-  ]);
-}
+    else if (item.id == 665) {
+      setcolumns([
+        { Header: "UTD", accessor: "UTD", align: "center" },
+        { Header: "SR. No.", accessor: "Misc_Code", align: "center" },
+        { Header: "Name", accessor: "Misc_Name", align: "center" },
+        { Header: "Abbreviation Name", accessor: "Misc_Abbr", align: "center" },
+        {
+          Header: "Can Delete",
+          accessor: "SPL_REM",
+          align: "center",
+          Cell: ({ value }) => {
+            return <span>{value === "1" ? "No" : "Yes"}</span>;
+          }
+        },
+      ]);
+    }
     else {
       setcolumns(columns1);
     }
@@ -940,7 +940,7 @@ else if (item.id == 665) {
             name?.toUpperCase() == "EMP DROPDOWN CONFIGURATION FIELDS" ||
             name?.toUpperCase() == "CUSTOMER DEAL SHEET MASTER" ||
             name?.toUpperCase() == "RTO INSURANCE MASTER" ||
-  name?.toUpperCase() == "EXPENSE TEMPLATES" ? ( 
+            name?.toUpperCase() == "EXPENSE TEMPLATES" ? (
             <>
               {name?.toUpperCase() == "PURCHASE PAYOUT" ? (
                 <>
@@ -1918,76 +1918,76 @@ else if (item.id == 665) {
                         </div>
 
                       </>
-                      ) : name?.toUpperCase() == "EXPENSE TEMPLATES" ? (
-  <>
-    <div className="p-1 mt-2">
-      <Ainput
-        type={"text"}
-        title={"Name:"}
-        name={"Misc_Name"}
-        handleInputChange={handleInputChange}
-        value={formData.Misc_Name}
-        onKeyDown={(e) => {
-          if (e.key === "Tab") {
-            e.preventDefault();
-            handleInputChange("Misc_Abbr", formData.Misc_Name);
-            const abbrInput = document.querySelector('input[name="Misc_Abbr"]');
-            abbrInput?.focus();
-          }
-        }}
-      />
-    </div>
-    <div className="p-1">
-      <Ainput
-        value={formData.Misc_Abbr}
-        handleInputChange={handleInputChange}
-        type={"text"}
-        title={"Abbreviation Name:"}
-        name={"Misc_Abbr"}
-      />
-    </div>
-    <div className="p-1">
-      <Eselect
-        initialValue={formData.SPL_REM?.toString()}
-        option={[
-          { label: "Yes (Cannot Delete/Edit)", value: "1" },
-          { label: "No (Can Delete/Edit)", value: "0" }
-        ]}
-        title={"Can Delete/Edit?"}
-        name={"SPL_REM"}
-        handleInputChange={handleInputChange}
-        h={9}
-      />
-    </div>
-    <div className="p-1 flex flex-wrap items-end gap-x-2">
-      <div className="w-full sm:w-auto">
-        <Ainput
-          value={formData.Exp_Date}
-          handleInputChange={handleInputChange}
-          type="date"
-          title="Expiry Date:"
-          name="Exp_Date"
-          disabled
-        />
-      </div>
-      <Button
-        variant="print"
-        className="text-sm"
-        onClick={() => {
-          const currentDate = getCurrentDate();
-          setFormData((prev) => ({
-            ...prev,
-            Exp_Date: currentDate,
-          }));
-        }}
-      >
-        DEACTIVATE
-      </Button>
-    </div>
-  </>
-) : (
-                 
-                      
+                    ) : name?.toUpperCase() == "EXPENSE TEMPLATES" ? (
+                      <>
+                        <div className="p-1 mt-2">
+                          <Ainput
+                            type={"text"}
+                            title={"Name:"}
+                            name={"Misc_Name"}
+                            handleInputChange={handleInputChange}
+                            value={formData.Misc_Name}
+                            onKeyDown={(e) => {
+                              if (e.key === "Tab") {
+                                e.preventDefault();
+                                handleInputChange("Misc_Abbr", formData.Misc_Name);
+                                const abbrInput = document.querySelector('input[name="Misc_Abbr"]');
+                                abbrInput?.focus();
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="p-1">
+                          <Ainput
+                            value={formData.Misc_Abbr}
+                            handleInputChange={handleInputChange}
+                            type={"text"}
+                            title={"Abbreviation Name:"}
+                            name={"Misc_Abbr"}
+                          />
+                        </div>
+                        <div className="p-1">
+                          <Eselect
+                            initialValue={formData.SPL_REM?.toString()}
+                            option={[
+                              { label: "Yes (Cannot Delete/Edit)", value: "1" },
+                              { label: "No (Can Delete/Edit)", value: "0" }
+                            ]}
+                            title={"Can Delete/Edit?"}
+                            name={"SPL_REM"}
+                            handleInputChange={handleInputChange}
+                            h={9}
+                          />
+                        </div>
+                        <div className="p-1 flex flex-wrap items-end gap-x-2">
+                          <div className="w-full sm:w-auto">
+                            <Ainput
+                              value={formData.Exp_Date}
+                              handleInputChange={handleInputChange}
+                              type="date"
+                              title="Expiry Date:"
+                              name="Exp_Date"
+                              disabled
+                            />
+                          </div>
+                          <Button
+                            variant="print"
+                            className="text-sm"
+                            onClick={() => {
+                              const currentDate = getCurrentDate();
+                              setFormData((prev) => ({
+                                ...prev,
+                                Exp_Date: currentDate,
+                              }));
+                            }}
+                          >
+                            DEACTIVATE
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+
+
                       <>
                         <div className="p-1 mt-2">
                           <Eselect

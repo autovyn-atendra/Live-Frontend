@@ -5,7 +5,7 @@ import Image from "next/image";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import HashloaderComponent from "@/components/Templates/hashloader";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import CustomSelectSearch from "@/components/atoms/Select";
 import axios from "axios";
@@ -233,7 +233,7 @@ const TransferExecutiveTasksPage = () => {
             title: "",
             width: "540px",
             padding: "1.5rem",
-          
+
             background: "#ffffff",
             showCancelButton: true,
             confirmButtonText: "Yes, Transfer Tasks ➔",
@@ -457,7 +457,7 @@ const TransferExecutiveTasksPage = () => {
                         <CustomSelectSearch
                             title="Select To Executive"
                             name="toExecutive"
-                             className="text-lg"
+                            className="text-lg"
                             labelClass="text-lg"
                             placeholder="Select destination executive..."
                             options={toEmployeeOptions}
@@ -496,7 +496,7 @@ const TransferExecutiveTasksPage = () => {
                             disabled={isTransferring}
                         >
                             {selectedTasks.length === pendingTasks.length
-                                ?`Clear All  (${pendingTasks.length})`
+                                ? `Clear All  (${pendingTasks.length})`
                                 : `Select All (${pendingTasks.length})`}
                         </Button>
                     )}
@@ -532,7 +532,7 @@ const TransferExecutiveTasksPage = () => {
                     {/* RESET BUTTON */}
                     <Button
                         variant="print"
-                         size="lg"
+                        size="lg"
                         onClick={() => {
                             setFromEmpCode("");
                             setToEmpCode("");

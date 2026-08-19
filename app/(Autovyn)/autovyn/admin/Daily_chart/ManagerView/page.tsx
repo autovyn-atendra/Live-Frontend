@@ -1,6 +1,6 @@
 "use client";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import React, { useEffect, useState } from "react";

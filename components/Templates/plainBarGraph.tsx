@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog2";
 import Highcharts from "highcharts";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HighchartsReact from "highcharts-react-official";
 
 const PlainGraph = ({
@@ -21,11 +21,11 @@ const PlainGraph = ({
     title: {
       align: "left",
       text: title,
-      
-      
-        style: {
-          color: "grey" // Text color for y-axis
-        }
+
+
+      style: {
+        color: "grey" // Text color for y-axis
+      }
     },
     xAxis: {
       type: "category",
@@ -35,7 +35,7 @@ const PlainGraph = ({
         }
       }
     },
-    
+
     yAxis: {
       title: {
         text: yaxis,
@@ -50,13 +50,13 @@ const PlainGraph = ({
       enabled: false,
     },
     plotOptions: {
-      column: { 
+      column: {
         borderWidth: 0,
         dataLabels: {
           enabled: true,
           format: "{point.y:.1f}",
         },
-       
+
       },
     },
     tooltip: {
@@ -79,7 +79,7 @@ const PlainGraph = ({
       },
     },
   };
-  
+
   return (
     <div className="">
       <div className="w-full h-96 shadow-signUp ">

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 const XLSX = require("xlsx");
 import axios from "axios";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -153,7 +153,7 @@ const Approver2 = () => {
     }
   };
 
-  const abcd = () => {};
+  const abcd = () => { };
   return (
     <div>
       <div className="col-span-12 gap-2 rounded-xl">

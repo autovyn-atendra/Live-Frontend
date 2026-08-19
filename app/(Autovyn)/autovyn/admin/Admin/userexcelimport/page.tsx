@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 const XLSX = require('xlsx');
 import axios from "axios";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -107,7 +107,7 @@ const Approver2 = () => {
         {
           headers: {
             "Content-Type": "multipart/form-data", // Set the content type for Excel files
-            compcode: user?.Comp_Code,name:user?.name,
+            compcode: user?.Comp_Code, name: user?.name,
           },
         }
       );

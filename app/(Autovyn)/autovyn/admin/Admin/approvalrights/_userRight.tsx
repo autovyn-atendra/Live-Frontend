@@ -9,7 +9,7 @@ import MediumTitle from "@/components/atoms/MediumTitle";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import CustomInputWithDatalist from "@/components/atoms/selectsearch";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { LuRefreshCcwDot } from "react-icons/lu";
 import { useRouter } from "next/navigation";
 import HashloaderComponent from "@/components/Templates/hashloader";
@@ -66,7 +66,7 @@ const UserRightsPage = ({ Emp_code }) => {
     fetchData();
   }, []);
 
-  useEffect(() => {}, [isClicked]);
+  useEffect(() => { }, [isClicked]);
   useEffect(() => {
     fetchUserData();
   }, [UserCode]);
@@ -335,7 +335,7 @@ const UserRightsPage = ({ Emp_code }) => {
                   >
                     Save
                   </Button>
-                  <Button type="button" variant={"print"} onClick={()=>history.back()}>
+                  <Button type="button" variant={"print"} onClick={() => history.back()}>
                     Back
                   </Button>
                 </div>
@@ -363,9 +363,8 @@ const UserRightsPage = ({ Emp_code }) => {
               className="bg-primary cursor-pointer text-center font-bold text-white h-9 w-20 flex justify-center mt-7 ml-4 rounded-md relative bg-sky-500"
             >
               <LuRefreshCcwDot
-                className={`absolute right-4 h-5 w-8 mt-2 mr-2  ${
-                  isClicked ? "animate-spin" : ""
-                }`}
+                className={`absolute right-4 h-5 w-8 mt-2 mr-2  ${isClicked ? "animate-spin" : ""
+                  }`}
               ></LuRefreshCcwDot>
             </div>
           </div>

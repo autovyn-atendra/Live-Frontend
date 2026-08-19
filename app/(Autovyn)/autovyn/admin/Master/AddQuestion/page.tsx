@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FaUsers } from "react-icons/fa";
 import SmallTitle from "@/components/atoms/smallTitle";
 import SelectSearch from "@/components/atoms/Select";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import MediumTitle from "@/components/atoms/MediumTitle";
 import { MdCameraAlt, MdFlipCameraIos } from "react-icons/md";
 import {

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog2";
 import Highcharts from "highcharts";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HighchartsReact from "highcharts-react-official";
 
 const GraphTableBar = ({
@@ -19,7 +19,7 @@ const GraphTableBar = ({
   const [tabledata, setTabledata] = useState([]);
   const handlePointClick = async (event) => {
     const point = event.point.name;
-    console.log(point,'point')
+    console.log(point, 'point')
     const apiData = await func(point);
     setIsDialogOpen(true);
     setTabledata(apiData?.a);
@@ -36,7 +36,7 @@ const GraphTableBar = ({
       style: {
         fontSize: "20px",
         fontWeight: "bold",
-        align:"left",
+        align: "left",
         color: "#999999",
         textTransform: "capitalize",
       },
@@ -67,7 +67,7 @@ const GraphTableBar = ({
           color: "#999999",
         },
       },
-     
+
     },
     legend: {
       enabled: false,
@@ -104,8 +104,8 @@ const GraphTableBar = ({
       },
     },
   };
-  
-  const onRowDoubleClick = () => {};
+
+  const onRowDoubleClick = () => { };
   return (
     <div className="mt-0">
       <div className="w-full h-96 ">

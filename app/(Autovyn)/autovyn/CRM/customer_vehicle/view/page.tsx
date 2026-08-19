@@ -5,7 +5,7 @@ import Image from "next/image";
 import Swal from "sweetalert2";
 
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios from "axios";
@@ -442,7 +442,7 @@ const CustomerVehicleListPage = () => {
     { Header: "Customer Name", accessor: "Cust_Name" },
     { Header: "Customer Mobile", accessor: "Cust_Mob" },
     { Header: "Model Name", accessor: "Model_Name" },
-    { Header: "Service Executive Name", accessor: "srv_exec_name",  },
+    { Header: "Service Executive Name", accessor: "srv_exec_name", },
     { Header: "Service Executive Emp Code", accessor: "srv_exec_Emp_Code", cellAlign: "center" },
     { Header: "Service Executive Mobile", accessor: "srv_exec_mobile", cellAlign: "center" },
     {
@@ -528,7 +528,7 @@ const CustomerVehicleListPage = () => {
                 className="!h-10 !text-[18px]"
                 placeholder="Search (name, mobile, reg no, model)..."
                 handleInputChange={(_, value) => setSearch(value)}
-                onInput={() => {}}
+                onInput={() => { }}
                 onKeyDown={handleKeyDown}
                 disabled={isLoading}
               />

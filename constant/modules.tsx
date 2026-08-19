@@ -386,14 +386,24 @@ export const treeData = [
     key: "14",
     children: [
       {
-        title: "Meta Leads|",
+        title: "Meta Dashboard|",
         key: "14.1",
         url: "/autovyn/meta",
         children: [
           {
-            title: "Meta Leads | ",
+            title: "Meta Leads Dashboard | ",
             key: "14.1.1",
-            url: "/autovyn/meta",
+            url: "/autovyn/meta/dashboard",
+          },
+          {
+            title: "Meta Leads Followup | ",
+            key: "14.1.2",
+            url: "/autovyn/meta/followup_lead",
+          },
+          {
+            title: "Meta Campaign From | ",
+            key: "14.1.3",
+            url: "/autovyn/meta/meta_campaign_from",
           },
         ],
       },

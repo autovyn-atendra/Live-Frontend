@@ -1,6 +1,6 @@
 "use client"
 import { useCurrentUser } from '@/app/hooks/use-current-user';
-import DataTable from '@/components/Templates/ServiceTable';
+import DataTable from '@/components/Templates/servicetable';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
@@ -34,7 +34,7 @@ function ReleaseNotesForm() {
                 formData,
                 {
                     headers: {
-                        compcode: user?.Comp_Code,name:user?.name,
+                        compcode: user?.Comp_Code, name: user?.name,
                         token: user?.email
                     },
                 }
@@ -63,7 +63,7 @@ function ReleaseNotesForm() {
                 formData,
                 {
                     headers: {
-                        compcode: user?.Comp_Code,name:user?.name,
+                        compcode: user?.Comp_Code, name: user?.name,
                         token: user?.email
                     },
                 }
@@ -92,7 +92,7 @@ function ReleaseNotesForm() {
                 formData,
                 {
                     headers: {
-                        compcode: user?.Comp_Code,name:user?.name,
+                        compcode: user?.Comp_Code, name: user?.name,
                         token: user?.email
                     },
                 }

@@ -1,6 +1,6 @@
 "use client";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import { useEffect, useState } from "react";
@@ -16,7 +16,7 @@ import PaginatedTable from "@/components/Templates/PaginatedTable";
 import Eselect from "@/components/atoms/Eselect";
 
 const columns = [
-    { Header: "Channel", accessor: "Channel" },
+  { Header: "Channel", accessor: "Channel" },
   { Header: "Cluster", accessor: "Cluster" },
   { Header: "Branch", accessor: "Branch" },
   { Header: "Employee Code", accessor: "EMPCODE" },
@@ -45,7 +45,7 @@ const Table1 = () => {
   const [form, setForm] = useState({
     Module_Code: "",
     branch: "",
-     includeLeft: "0",
+    includeLeft: "0",
   });
 
   useEffect(() => {
@@ -84,15 +84,15 @@ const Table1 = () => {
   };
 
   const handleChange = (name, value) => {
-  if (Array.isArray(value)) {
-    value = value[0]; // 👈 take only first value
-  }
+    if (Array.isArray(value)) {
+      value = value[0]; // 👈 take only first value
+    }
 
-  setForm((prev) => ({
-    ...prev,
-    [name]: value,
-  }));
-};
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
   const data = async () => {
     setIsLoading(true);
@@ -138,7 +138,7 @@ const Table1 = () => {
         <div className="rounded-t w-full bg-white dark:bg-dark mb-0 py-1 px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-1">
-            <GrUserAdmin
+              <GrUserAdmin
                 size={22}
                 className="text-gray-700 dark:text-gray-300"
               />
@@ -153,7 +153,7 @@ const Table1 = () => {
             </Button>
           </div>
         </div>
-       <div className="flex gap-2 p-3 dark:bg-primary dark:bg-opacity-10 items-end">
+        <div className="flex gap-2 p-3 dark:bg-primary dark:bg-opacity-10 items-end">
           <div className="w-1/4">
             <Fselect
               title="Module"
@@ -175,19 +175,19 @@ const Table1 = () => {
             />
           </div>
           <div className="w-1/4 mb-2">
-  <Eselect
-    title="Left Employees"
-    name={"includeLeft"}
-    initialValue={form.includeLeft}
-    option={[
-       { label: "Exclude Left Employees", value: "0" },
-      { label: "Include Left Employees", value: "1" },
-     
-    ]}
-    handleInputChange={handleChange}
-  h={9}
-  />
-</div>
+            <Eselect
+              title="Left Employees"
+              name={"includeLeft"}
+              initialValue={form.includeLeft}
+              option={[
+                { label: "Exclude Left Employees", value: "0" },
+                { label: "Include Left Employees", value: "1" },
+
+              ]}
+              handleInputChange={handleChange}
+              h={9}
+            />
+          </div>
 
           <div className="w-1/4">
             <Button size={"default"} variant={"update"} onClick={data}>

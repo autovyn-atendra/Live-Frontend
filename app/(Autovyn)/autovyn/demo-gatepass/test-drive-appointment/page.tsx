@@ -5,7 +5,7 @@ import { UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Ainput from "@/components/atoms/Input";
 import CustomSelectSearch from "@/components/atoms/Select";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { toast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";

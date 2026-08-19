@@ -5,7 +5,7 @@ import Image from "next/image";
 import Swal from "sweetalert2";
 
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios from "axios";
@@ -662,6 +662,18 @@ const CustomerVehicleImportPage = () => {
       Header: "Model Name",
       accessor: "Model_Name",
     },
+     {
+      Header: "Service Executive Name",
+      accessor: "srv_exec_name",
+    },
+    {
+      Header: "Service Executive Emp Code",
+      accessor: "srv_exec_Emp_Code",
+    },
+    {
+      Header: "Service Executive Mobile",
+      accessor: "srv_exec_mobile",
+    },
     {
       Header: "Last Service Date",
       accessor: "Last_Service_Date",
@@ -694,18 +706,7 @@ const CustomerVehicleImportPage = () => {
       cellAlign: "right",
     },
     // ✅ 3 NEW COLUMNS
-    {
-      Header: "Service Executive Name",
-      accessor: "srv_exec_name",
-    },
-    {
-      Header: "Service Executive Emp Code",
-      accessor: "srv_exec_Emp_Code",
-    },
-    {
-      Header: "Service Executive Mobile",
-      accessor: "srv_exec_mobile",
-    },
+
   ];
 
   // ============================================================
@@ -719,7 +720,7 @@ const CustomerVehicleImportPage = () => {
         <div className="rounded-t border border-borderColor bg-header px-2 py-2 dark:border-borderColor-dark dark:bg-black md:px-6">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div className="flex">
-              <h1 className="flex items-center gap-x-3 text-sm font-bold uppercase text-white dark:text-[#37a9dd] md:text-lg lg:text-xl">
+              <h1 className="flex items-center gap-x-3 text-lg font-bold uppercase text-white dark:text-[#37a9dd] md:text-lg lg:text-xl">
                 <Image
                   src="/Payrollicon/Excel_Import.png"
                   alt="Service Reminder Import"
@@ -765,7 +766,7 @@ const CustomerVehicleImportPage = () => {
           <div className="flex flex-col gap-4 md:flex-row">
             <input
               type="file"
-              className="flex h-9 w-full rounded-md border border-borderColor bg-white px-3 py-1 pt-1.5 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-borderColor-dark dark:bg-input dark:placeholder:text-slate-400 dark:focus-visible:ring-slate-300 md:w-1/2 lg:w-1/4"
+              className="flex h-10 w-full rounded-md border border-borderColor bg-white px-3 py-1.5 text-lg shadow-sm transition-colors file:border-0 file:bg-transparent file:text-lg file:font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-borderColor-dark dark:bg-input dark:placeholder:text-slate-400 dark:focus-visible:ring-slate-300 md:w-1/2 lg:w-1/4"
               accept=".xlsx,.xls"
               onChange={handleChange}
               ref={fileInputRef}
@@ -775,6 +776,7 @@ const CustomerVehicleImportPage = () => {
             <Button
               variant="save"
               onClick={handleButtonClick}
+              size="lg"
               loading={isLoadingOnPage}
               disabled={isLoadingOnPage || !excelFile}
             >
@@ -790,7 +792,7 @@ const CustomerVehicleImportPage = () => {
 
       {/* COUNTS + FILTER BUTTONS */}
       <div className="col-span-12">
-        <div className="mt-0 flex flex-wrap items-center gap-4 rounded-b border border-borderColor bg-white p-2  shadow dark:border-borderColor-dark dark:bg-black md:p-4">
+        <div className="mt-0 flex  text-lg flex-wrap items-center gap-4 rounded-b border border-borderColor bg-white p-2  shadow dark:border-borderColor-dark dark:bg-black md:p-4">
           <div className="text-green">Imported Rows  {correctData.length}</div>
 
           <div className="text-exit">Non-Imported Rows  {erroredData.length}</div>
@@ -799,15 +801,15 @@ const CustomerVehicleImportPage = () => {
             Total Rows  {correctData.length + erroredData.length}
           </div>
 
-          <Button variant="outline" className="ml-0 md:ml-4" onClick={handleAllDataClick}>
+          <Button variant="outline" size="lg" className="ml-0 md:ml-4" onClick={handleAllDataClick}>
             All Data
           </Button>
 
-          <Button variant="outline" onClick={handleCorrectDataClick}>
+          <Button variant="outline" size="lg" onClick={handleCorrectDataClick}>
             Imported Data
           </Button>
 
-          <Button variant="outline" onClick={handleErrorDataClick}>
+          <Button variant="outline" size="lg" onClick={handleErrorDataClick}>
             Non-Imported Data
           </Button>
         </div>
@@ -822,6 +824,7 @@ const CustomerVehicleImportPage = () => {
           selectValue="UTD"
           data={tableData}
           height="350px"
+          size="text-lg"
           filterPosition="FilterData"
           enableColumnFilters={true}
           numericFilterColumns={[

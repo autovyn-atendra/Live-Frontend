@@ -1,6 +1,6 @@
 "use client";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import {
   FetchGroupName,
   FetchGroupTable,
@@ -100,12 +100,12 @@ const Bookingdata = () => {
       Server_Id: 0,
       USER_BY: user?.name,
     });
-    setIsUpdateMode(false); 
+    setIsUpdateMode(false);
   };
 
   const save = async () => {
 
-    if(!GrupData.TAN_YN){
+    if (!GrupData.TAN_YN) {
       Swal.fire({
         icon: "info",
         title: "",
@@ -127,7 +127,7 @@ const Bookingdata = () => {
         title: "",
         text: "Group Added Succesfully.",
       });
-    resetForm();
+      resetForm();
       await fetchData();
     }
   };
@@ -158,7 +158,7 @@ const Bookingdata = () => {
       ...rowData,
     }));
 
-    setIsUpdateMode(true); 
+    setIsUpdateMode(true);
   };
 
   return (
@@ -190,10 +190,10 @@ const Bookingdata = () => {
 
             {/* Right side with buttons */}
             <div className="flex items-center gap-x-2">
-              <Button onClick={save} variant={"save"}  disabled={isUpdateMode}>
+              <Button onClick={save} variant={"save"} disabled={isUpdateMode}>
                 Save
               </Button>
-              <Button onClick={update} variant={"update"}  disabled={!isUpdateMode}>
+              <Button onClick={update} variant={"update"} disabled={!isUpdateMode}>
                 Update
               </Button>
               <Button

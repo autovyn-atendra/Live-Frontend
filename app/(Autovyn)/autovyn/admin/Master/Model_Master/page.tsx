@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import ModelMasterUpdate from "./MasterUpdate/MasterUpdate";
 
@@ -97,7 +97,7 @@ const EmpTabs = () => {
                     data={tableData}
                     onRowDoubleClick={handleRowDoubleClick}
                     filterPosition="FilterData"
-          numericFilterColumns={[]}
+                    numericFilterColumns={[]}
                 />
             )}
 

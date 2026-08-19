@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios from "axios";
@@ -486,7 +486,7 @@ const Page = () => {
     //     setAppliedSearch(search);
     //     setAppliedFromDate(fromDate);
     //     setAppliedToDate(toDate);
-        
+
     //     await fetchData();
     //     const vehicleNoFromUrl = searchParams?.get("vehicleNo");
     //     if (vehicleNoFromUrl) {
@@ -774,7 +774,7 @@ const Page = () => {
                                     width={25}
                                     height={25}
                                 />
-                                 SERVICE REMINDER HISTORY
+                                SERVICE REMINDER HISTORY
                             </h1>
                         </div>
 

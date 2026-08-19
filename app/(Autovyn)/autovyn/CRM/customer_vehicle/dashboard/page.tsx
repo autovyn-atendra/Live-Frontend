@@ -10,7 +10,7 @@ import React, {
 import Swal from "sweetalert2";
 import axios from "axios";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import Ainput from "@/components/atoms/Input";
@@ -951,13 +951,13 @@ const DashboardPage = () => {
                 disabled={isLoadingAny}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-lg font-semibold text-white transition-all disabled:opacity-50"
               >
-                 Reset
+                Reset
               </button>
               <button
                 onClick={() => window.history.back()}
                 className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-lg font-semibold text-white transition-all"
               >
-                 Back
+                Back
               </button>
             </div>
           </div>
@@ -1023,7 +1023,7 @@ const DashboardPage = () => {
           <MetricCard
             label="Active VEH."
             value={totals?.totalMasterVehiclesActive ?? 0}
-            onClick={()=>(router.push("/autovyn/CRM/customer_vehicle/view"))}
+            onClick={() => (router.push("/autovyn/CRM/customer_vehicle/view"))}
             color="purple"
             sub="Total vehicles"
             iconType="box"
@@ -1163,7 +1163,7 @@ const DashboardPage = () => {
           </div>
         </Card>
 
-       
+
 
         {/* Top Models */}
         <Card>
@@ -1262,7 +1262,7 @@ const DashboardPage = () => {
                       setPage(1);
                       scrollToTable();
                     }}
-                    onInput={() => {}}
+                    onInput={() => { }}
                     redlabel=""
                     labelClass="text-[17px]"
                     className="!h-10 !text-[17px]"
@@ -1283,7 +1283,7 @@ const DashboardPage = () => {
                       setPage(1);
                       scrollToTable();
                     }}
-                    onInput={() => {}}
+                    onInput={() => { }}
                     redlabel=""
                     labelClass="text-[17px]"
                     className="!h-10 !text-[17px]"
@@ -1313,7 +1313,7 @@ const DashboardPage = () => {
                     setPage(1);
                     scrollToTable();
                   }}
-                  onInput={() => {}}
+                  onInput={() => { }}
                   redlabel=""
                   placeholder="Reg No, Customer, Mobile, Model..."
                   labelClass="text-[17px]"
@@ -1342,7 +1342,7 @@ const DashboardPage = () => {
             }}
             onServerPageChange={(p: number) => setPage(p)}
             onServerPageSizeChange={(s: number) => { setPageSize(s); setPage(1); }}
-            
+
           />
         </Card>
       </div>

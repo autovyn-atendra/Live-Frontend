@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog2";
 
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 import MediumTitle from "../atoms/MediumTitle";
 
 const DivClickData = ({
@@ -19,7 +19,7 @@ const DivClickData = ({
     setTabledata(tableData);
   };
 
-  const onRowDoubleClick = () => {};
+  const onRowDoubleClick = () => { };
   return (
     <div>
       <div onClick={handlePointClick} className=" lg:col-span-3 md:col-span-12 col-span-12  flex  bg-white dark:bg-dark rounded ">
@@ -27,7 +27,7 @@ const DivClickData = ({
           className=" lg:text-xl md:text-lg text-base font-bold flex"
         >
           <MediumTitle text={title} />
-      <MediumTitle text={value} />
+          <MediumTitle text={value} />
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import DataTable from "@/components/Templates/ServiceTable";
+import DataTable from "@/components/Templates/servicetable";
 const XLSX = require('xlsx');
 import axios from "axios";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -102,7 +102,7 @@ const Approver2 = () => {
         {
           headers: {
             "Content-Type": "multipart/form-data", // Set the content type for Excel files
-            compcode: user?.Comp_Code,name:user?.name,
+            compcode: user?.Comp_Code, name: user?.name,
           },
         }
       );
@@ -153,26 +153,26 @@ const Approver2 = () => {
   return (
     <div>
       <div className="col-span-12 gap-2 rounded-xl">
-      <div className="rounded-t bg-white dark:bg-dark px-6 py-2">
-  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-    <div className="flex items-center gap-2">
-      <GrUserAdmin size={34} className="mt-1" title="Payroll" />
-      <MediumTitle text="User Rights Excel Import" />
-    </div>
-    <div className="flex gap-x-2">
-      <Button variant="save" onClick={showdata}>
-        Download Sample
-      </Button>
-      <Button
-        variant="print"
-        onClick={() => window.history.back()}
-        className="flex items-center gap-1"
-      >
-        Back
-      </Button>
-    </div>
-  </div>
-</div>
+        <div className="rounded-t bg-white dark:bg-dark px-6 py-2">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <GrUserAdmin size={34} className="mt-1" title="Payroll" />
+              <MediumTitle text="User Rights Excel Import" />
+            </div>
+            <div className="flex gap-x-2">
+              <Button variant="save" onClick={showdata}>
+                Download Sample
+              </Button>
+              <Button
+                variant="print"
+                onClick={() => window.history.back()}
+                className="flex items-center gap-1"
+              >
+                Back
+              </Button>
+            </div>
+          </div>
+        </div>
         <div className="p-3 dark:bg-primary dark:bg-opacity-10 rounded-xl">
           <div className="flex gap-4">
             <input
