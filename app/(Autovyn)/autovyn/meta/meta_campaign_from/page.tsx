@@ -34,6 +34,8 @@ type CampaignRecord = {
   Campaign_Type: string | null;
   Meta_Form_Id: string | null;
   Meta_Form_Name: string | null;
+  Sales_Executive_Number?: string | null;
+  Transfer_Number?: string | null;
   Is_Active: number;
   Remark: string | null;
   Created_By: string | null;
@@ -49,6 +51,7 @@ type FormDataState = {
   Campaign_Type: string;
   Meta_Form_Id: string;
   Meta_Form_Name: string;
+  Sales_Executive_Number: string;
   Is_Active: number;
   Remark: string;
 };
@@ -60,6 +63,7 @@ const INITIAL_FORM: FormDataState = {
   Campaign_Type: "CALLMATIC",
   Meta_Form_Id: "",
   Meta_Form_Name: "",
+  Sales_Executive_Number: "",
   Is_Active: 1,
   Remark: "",
 };
@@ -200,6 +204,7 @@ export default function MetaCampaignFormPage() {
       Campaign_Type: item.Campaign_Type || "CALLMATIC",
       Meta_Form_Id: item.Meta_Form_Id || "",
       Meta_Form_Name: item.Meta_Form_Name || "",
+      Sales_Executive_Number: item.Sales_Executive_Number || item.Transfer_Number || "",
       Is_Active: Number(item.Is_Active) ? 1 : 0,
       Remark: item.Remark || "",
     });
@@ -224,6 +229,8 @@ export default function MetaCampaignFormPage() {
         campaignType: formData.Campaign_Type.trim(),
         metaFormId: formData.Meta_Form_Id.trim(),
         metaFormName: formData.Meta_Form_Name.trim(),
+        salesExecutiveNumber: formData.Sales_Executive_Number.trim(),
+        transferNumber: formData.Sales_Executive_Number.trim(),
         isActive: formData.Is_Active,
         remark: formData.Remark.trim(),
       };
@@ -288,13 +295,13 @@ export default function MetaCampaignFormPage() {
   // ============================================================
   const columns = useMemo(
     () => [
-      {
-        Header: "#",
-        accessor: "UTD",
-        Cell: ({ value }: { value: number }) => (
-          <span className="font-mono font-bold text-[#64748B] text-lg">#{value}</span>
-        ),
-      },
+      // {
+      //   Header: "#",
+      //   accessor: "UTD",
+      //   Cell: ({ value }: { value: number }) => (
+      //     <span className="font-mono font-bold text-[#64748B] text-lg">#{value}</span>
+      //   ),
+      // },
       {
         Header: "Campaign ID",
         accessor: "Campaign_Id",
@@ -337,6 +344,15 @@ export default function MetaCampaignFormPage() {
         Cell: ({ value }: { value: string | null }) => (
           <span className="font-medium text-[#334155] dark:text-[#CBD5E1] text-lg">
             {value || "—"}
+          </span>
+        ),
+      },
+      {
+        Header: "Sales Exec Number",
+        accessor: "Sales_Executive_Number",
+        Cell: ({ value, row }: any) => (
+          <span className="font-mono font-bold text-[#2563EB] dark:text-[#60A5FA] text-lg">
+            {value || row.original.Transfer_Number || "—"}
           </span>
         ),
       },
@@ -530,6 +546,20 @@ export default function MetaCampaignFormPage() {
               placeholder="e.g. Festive Auto Lead Form 2026"
               value={formData.Meta_Form_Name}
               handleInputChange={(_, value) => handleInputChange("Meta_Form_Name", value)}
+              onInput={() => {}}
+              redlabel=""
+              labelClass="text-lg font-bold"
+              className="!h-10 !text-lg"
+            />
+
+            {/* Sales Executive Number (Transfer Call) */}
+            <Ainput
+              type="text"
+              name="Sales_Executive_Number"
+              title="Sales Executive Number (Call Transfer)"
+              placeholder="e.g. 9876543210"
+              value={formData.Sales_Executive_Number}
+              handleInputChange={(_, value) => handleInputChange("Sales_Executive_Number", value)}
               onInput={() => {}}
               redlabel=""
               labelClass="text-lg font-bold"

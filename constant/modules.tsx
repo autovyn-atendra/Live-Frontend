@@ -282,9 +282,14 @@ export const treeData = [
             url: "/autovyn/CRM/customer_vehicle/Transfer_work",
           },
           {
-            title: "Service Reminder Appointment Booking |",
+            title: "Service Reminder Service Booking |",
             key: "23.1.10",
             url: "/autovyn/CRM/customer_vehicle/service-appointment",
+          },
+          {
+            title: "Service Reminder Appointment Booking |",
+            key: "23.1.11",
+            url: "/autovyn/CRM/customer_vehicle/appointment-booking",
           },
         ]
       },
@@ -404,6 +409,11 @@ export const treeData = [
             title: "Meta Campaign From | ",
             key: "14.1.3",
             url: "/autovyn/meta/meta_campaign_from",
+          },
+          {
+            title: "Meta Lead Demo| ",
+            key: "14.1.4",
+            url: "/autovyn/meta/demo",
           },
         ],
       },

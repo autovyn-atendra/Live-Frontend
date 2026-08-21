@@ -48,6 +48,25 @@ const showToast = (msg: string, type: "success" | "error" | "warning" | "info") 
   Swal.mixin({ toast: true, position: "top-end", showConfirmButton: false, timer: 4000, timerProgressBar: true })
     .fire({ icon: type, title: msg });
 
+const formatTimeDisplay = (timeStr?: string) => {
+  if (!timeStr) return "10:00 AM";
+  if (timeStr.includes("T")) {
+    const timePart = timeStr.split("T")[1]?.split(".")[0];
+    if (timePart) timeStr = timePart;
+  }
+  const parts = timeStr.split(":");
+  if (parts.length >= 2) {
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1];
+    if (isNaN(hours)) return timeStr;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    const formattedHours = hours < 10 ? `0${hours}` : `${hours}`;
+    return `${formattedHours}:${minutes} ${ampm}`;
+  }
+  return timeStr;
+};
+
 function AppointmentBookingContent() {
   const searchParams = useSearchParams();
   const utdParam = searchParams.get("utd");
@@ -142,91 +161,106 @@ function AppointmentBookingContent() {
         const formattedVehicle = data?.vehicleNo || vehicleNoParam || "N/A";
         const formattedCustName = data?.custName || "Valued Customer";
         const formattedDate = appointmentDate;
-        const formattedTime = appointmentTime;
+        const formattedTime = formatTimeDisplay(appointmentTime);
         const formattedLocation = data?.serviceCenter || "AutoVyn Service Center";
         const isPickup = pickupOption === "PICKUP_REQUIRED";
 
         Swal.fire({
           title: "",
+          width: "560px",
           html: `
-            <div class="p-2 text-left font-sans">
-              <!-- Top Success Header Badge -->
-              <div class="flex items-center justify-center mb-4">
-                <div class="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/80 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner">
-                  <svg class="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                  </svg>
+            <div class="p-1 text-left font-sans relative overflow-hidden">
+              <!-- Background Ambient Glow Effects -->
+              <div class="absolute -top-12 -right-12 w-48 h-48 bg-[#10B981]/10 rounded-full blur-3xl pointer-events-none"></div>
+              <div class="absolute -bottom-12 -left-12 w-48 h-48 bg-[#6366F1]/10 rounded-full blur-3xl pointer-events-none"></div>
+
+              <!-- Top Success Glowing Icon -->
+              <div class="flex justify-center mb-3">
+                <div class="relative">
+                  <div class="absolute inset-0 rounded-2xl bg-[#10B981]/20 dark:bg-[#10B981]/30 blur-lg animate-pulse"></div>
+                  <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-[#10B981] to-[#0D9488] text-[#FFFFFF] flex items-center justify-center shadow-lg shadow-[#10B981]/30 transform hover:scale-105 transition-all duration-300">
+                    <svg class="w-9 h-9 text-[#FFFFFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </div>
                 </div>
               </div>
 
-              <h2 class="text-center text-2xl font-extrabold text-slate-800 dark:text-white mb-1">
+              <!-- Header Text -->
+              <h2 class="text-center text-2xl font-black tracking-tight text-[#1E293B] dark:text-[#FFFFFF] mb-1">
                 Appointment Confirmed! 🎉
               </h2>
-              <p class="text-center text-xs text-slate-500 dark:text-slate-400 mb-5">
+              <p class="text-center text-sm font-medium text-[#64748B] dark:text-[#94A3B8] mb-4">
                 Your service booking has been successfully registered.
               </p>
 
-              <!-- Main Detail Card -->
-              <div class="bg-slate-50 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 mb-4">
+              <!-- Main Detail Card with Glassmorphism -->
+              <div class="bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9]/80 dark:from-[#0F172A]/90 dark:to-[#0F172A]/50 border border-[#E2E8F0]/80 dark:border-[#1E293B]/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5 mb-3.5 relative z-10">
                 
-                <!-- Vehicle & Customer Header -->
-                <div class="flex items-center justify-between pb-3 border-b border-slate-200/70 dark:border-slate-800">
-                  <div>
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Customer</p>
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-100 mt-0.5">${formattedCustName}</p>
+                <!-- Customer & Vehicle Header -->
+                <div class="flex items-center justify-between pb-3 border-b border-[#E2E8F0]/70 dark:border-[#1E293B]/70">
+                  <div class="space-y-0.5">
+                    <p class="text-xs font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Customer</p>
+                    <p class="text-base font-black text-[#1E293B] dark:text-[#F1F5F9]">${formattedCustName}</p>
                   </div>
-                  <div class="text-right">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vehicle No</p>
-                    <span class="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 px-2.5 py-0.5 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-800 mt-0.5">
+                  <div class="text-right space-y-0.5">
+                    <p class="text-xs font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Vehicle No</p>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs sm:text-sm font-bold shadow-xs" style="background: linear-gradient(to right, #2563eb, #4f46e5) !important; color: #ffffff !important;">
                       🚗 ${formattedVehicle}
                     </span>
                   </div>
                 </div>
 
-                <!-- Grid Details -->
-                <div class="grid grid-cols-2 gap-2.5 pt-1">
-                  <div class="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60">
-                    <p class="text-[10px] font-semibold text-slate-400">📅 Date</p>
-                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">${formattedDate}</p>
+                <!-- Grid Details: Date & Time -->
+                <div class="grid grid-cols-2 gap-3 pt-0.5">
+                  <div class="bg-[#FFFFFF]/80 dark:bg-[#1E293B]/80 p-3 rounded-xl border border-[#E2E8F0]/50 dark:border-[#334155]/50 shadow-2xs backdrop-blur-xs">
+                    <div class="flex items-center gap-1.5 text-[#94A3B8] dark:text-[#94A3B8] mb-1">
+                      <span class="text-sm">📅</span>
+                      <p class="text-xs font-bold uppercase tracking-wider">Date</p>
+                    </div>
+                    <p class="text-sm sm:text-base font-black text-[#1E293B] dark:text-[#F1F5F9]">${formattedDate}</p>
                   </div>
 
-                  <div class="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60">
-                    <p class="text-[10px] font-semibold text-slate-400">⏰ Time Slot</p>
-                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">${formattedTime}</p>
+                  <div class="bg-[#FFFFFF]/80 dark:bg-[#1E293B]/80 p-3 rounded-xl border border-[#E2E8F0]/50 dark:border-[#334155]/50 shadow-2xs backdrop-blur-xs">
+                    <div class="flex items-center gap-1.5 text-[#94A3B8] dark:text-[#94A3B8] mb-1">
+                      <span class="text-sm">⏰</span>
+                      <p class="text-xs font-bold uppercase tracking-wider">Time Slot</p>
+                    </div>
+                    <p class="text-sm sm:text-base font-black text-[#1E293B] dark:text-[#F1F5F9]">${formattedTime}</p>
                   </div>
                 </div>
 
-                <!-- Location -->
-                <div class="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60 flex items-start gap-2">
-                  <span class="text-base mt-0.5">📍</span>
+                <!-- Location Card -->
+                <div class="bg-[#FFFFFF]/80 dark:bg-[#1E293B]/80 p-3 rounded-xl border border-[#E2E8F0]/50 dark:border-[#334155]/50 shadow-2xs backdrop-blur-xs flex items-start gap-3">
+                  <span class="text-lg mt-0.5 p-1 rounded-lg bg-[#EEF2FF] dark:bg-[#1E1B4B]/60 text-[#4F46E5] dark:text-[#818CF8] shrink-0">📍</span>
                   <div>
-                    <p class="text-[10px] font-semibold text-slate-400">Service Center</p>
-                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">${formattedLocation}</p>
+                    <p class="text-xs font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Service Center</p>
+                    <p class="text-sm font-black text-[#1E293B] dark:text-[#F1F5F9] mt-0.5 leading-snug">${formattedLocation}</p>
                   </div>
                 </div>
 
-                <!-- Service Mode -->
-                <div class="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
-                  <span class="text-[10px] font-semibold text-slate-400">Service Type</span>
-                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-md ${isPickup ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800" : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"}">
+                <!-- Service Type Badge -->
+                <div class="bg-[#FFFFFF]/80 dark:bg-[#1E293B]/80 p-3 rounded-xl border border-[#E2E8F0]/50 dark:border-[#334155]/50 shadow-2xs backdrop-blur-xs flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Service Type</span>
+                  <span class="text-xs sm:text-sm font-extrabold px-3 py-1 rounded-lg ${isPickup ? "bg-[#F59E0B]/10 text-[#B45309] dark:text-[#FCD34D] border border-[#F59E0B]/20" : "bg-[#10B981]/10 text-[#047857] dark:text-[#6EE7B7] border border-[#10B981]/20"}">
                     ${isPickup ? "🚚 Home Pickup Requested" : "🚗 Self Drive Workshop Visit"}
                   </span>
                 </div>
 
               </div>
 
-              <!-- WhatsApp Confirmation Alert -->
-              <div class="flex items-center gap-2.5 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200/80 dark:border-emerald-800/80 p-3 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs font-medium">
-                <span class="text-base">💬</span>
-                <span>Confirmation details & service ticket sent to your WhatsApp!</span>
+              <!-- WhatsApp Confirmation Alert Banner -->
+              <div class="flex items-center gap-3 bg-gradient-to-r from-[#10B981]/10 via-[#14B8A6]/10 to-[#10B981]/10 border border-[#10B981]/20 p-3.5 rounded-2xl text-[#065F46] dark:text-[#6EE7B7] text-sm font-semibold shadow-xs">
+                <span class="text-xl shrink-0">💬</span>
+                <span class="leading-tight">Confirmation details & service ticket sent to your WhatsApp!</span>
               </div>
             </div>
           `,
           confirmButtonText: "Great, Thank You! ✨",
           buttonsStyling: false,
           customClass: {
-            popup: "rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 dark:bg-slate-950 max-w-md w-full",
-            confirmButton: "w-full mt-4 py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 cursor-pointer transform hover:scale-[1.01]"
+            popup: "rounded-3xl shadow-2xl border border-[#E2E8F0]/80 dark:border-[#1E293B] dark:bg-[#020617] max-w-xl w-full p-6 text-sans overflow-hidden",
+            confirmButton: "w-full mt-4 py-3.5 px-6 bg-gradient-to-r from-[#4F46E5] via-[#2563EB] to-[#4338CA] hover:from-[#4338CA] hover:to-[#1D4ED8] text-[#FFFFFF] font-black text-base rounded-xl shadow-lg shadow-[#6366F1]/25 hover:shadow-[#6366F1]/40 transition-all duration-200 cursor-pointer transform hover:scale-[1.01] active:scale-[0.99]"
           }
         });
       } else {
@@ -295,45 +329,98 @@ function AppointmentBookingContent() {
 
       {/* ── CONFIRMED SUCCESS SCREEN ── */}
       {isSaved ? (
-        <div className="mt-6 rounded-2xl border border-[#86EFAC] bg-[#F0FDF4] p-8 text-center shadow-lg dark:border-[#166534] dark:bg-[#14532D]/20">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#16A34A] text-white shadow-md">
-            <CheckCircle2 size={36} />
-          </div>
-          <h2 className="mt-4 text-[26px] font-bold text-[#15803D] dark:text-[#86EFAC]">
-            Appointment Confirmed!
-          </h2>
-          <p className="mt-1 text-[18px] text-[#4B5563] dark:text-[#D1D5DB]">
-            Your service appointment details have been updated and confirmed in our system.
-          </p>
+        <div className="mt-6 overflow-hidden rounded-3xl border border-[#CBD5E1] dark:border-[#1E293B] bg-white dark:bg-[#0F172A] p-6 shadow-xl relative text-left">
+          {/* Background Ambient Glow Effects */}
+          <div className="absolute -top-12 -right-12 h-36 w-36 rounded-full bg-[#10B981]/10 blur-2xl pointer-events-none"></div>
+          <div className="absolute -bottom-12 -left-12 h-36 w-36 rounded-full bg-[#3B82F6]/10 blur-2xl pointer-events-none"></div>
 
-          <div className="mx-auto mt-6 max-w-lg rounded-xl border border-[#BBF7D0] bg-white p-5 text-left dark:border-[#166534] dark:bg-[#111827]">
-            <div className="grid grid-cols-2 gap-4 text-[17px]">
-              <div>
-                <span className="text-[14px] font-medium text-[#6B7280]">Scheduled Date:</span>
-                <p className="font-bold text-[#1F2937] dark:text-white">{appointmentDate}</p>
-              </div>
-              <div>
-                <span className="text-[14px] font-medium text-[#6B7280]">Time Slot:</span>
-                <p className="font-bold text-[#1F2937] dark:text-white">{appointmentTime}</p>
-              </div>
-              <div>
-                <span className="text-[14px] font-medium text-[#6B7280]">Service Workshop:</span>
-                <p className="font-bold text-[#1F2937] dark:text-white">{data?.serviceCenter}</p>
-              </div>
-              <div>
-                <span className="text-[14px] font-medium text-[#6B7280]">Vehicle No:</span>
-                <p className="font-bold text-[#1D4ED8] dark:text-[#60A5FA]">{data?.vehicleNo}</p>
+          {/* Top Success Badge */}
+          <div className="flex justify-center mb-3">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-2xl bg-[#10B981]/20 blur-lg animate-pulse"></div>
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-lg shadow-[#10B981]/30">
+                <CheckCircle2 size={36} />
               </div>
             </div>
           </div>
 
-          <Button
-            onClick={() => setIsSaved(false)}
-            variant="outline"
-            className="mt-6 border-[#16A34A] text-[#16A34A] hover:bg-[#F0FDF4]"
-          >
-            Modify / Reschedule Appointment
-          </Button>
+          <h2 className="text-center text-[26px] font-black tracking-tight text-[#1E293B] dark:text-[#F1F5F9]">
+            Appointment Confirmed! 🎉
+          </h2>
+          <p className="mt-1 text-center text-[15px] font-medium text-[#64748B] dark:text-[#94A3B8]">
+            Your service appointment details have been updated and confirmed in our system.
+          </p>
+
+          {/* Main Detail Card */}
+          <div className="mx-auto mt-6 max-w-md space-y-3 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9]/80 dark:from-[#1E293B]/80 dark:to-[#0F172A]/80 p-4 shadow-xs">
+            
+            {/* Customer & Vehicle Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0] dark:border-[#1E293B]">
+              <div className="space-y-0.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Customer</p>
+                <p className="text-[16px] font-black text-[#1E293B] dark:text-[#F1F5F9]">{data?.custName || "Valued Customer"}</p>
+              </div>
+              <div className="text-right space-y-0.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Vehicle No</p>
+                <span className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold shadow-xs" style={{ background: "linear-gradient(to right, #2563eb, #4f46e5)", color: "#ffffff" }}>
+                  🚗 {data?.vehicleNo || vehicleNoParam || "N/A"}
+                </span>
+              </div>
+            </div>
+
+            {/* Grid Details: Date & Time */}
+            <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] p-3 shadow-2xs">
+                <div className="flex items-center gap-1.5 text-[#94A3B8] mb-0.5">
+                  <Calendar size={14} />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Date</span>
+                </div>
+                <p className="text-[15px] font-black text-[#1E293B] dark:text-[#F1F5F9]">{appointmentDate}</p>
+              </div>
+
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] p-3 shadow-2xs">
+                <div className="flex items-center gap-1.5 text-[#94A3B8] mb-0.5">
+                  <Clock size={14} />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Time Slot</span>
+                </div>
+                <p className="text-[15px] font-black text-[#1E293B] dark:text-[#F1F5F9]">{formatTimeDisplay(appointmentTime)}</p>
+              </div>
+            </div>
+
+            {/* Workshop Location Card */}
+            <div className="rounded-xl border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] p-3 shadow-2xs flex items-start gap-2.5">
+              <MapPin size={18} className="mt-0.5 shrink-0 text-[#2563EB] dark:text-[#60A5FA]" />
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Workshop Location</p>
+                <p className="text-[14px] font-black text-[#1E293B] dark:text-[#F1F5F9] mt-0.5 leading-snug">{data?.serviceCenter || "AutoVyn Service Center"}</p>
+              </div>
+            </div>
+
+            {/* Service Type Badge */}
+            <div className="rounded-xl border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] p-3 shadow-2xs flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">Service Type</span>
+              <span className={`text-[12px] font-extrabold px-2.5 py-1 rounded-lg ${pickupOption === "PICKUP_REQUIRED" ? "bg-[#F59E0B]/10 text-[#B45309] dark:text-[#FCD34D] border border-[#F59E0B]/20" : "bg-[#10B981]/10 text-[#047857] dark:text-[#6EE7B7] border border-[#10B981]/20"}`}>
+                {pickupOption === "PICKUP_REQUIRED" ? "🚚 Home Pickup Requested" : "🚗 Self Drive Workshop Visit"}
+              </span>
+            </div>
+
+          </div>
+
+          {/* WhatsApp Alert Banner */}
+          <div className="mx-auto mt-4 max-w-md flex items-center gap-3 rounded-2xl border border-[#10B981]/30 bg-gradient-to-r from-[#10B981]/10 via-[#14B8A6]/10 to-[#10B981]/10 p-3.5 text-[14px] font-semibold text-[#047857] dark:text-[#6EE7B7]">
+            <span className="text-xl shrink-0">💬</span>
+            <span className="leading-tight">Confirmation details & service ticket sent to your WhatsApp!</span>
+          </div>
+
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => setIsSaved(false)}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#1E293B] px-6 py-3 text-[15px] font-bold text-[#334155] dark:text-[#F1F5F9] shadow-sm transition-all hover:bg-[#F8FAFC] dark:hover:bg-[#0F172A] hover:border-[#94A3B8] cursor-pointer"
+            >
+              <Wrench size={18} className="text-[#2563EB] dark:text-[#60A5FA]" /> Modify / Reschedule Appointment
+            </button>
+          </div>
         </div>
       ) : (
         <form onSubmit={handleSaveAppointment} className="mt-6 space-y-6">

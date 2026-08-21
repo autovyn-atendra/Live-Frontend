@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -170,12 +171,19 @@ const DAYS_OF_WEEK = ["S", "M", "T", "W", "T", "F", "S"];
 // ============================================================
 export default function FollowupLeadPage() {
   const user: any = useCurrentUser();
+  const router = useRouter();
+
+  const handleViewLeadDetail = (leadUtd: number) => {
+    if (!leadUtd) return;
+    router.push(`/autovyn/meta/dashboard?leadUtd=${leadUtd}&from=followup`);
+  };
 
   // ── Dynamic Calendar State ──────────────────────────────
   const today = new Date();
   const [currentMonthDate, setCurrentMonthDate] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [activeDateFilter, setActiveDateFilter] = useState<string | null>(null);
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null);
 
   // ── Followup State ────────────────────────────────────────
   const [followups, setFollowups] = useState<FollowupRecord[]>([]);
@@ -272,14 +280,72 @@ export default function FollowupLeadPage() {
     setActiveDateFilter(dateKey);
   };
 
-  // Visible follow-ups filtering
+  // Visible follow-ups filtering by date (if calendar date is selected)
   const visibleFollowups = activeDateFilter
     ? followups.filter((f) => String(f.Followup_Date).startsWith(activeDateFilter))
     : followups;
 
-  const overdueItems = visibleFollowups.filter((f) => f.category === "OVERDUE");
-  const todayItems = visibleFollowups.filter((f) => f.category === "TODAY");
-  const upcomingItems = visibleFollowups.filter((f) => f.category === "UPCOMING");
+  // Helper to parse item scheduled Date + Time to a Date object
+  const getItemDateTime = (item: FollowupRecord): Date | null => {
+    if (!item.Followup_Date) return null;
+    const dStr = String(item.Followup_Date).substring(0, 10);
+    let tStr = "00:00:00";
+    if (item.Followup_Time) {
+      const rawTime = String(item.Followup_Time);
+      if (rawTime.includes("T")) {
+        const tPart = rawTime.split("T")[1];
+        tStr = tPart.split(".")[0];
+      } else {
+        tStr = rawTime;
+      }
+    }
+    const dt = new Date(`${dStr}T${tStr}`);
+    return isNaN(dt.getTime()) ? null : dt;
+  };
+
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  // 1. TODAY: Any follow-up scheduled for Today's date
+  const todayItems = visibleFollowups.filter((f) => {
+    const dStr = String(f.Followup_Date || "").substring(0, 10);
+    return dStr === todayStr;
+  });
+
+  // 2. OVERDUE: Any follow-up scheduled before current time (now)
+  const overdueItems = visibleFollowups.filter((f) => {
+    const dt = getItemDateTime(f);
+    if (!dt) {
+      const dStr = String(f.Followup_Date || "").substring(0, 10);
+      return dStr < todayStr && dStr !== "";
+    }
+    return dt < now;
+  });
+
+  // 3. UPCOMING: Any follow-up scheduled after current time (now)
+  const upcomingItems = visibleFollowups.filter((f) => {
+    const dt = getItemDateTime(f);
+    if (!dt) {
+      const dStr = String(f.Followup_Date || "").substring(0, 10);
+      return dStr > todayStr;
+    }
+    return dt > now;
+  });
+
+  // 4. RESCHEDULED: Any follow-up that was rescheduled
+  const rescheduledItems = visibleFollowups.filter(
+    (f) => !!f.Rescheduled_From_UTD || String(f.Followup_Status).toUpperCase() === "RESCHEDULED"
+  );
+
+  const filteredCategoryItems = activeCategoryFilter === "OVERDUE"
+    ? overdueItems
+    : activeCategoryFilter === "TODAY"
+    ? todayItems
+    : activeCategoryFilter === "UPCOMING"
+    ? upcomingItems
+    : activeCategoryFilter === "RESCHEDULED"
+    ? rescheduledItems
+    : visibleFollowups;
 
   // ============================================================
   // MARK DONE MODAL HANDLER
@@ -401,7 +467,7 @@ export default function FollowupLeadPage() {
           },
         }
       );
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleCall = async (phone: string, leadUtd: number) => {
@@ -424,12 +490,12 @@ export default function FollowupLeadPage() {
           },
         }
       );
-    } catch (e) {}
+    } catch (e) { }
   };
 
   return (
     <div className="w-full min-h-screen bg-[#F8FAFC] dark:bg-[#090D16] p-4 sm:p-6 flex flex-col gap-6 font-sans text-[#334155] dark:text-[#F1F5F9]">
-      
+
       {/* ══ PAGE HEADER ══ */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -453,10 +519,10 @@ export default function FollowupLeadPage() {
 
       {/* ══ 2-COLUMN MAIN CONTENT GRID ══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
+
         {/* ── LEFT COLUMN (4 COLS): DYNAMIC CALENDAR SIDEBAR CARD ── */}
         <div className="lg:col-span-4 bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-5 shadow-xs space-y-5">
-          
+
           {/* Calendar Header Month & Controls */}
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-[#0F172A] dark:text-white text-lg">
@@ -523,31 +589,93 @@ export default function FollowupLeadPage() {
             })}
           </div>
 
-          {/* Category Summary Legend */}
-          <div className="pt-4 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-2.5 text-lg font-bold">
-            <div className="flex justify-between items-center">
+          {/* Category Summary Filters */}
+          <div className="pt-4 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-1.5 font-bold">
+            <div className="text-xs uppercase tracking-wider font-extrabold text-[#94A3B8] mb-2 px-1">
+              Category Filters
+            </div>
+
+            {/* All Filter */}
+            <button
+              onClick={() => setActiveCategoryFilter(null)}
+              className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${
+                activeCategoryFilter === null
+                  ? "bg-[#4F46E5] text-white shadow-xs font-bold"
+                  : "hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] text-[#475569] dark:text-[#CBD5E1]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${activeCategoryFilter === null ? "bg-white" : "bg-[#4F46E5]"}`} />
+                <span>All Followups</span>
+              </div>
+              <span className={activeCategoryFilter === null ? "text-white" : "text-[#4F46E5]"}>
+                {visibleFollowups.length}
+              </span>
+            </button>
+
+            {/* Overdue Filter */}
+            <button
+              onClick={() => setActiveCategoryFilter(activeCategoryFilter === "OVERDUE" ? null : "OVERDUE")}
+              className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${
+                activeCategoryFilter === "OVERDUE"
+                  ? "bg-[#FFE4E6] text-[#E11D48] border border-[#FECDD3] font-bold shadow-2xs"
+                  : "hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] text-[#475569] dark:text-[#CBD5E1]"
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#E11D48]" />
-                <span className="text-[#64748B]">Overdue</span>
+                <span>Overdue</span>
               </div>
-              <span className="text-[#E11D48]">{counts.overdueCount || overdueItems.length}</span>
-            </div>
+              <span className="text-[#E11D48]">{overdueItems.length}</span>
+            </button>
 
-            <div className="flex justify-between items-center">
+            {/* Today Filter */}
+            <button
+              onClick={() => setActiveCategoryFilter(activeCategoryFilter === "TODAY" ? null : "TODAY")}
+              className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${
+                activeCategoryFilter === "TODAY"
+                  ? "bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A] font-bold shadow-2xs"
+                  : "hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] text-[#475569] dark:text-[#CBD5E1]"
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" />
-                <span className="text-[#64748B]">Today</span>
+                <span>Today</span>
               </div>
-              <span className="text-[#D97706]">{counts.todayCount || todayItems.length}</span>
-            </div>
+              <span className="text-[#D97706]">{todayItems.length}</span>
+            </button>
 
-            <div className="flex justify-between items-center">
+            {/* Upcoming Filter */}
+            <button
+              onClick={() => setActiveCategoryFilter(activeCategoryFilter === "UPCOMING" ? null : "UPCOMING")}
+              className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${
+                activeCategoryFilter === "UPCOMING"
+                  ? "bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0] font-bold shadow-2xs"
+                  : "hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] text-[#475569] dark:text-[#CBD5E1]"
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#64748B]" />
-                <span className="text-[#64748B]">Upcoming</span>
+                <span>Upcoming</span>
               </div>
-              <span className="text-[#64748B]">{counts.upcomingCount || upcomingItems.length}</span>
-            </div>
+              <span className="text-[#64748B]">{upcomingItems.length}</span>
+            </button>
+
+            {/* Rescheduled Filter */}
+            <button
+              onClick={() => setActiveCategoryFilter(activeCategoryFilter === "RESCHEDULED" ? null : "RESCHEDULED")}
+              className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${
+                activeCategoryFilter === "RESCHEDULED"
+                  ? "bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold shadow-2xs"
+                  : "hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] text-[#475569] dark:text-[#CBD5E1]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]" />
+                <span>Rescheduled</span>
+              </div>
+              <span className="text-[#2563EB]">{rescheduledItems.length}</span>
+            </button>
           </div>
 
         </div>
@@ -555,46 +683,53 @@ export default function FollowupLeadPage() {
         {/* ── RIGHT COLUMN (8 COLS): FOLLOWUP CARDS GROUPED BY STATUS ── */}
         <div className="lg:col-span-8 flex flex-col gap-6">
 
-          {/* Active Date Filter Banner */}
-          {activeDateFilter && (
+          {/* Active Filter Banner */}
+          {(activeDateFilter || activeCategoryFilter) && (
             <div className="flex items-center justify-between bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-3 px-4 shadow-2xs">
               <span className="text-lg font-bold text-[#4F46E5] dark:text-[#818CF8] flex items-center gap-2">
                 <CalendarIcon size={16} />
-                Showing followups for {selectedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} ({visibleFollowups.length} found)
+                Filtering: {activeCategoryFilter ? activeCategoryFilter : "All Categories"}
+                {activeDateFilter ? ` for ${selectedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}` : ""}
               </span>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setActiveDateFilter(null)}
-                className="font-bold rounded-xl border-[#E2E8F0] px-3 py-1 cursor-pointer"
+                onClick={() => {
+                  setActiveDateFilter(null);
+                  setActiveCategoryFilter(null);
+                }}
+                className="font-bold rounded-xl border-[#E2E8F0] px-3 py-1 cursor-pointer text-[#E11D48] hover:bg-[#FFE4E6]"
               >
-                Show All Dates
+                Clear Filters ✕
               </Button>
             </div>
           )}
 
-          {/* Empty State when no followups */}
-          {visibleFollowups.length === 0 && !isLoading && (
+          {/* Empty State when no followups match filter */}
+          {filteredCategoryItems.length === 0 && !isLoading && (
             <div className="bg-white dark:bg-[#0F172A] border-2 border-dashed border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-10 text-center space-y-3">
               <CalendarIcon size={36} className="mx-auto text-[#94A3B8]" />
               <h3 className="text-lg font-bold text-[#334155] dark:text-[#E2E8F0]">
                 No pending follow-ups found
               </h3>
               <p className="text-lg text-[#94A3B8]">
-                All clear! No pending follow-ups match your selected date.
+                All clear! No pending follow-ups match your selected filter.
               </p>
               <Button
                 size="lg"
-                onClick={() => setActiveDateFilter(null)}
+                onClick={() => {
+                  setActiveDateFilter(null);
+                  setActiveCategoryFilter(null);
+                }}
                 className="bg-[#4F46E5] max-w-xl text-white font-bold rounded-xl h-11 px-4 py-2 mt-2 cursor-pointer"
               >
-                View All Dates
+                Clear All Filters
               </Button>
             </div>
           )}
 
           {/* GROUP 1: 🔴 OVERDUE */}
-          {overdueItems.length > 0 && (
+          {(activeCategoryFilter === null || activeCategoryFilter === "OVERDUE") && overdueItems.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#E11D48]" />
@@ -613,9 +748,19 @@ export default function FollowupLeadPage() {
                     className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] border-l-4 border-l-[#E11D48] rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all flex flex-wrap items-center justify-between gap-4"
                   >
                     <div className="space-y-1 max-w-md">
-                      <h4 className="font-bold text-[#0F172A] dark:text-white text-lg">
-                        {item.customerName || "Customer"}
-                      </h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4
+                          onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                          className="font-bold text-[#0F172A] dark:text-white text-lg hover:text-[#4F46E5] cursor-pointer transition-colors"
+                        >
+                          {item.customerName || "Customer"}
+                        </h4>
+                        {item.Rescheduled_From_UTD ? (
+                          <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] flex items-center gap-1">
+                            🔄 Rescheduled
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2 text-lg">
                         <span className="font-bold text-[#4F46E5] dark:text-[#818CF8]">
                           {item.phone || "—"}
@@ -634,10 +779,10 @@ export default function FollowupLeadPage() {
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        onClick={() => handleCall(item.phone || "", item.Meta_Lead_UTD)}
-                        className="bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                        className="bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] border border-[#C7D2FE] px-3.5 py-1.5 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                       >
-                        <PhoneCall size={14} /> Call
+                        View Lead ➔
                       </Button>
 
                       <Button
@@ -673,14 +818,14 @@ export default function FollowupLeadPage() {
           )}
 
           {/* GROUP 2: 🟠 TODAY */}
-          {todayItems.length > 0 && (
+          {(activeCategoryFilter === null || activeCategoryFilter === "TODAY") && todayItems.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" />
                 <h3 className="text-lg font-bold uppercase tracking-wider text-[#D97706]">
                   Today
                 </h3>
-                <span className="bg-[#FEF3C7] text-[#B45309] text-lg font-bold px-2 py-0.5 rounded-full">
+                <span className="bg-[#FEF3C7] text-[#D97706] text-lg font-bold px-2 py-0.5 rounded-full">
                   {todayItems.length}
                 </span>
               </div>
@@ -692,9 +837,19 @@ export default function FollowupLeadPage() {
                     className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] border-l-4 border-l-[#D97706] rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all flex flex-wrap items-center justify-between gap-4"
                   >
                     <div className="space-y-1 max-w-md">
-                      <h4 className="font-bold text-[#0F172A] dark:text-white text-lg">
-                        {item.customerName || "Customer"}
-                      </h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4
+                          onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                          className="font-bold text-[#0F172A] dark:text-white text-lg hover:text-[#4F46E5] cursor-pointer transition-colors"
+                        >
+                          {item.customerName || "Customer"}
+                        </h4>
+                        {item.Rescheduled_From_UTD ? (
+                          <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] flex items-center gap-1">
+                            🔄 Rescheduled
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2 text-lg">
                         <span className="font-bold text-[#4F46E5] dark:text-[#818CF8]">
                           {item.phone || "—"}
@@ -713,10 +868,10 @@ export default function FollowupLeadPage() {
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        onClick={() => handleCall(item.phone || "", item.Meta_Lead_UTD)}
-                        className="bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                        className="bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] border border-[#C7D2FE] px-3.5 py-1.5 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                       >
-                        <PhoneCall size={14} /> Call
+                        View Lead ➔
                       </Button>
 
                       <Button
@@ -752,7 +907,7 @@ export default function FollowupLeadPage() {
           )}
 
           {/* GROUP 3: ⚪ UPCOMING */}
-          {upcomingItems.length > 0 && (
+          {(activeCategoryFilter === null || activeCategoryFilter === "UPCOMING") && upcomingItems.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#64748B]" />
@@ -771,9 +926,19 @@ export default function FollowupLeadPage() {
                     className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] border-l-4 border-l-[#4F46E5] rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all flex flex-wrap items-center justify-between gap-4"
                   >
                     <div className="space-y-1 max-w-md">
-                      <h4 className="font-bold text-[#0F172A] dark:text-white text-lg">
-                        {item.customerName || "Customer"}
-                      </h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4
+                          onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                          className="font-bold text-[#0F172A] dark:text-white text-lg hover:text-[#4F46E5] cursor-pointer transition-colors"
+                        >
+                          {item.customerName || "Customer"}
+                        </h4>
+                        {item.Rescheduled_From_UTD ? (
+                          <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] flex items-center gap-1">
+                            🔄 Rescheduled
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2 text-lg">
                         <span className="font-bold text-[#4F46E5] dark:text-[#818CF8]">
                           {item.phone || "—"}
@@ -792,10 +957,97 @@ export default function FollowupLeadPage() {
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        onClick={() => handleCall(item.phone || "", item.Meta_Lead_UTD)}
-                        className="bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                        className="bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] border border-[#C7D2FE] px-3.5 py-1.5 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                       >
-                        <PhoneCall size={14} /> Call
+                        View Lead ➔
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => handleWhatsApp(item.phone || "", item.customerName || "", item.Meta_Lead_UTD)}
+                        className="bg-[#DCFCE7] hover:bg-[#BBF7D0] text-[#15803D] border border-[#86EFAC] px-3.5 py-1.5 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                      >
+                        WhatsApp
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openMarkDoneModal(item)}
+                        className="bg-white dark:bg-[#1E293B] hover:bg-[#F8FAFC] text-[#334155] dark:text-[#E2E8F0] border border-[#E2E8F0] dark:border-[#334155] px-3.5 py-1.5 rounded-xl text-lg font-bold shadow-2xs transition-all cursor-pointer"
+                      >
+                        Mark Done
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openRescheduleModal(item)}
+                        className="bg-white dark:bg-[#1E293B] hover:bg-[#F8FAFC] text-[#334155] dark:text-[#E2E8F0] border border-[#E2E8F0] dark:border-[#334155] px-3.5 py-1.5 rounded-xl text-lg font-bold shadow-2xs transition-all cursor-pointer"
+                      >
+                        Reschedule
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* GROUP 4: 🔄 RESCHEDULED */}
+          {(activeCategoryFilter === null || activeCategoryFilter === "RESCHEDULED") && rescheduledItems.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]" />
+                <h3 className="text-lg font-bold uppercase tracking-wider text-[#2563EB]">
+                  Rescheduled Followups
+                </h3>
+                <span className="bg-[#EFF6FF] text-[#2563EB] text-lg font-bold px-2 py-0.5 rounded-full">
+                  {rescheduledItems.length}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {rescheduledItems.map((item) => (
+                  <div
+                    key={item.UTD}
+                    className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] border-l-4 border-l-[#2563EB] rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all flex flex-wrap items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1 max-w-md">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4
+                          onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                          className="font-bold text-[#0F172A] dark:text-white text-lg hover:text-[#4F46E5] cursor-pointer transition-colors"
+                        >
+                          {item.customerName || "Customer"}
+                        </h4>
+                        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] flex items-center gap-1">
+                          🔄 Rescheduled
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-lg">
+                        <span className="font-bold text-[#4F46E5] dark:text-[#818CF8]">
+                          {item.phone || "—"}
+                        </span>
+                        <span className="text-[#94A3B8] font-medium">•</span>
+                        <span className="text-[#64748B] dark:text-[#CBD5E1] font-medium">
+                          {formatDateStr(item.Followup_Date)}, {formatTimeStr(item.Followup_Time)}
+                        </span>
+                      </div>
+                      <p className="text-lg italic text-[#64748B] dark:text-[#94A3B8] pt-1">
+                        "{item.Purpose || item.Remark || "Rescheduled follow-up"}"
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleViewLeadDetail(item.Meta_Lead_UTD)}
+                        className="bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] border border-[#C7D2FE] px-3.5 py-1.5 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                      >
+                        View Lead ➔
                       </Button>
 
                       <Button
@@ -935,7 +1187,7 @@ export default function FollowupLeadPage() {
                 title="New Date"
                 value={rescheduleDate}
                 handleInputChange={(_, value) => setRescheduleDate(value)}
-                onInput={() => {}}
+                onInput={() => { }}
                 redlabel=""
                 labelClass="text-lg font-bold"
                 className="!h-10 !text-lg"
@@ -947,7 +1199,7 @@ export default function FollowupLeadPage() {
                 title="New Time"
                 value={rescheduleTime}
                 handleInputChange={(_, value) => setRescheduleTime(value)}
-                onInput={() => {}}
+                onInput={() => { }}
                 redlabel=""
                 labelClass="text-lg font-bold"
                 className="!h-10 !text-lg"

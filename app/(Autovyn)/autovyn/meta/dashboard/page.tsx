@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
@@ -271,7 +272,7 @@ export default function MetaPage() {
   const [toDate, setToDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterFormId, setFilterFormId] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  const [filterCallSource, setFilterCallSource] = useState("");
 
   // ── Detail Workspace State ────────────────────────────────
   const [activeStage, setActiveStage] = useState<string>("New");
@@ -324,12 +325,12 @@ export default function MetaPage() {
   // FETCH META LEADS
   // ============================================================
   const fetchMetaLeads = useCallback(
-    async (pageToFetch = 1) => {
+    async (pageToFetch = 1, customLimit?: number) => {
       setIsLoading(true);
       try {
         const payload: Record<string, any> = {
           page: pageToFetch,
-          limit: pagination.pageSize,
+          limit: customLimit || pagination.pageSize,
           sortBy: "UTD",
           sortOrder: "DESC",
         };
@@ -339,6 +340,7 @@ export default function MetaPage() {
         if (toDate) payload.toDate = toDate;
         if (filterStatus !== "") payload.status = Number(filterStatus);
         if (filterFormId.trim()) payload.formId = filterFormId.trim();
+        if (filterCallSource !== "") payload.filterCallSource = filterCallSource;
 
         const res = await axios.post(`${BASE_URL}/meta/getMetaLeads`, payload, {
           headers: {
@@ -380,6 +382,7 @@ export default function MetaPage() {
       toDate,
       filterStatus,
       filterFormId,
+      filterCallSource,
       pagination.pageSize,
       user?.Comp_Code,
       user?.name,
@@ -413,10 +416,35 @@ export default function MetaPage() {
     [user?.Comp_Code, user?.name]
   );
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadUtdParam = searchParams.get("leadUtd");
+  const fromParam = searchParams.get("from");
+
   useEffect(() => {
     fetchMetaLeads(1);
+    if (leadUtdParam) {
+      const leadUtd = Number(leadUtdParam);
+      if (leadUtd && !isNaN(leadUtd)) {
+        axios.post(`${BASE_URL}/meta/getMetaLeads`, { leadUtd }, {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }).then((res) => {
+          const list = res.data?.data || [];
+          if (Array.isArray(list) && list.length > 0) {
+            handleOpenDetailView(list[0]);
+          }
+        }).catch((err) => {
+          console.error("Fetch single lead detail error:", err);
+        });
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [leadUtdParam]);
 
   const handleApplyFilter = () => {
     fetchMetaLeads(1);
@@ -428,6 +456,7 @@ export default function MetaPage() {
     setToDate("");
     setFilterStatus("");
     setFilterFormId("");
+    setFilterCallSource("");
     setTimeout(() => {
       fetchMetaLeads(1);
     }, 50);
@@ -469,6 +498,58 @@ export default function MetaPage() {
       "Lost": 6,
     };
     const newStatusVal = stageMap[targetStage] !== undefined ? stageMap[targetStage] : 0;
+    let customRemark = `Stage changed to ${targetStage}`;
+
+    if (targetStage === "Lost") {
+      const { value: lossReason, isConfirmed } = await Swal.fire({
+        html: `
+          <div style="text-align: center; padding-top: 4px;">
+            <div style="width: 54px; height: 54px; margin: 0 auto 16px auto; border-radius: 50%; background: #EEF2FF; border: 1.5px solid #C7D2FE; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #4F46E5;">
+              ❓
+            </div>
+            <h3 style="font-size: 24px; font-weight: 800; color: #0F172A; margin: 0 0 8px 0; tracking: -0.02em;">
+              Mark Lead as Lost?
+            </h3>
+            <p style="color: #64748B; font-size: 16px; margin: 0 0 16px 0; font-weight: 500; line-height: 1.5;">
+              Are you sure you want to mark <b>${selectedLead.Full_Name || "this customer"}</b> as 
+              <span style="color: #DC2626; font-weight: 700;">Lost</span>? All future automated calling will be stopped.
+            </p>
+            <div style="text-align: left;">
+              <label style="display: block; font-size: 18px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">
+                Reason for Loss <span style="color: #DC2626;">*</span>
+              </label>
+              <textarea 
+                id="swal-loss-remark" 
+                rows="3" 
+                style="width: 100%; box-sizing: border-box; padding: 10px 14px; font-size: 14px; border-radius: 12px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-family: inherit; resize: none; outline: none;" 
+                placeholder="e.g. Price issue, Purchased from competitor, Customer not interested..."
+              ></textarea>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Yes, Mark as Lost ❌",
+        cancelButtonText: "Cancel",
+        buttonsStyling: false,
+        customClass: {
+          popup: "rounded-3xl p-6 border border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#0F172A] max-w-md shadow-2xl font-sans",
+          confirmButton: "px-5 py-2.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-sm rounded-xl cursor-pointer shadow-md transition-all",
+          cancelButton: "px-4 py-2.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold text-sm rounded-xl cursor-pointer transition-all mr-3",
+        },
+        focusConfirm: false,
+        preConfirm: () => {
+          const val = (document.getElementById("swal-loss-remark") as HTMLTextAreaElement)?.value;
+          if (!val || !val.trim()) {
+            Swal.showValidationMessage("Mandatory: Please enter reason/remark for loss!");
+            return false;
+          }
+          return val.trim();
+        },
+      });
+
+      if (!isConfirmed || !lossReason) return;
+      customRemark = `Lost Reason: ${lossReason}`;
+    }
 
     try {
       setIsSubmittingActivity(true);
@@ -477,7 +558,7 @@ export default function MetaPage() {
         {
           metaLeadUtd: selectedLead.UTD,
           status: newStatusVal,
-          remark: `Stage changed to ${targetStage}`,
+          remark: customRemark,
         },
         {
           headers: {
@@ -489,15 +570,23 @@ export default function MetaPage() {
         }
       );
 
-      if (res.data?.success) {
-        setActiveStage(targetStage);
-        setSelectedLead({ ...selectedLead, status: newStatusVal });
-        showToast(`Stage updated to ${targetStage}`, "success");
-        fetchLeadActivities(selectedLead.UTD);
-        fetchMetaLeads(pagination.currentPage);
+      const isSuccess = res.data?.success || res.data?.Status || res.data?.status;
+      if (isSuccess) {
+        showToast(res.data?.message || `Stage updated to ${targetStage}`, "success");
+        if (targetStage === "Lost" || targetStage === "Won") {
+          setSelectedLead(null);
+        } else {
+          setActiveStage(targetStage);
+          setSelectedLead({ ...selectedLead, status: newStatusVal });
+          fetchLeadActivities(selectedLead.UTD);
+        }
+        fetchMetaLeads(1);
+      } else {
+        showToast(res.data?.message || "Failed to update lead status", "error");
       }
     } catch (err: any) {
-      showToast(err?.response?.data?.message ?? "Failed to update lead status", "error");
+      console.error("Update Lead Stage Error:", err);
+      showToast(err?.response?.data?.message || err?.message || "Failed to update lead status", "error");
     } finally {
       setIsSubmittingActivity(false);
     }
@@ -1037,9 +1126,8 @@ export default function MetaPage() {
 
                               {/* STATUS */}
                               <td className="px-4 py-3.5 whitespace-nowrap font-bold text-lg uppercase">
-                                <span className={`inline-flex items-center gap-1.5 ${
-                                  isCompleted ? "text-[#16A34A]" : isFailed ? "text-[#DC2626]" : "text-[#D97706]"
-                                }`}>
+                                <span className={`inline-flex items-center gap-1.5 ${isCompleted ? "text-[#16A34A]" : isFailed ? "text-[#DC2626]" : "text-[#D97706]"
+                                  }`}>
                                   <span className="w-2 h-2 rounded-full bg-current" />
                                   {call.status || "completed"}
                                 </span>
@@ -1052,9 +1140,18 @@ export default function MetaPage() {
 
                               {/* CHANNEL */}
                               <td className="px-4 py-3.5 whitespace-nowrap">
-                                <span className="px-2.5 py-1 rounded-full text-lg font-semibold bg-[#FFEDD5] text-[#C2410C] border border-[#FED7AA]">
-                                  Manual
-                                </span>
+                                {String(call.Call_Type || "").toUpperCase() === "AUTO_AI_CALL" ||
+                                  String(call.Call_Source || "").toUpperCase().includes("CRON") ||
+                                  String(call.Created_By || "").toUpperCase().includes("CRON") ||
+                                  String(call.Created_By || "").toUpperCase().includes("AUTO") ? (
+                                  <span className="px-2.5 py-1 rounded-full text-lg font-bold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC]">
+                                    🤖 Auto AI Call (Cron)
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1 rounded-full text-lg font-bold bg-[#FFEDD5] text-[#C2410C] border border-[#FED7AA]">
+                                    👤 Manual AI Call
+                                  </span>
+                                )}
                               </td>
 
                               {/* RECORDING */}
@@ -1120,10 +1217,10 @@ export default function MetaPage() {
                       Showing 1 to {callHistoryData.length} of {callHistoryData.length} results
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" disabled className="h-8 px-3 text-lg font-semibold cursor-not-allowed">
+                      <Button variant="outline" size="lg" disabled className="h-8 px-3 text-lg font-semibold cursor-not-allowed">
                         Previous
                       </Button>
-                      <Button variant="outline" size="sm" disabled className="h-8 px-3 text-lg font-semibold cursor-not-allowed">
+                      <Button variant="outline" size="lg" disabled className="h-8 px-3 text-lg font-semibold cursor-not-allowed">
                         Next
                       </Button>
                     </div>
@@ -1162,128 +1259,127 @@ export default function MetaPage() {
           </div>
         </Modal>
 
-      {/* ══ WHATSAPP STYLE VOICE TRANSCRIPT MODAL ══ */}
-      <Modal
-        isOpen={isTranscriptModalOpen}
-        onClose={() => setIsTranscriptModalOpen(false)}
-        widthClass="max-w-xl"
-        zIndexClass="z-[999999]"
-      >
-        {/* WhatsApp Header */}
-        <div className="flex items-center justify-between bg-header dark:bg-[#111B21] px-5 py-3 text-white shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center font-bold text-white shadow-xs">
-              <Bot size={22} />
+        {/* ══ WHATSAPP STYLE VOICE TRANSCRIPT MODAL ══ */}
+        <Modal
+          isOpen={isTranscriptModalOpen}
+          onClose={() => setIsTranscriptModalOpen(false)}
+          widthClass="max-w-xl"
+          zIndexClass="z-[999999]"
+        >
+          {/* WhatsApp Header */}
+          <div className="flex items-center justify-between bg-header dark:bg-[#111B21] px-5 py-3 text-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center font-bold text-white shadow-xs">
+                <Bot size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold leading-tight">
+                  Callmatic AI Voice Call Transcript
+                </h3>
+                <p className="text-lg text-[#E0F2F1] dark:text-[#8696A0]">
+                  Customer: <span className="font-semibold">{callHistoryLead?.Full_Name || "Customer"}</span>
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-bold leading-tight">
-                Callmatic AI Voice Call Transcript
-              </h3>
-              <p className="text-lg text-[#E0F2F1] dark:text-[#8696A0]">
-                Customer: <span className="font-semibold">{callHistoryLead?.Full_Name || "Customer"}</span>
-              </p>
-            </div>
+            <button
+              onClick={() => setIsTranscriptModalOpen(false)}
+              className="p-1.5 rounded-full hover:bg-white/10 transition-all cursor-pointer text-white"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button
-            onClick={() => setIsTranscriptModalOpen(false)}
-            className="p-1.5 rounded-full hover:bg-white/10 transition-all cursor-pointer text-white"
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        {/* WhatsApp Chat Wallpaper Background */}
-        <div className="p-4 max-h-[70vh] overflow-y-auto space-y-3 bg-[#E5DDD5] dark:bg-[#0B141A] min-h-[350px]">
-          {Array.isArray(selectedCallTranscript) && selectedCallTranscript.length > 0 ? (
-            selectedCallTranscript.map((tItem: any, idx: number) => {
-              const isUser = isCustomerMessage(tItem, idx);
-              const messageText =
-                typeof tItem === "string"
-                  ? tItem
-                  : tItem.content || tItem.text || tItem.message || tItem.transcript || JSON.stringify(tItem);
+          {/* WhatsApp Chat Wallpaper Background */}
+          <div className="p-4 max-h-[70vh] overflow-y-auto space-y-3 bg-[#E5DDD5] dark:bg-[#0B141A] min-h-[350px]">
+            {Array.isArray(selectedCallTranscript) && selectedCallTranscript.length > 0 ? (
+              selectedCallTranscript.map((tItem: any, idx: number) => {
+                const isUser = isCustomerMessage(tItem, idx);
+                const messageText =
+                  typeof tItem === "string"
+                    ? tItem
+                    : tItem.content || tItem.text || tItem.message || tItem.transcript || JSON.stringify(tItem);
 
-              return (
-                <div
-                  key={idx}
-                  className={`flex flex-col ${isUser ? "items-end" : "items-start"} mb-1`}
-                >
-                  <span className="text-[14px] font-semibold text-[#54656F] dark:text-[#8696A0] mb-0.5 px-1">
-                    {isUser ? (callHistoryLead?.Full_Name || "Customer") : "Callmatic AI Agent"}
-                  </span>
-
+                return (
                   <div
-                    className={`relative max-w-[82%] p-3 rounded-2xl text-lg leading-relaxed shadow-xs ${
-                      isUser
-                        ? "bg-[#DCF8C6] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-none border border-[#B9E69B]/50 dark:border-[#005C4B]"
-                        : "bg-white dark:bg-[#202C33] text-[#111B21] dark:text-[#E9EDEF] rounded-tl-none border border-[#E2E8F0] dark:border-[#2A3942]"
-                    }`}
+                    key={idx}
+                    className={`flex flex-col ${isUser ? "items-end" : "items-start"} mb-1`}
                   >
-                    <p className="whitespace-pre-wrap font-sans text-lg">{messageText}</p>
+                    <span className="text-[14px] font-semibold text-[#54656F] dark:text-[#8696A0] mb-0.5 px-1">
+                      {isUser ? (callHistoryLead?.Full_Name || "Customer") : "Callmatic AI Agent"}
+                    </span>
 
-                    {/* Time & Read Ticks */}
-                    <div className={`flex items-center justify-end gap-1 text-[14px] mt-1 ${isUser ? "text-[#54656F] dark:text-[#8696A0]" : "text-[#8696A0]"}`}>
-                     
-                      {isUser && <span className="text-[#53BDEB]  font-bold">✓✓</span>}
+                    <div
+                      className={`relative max-w-[82%] p-3 rounded-2xl text-lg leading-relaxed shadow-xs ${isUser
+                          ? "bg-[#DCF8C6] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-none border border-[#B9E69B]/50 dark:border-[#005C4B]"
+                          : "bg-white dark:bg-[#202C33] text-[#111B21] dark:text-[#E9EDEF] rounded-tl-none border border-[#E2E8F0] dark:border-[#2A3942]"
+                        }`}
+                    >
+                      <p className="whitespace-pre-wrap font-sans text-lg">{messageText}</p>
+
+                      {/* Time & Read Ticks */}
+                      <div className={`flex items-center justify-end gap-1 text-[14px] mt-1 ${isUser ? "text-[#54656F] dark:text-[#8696A0]" : "text-[#8696A0]"}`}>
+
+                        {isUser && <span className="text-[#53BDEB]  font-bold">✓✓</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <MessageSquare size={36} className="text-[#8696A0] opacity-60 mb-2" />
-              <p className="text-lg font-semibold text-[#54656F] dark:text-[#8696A0]">
-                {typeof selectedCallTranscript === "string" ? selectedCallTranscript : "No voice transcript messages found."}
-              </p>
-            </div>
-          )}
-        </div>
-      </Modal>
+                );
+              })
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <MessageSquare size={36} className="text-[#8696A0] opacity-60 mb-2" />
+                <p className="text-lg font-semibold text-[#54656F] dark:text-[#8696A0]">
+                  {typeof selectedCallTranscript === "string" ? selectedCallTranscript : "No voice transcript messages found."}
+                </p>
+              </div>
+            )}
+          </div>
+        </Modal>
 
-      {/* ══ RECORDING AUDIO MODAL ══ */}
-      <Modal
-        isOpen={isRecordingModalOpen}
-        onClose={closeRecordingModal}
-        widthClass="max-w-md"
-        zIndexClass="z-[999999]"
-      >
-        <div className="flex items-center justify-between bg-[#4F46E5] px-5 py-3 text-white">
-          <h3 className="flex items-center gap-2 text-lg font-bold">
-            <PlayCircle size={20} /> Call Recording Audio
-          </h3>
-          <button onClick={closeRecordingModal} className="hover:opacity-80 cursor-pointer">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex min-h-[160px] flex-col items-center justify-center gap-4 p-6">
-          {isLoadingRecording ? (
-            <div className="flex flex-col items-center gap-2">
-              <HashloaderComponent isLoading={true} />
-              <p className="text-lg text-[#64748B] dark:text-[#94A3B8]">Loading call recording audio...</p>
-            </div>
-          ) : audioUrl ? (
-            <>
-              <audio controls autoPlay className="w-full rounded-xl">
-                <source src={audioUrl} type="audio/mpeg" />
-                Your browser does not support the audio element.
-              </audio>
+        {/* ══ RECORDING AUDIO MODAL ══ */}
+        <Modal
+          isOpen={isRecordingModalOpen}
+          onClose={closeRecordingModal}
+          widthClass="max-w-md"
+          zIndexClass="z-[999999]"
+        >
+          <div className="flex items-center justify-between bg-[#4F46E5] px-5 py-3 text-white">
+            <h3 className="flex items-center gap-2 text-lg font-bold">
+              <PlayCircle size={20} /> Call Recording Audio
+            </h3>
+            <button onClick={closeRecordingModal} className="hover:opacity-80 cursor-pointer">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="flex min-h-[160px] flex-col items-center justify-center gap-4 p-6">
+            {isLoadingRecording ? (
+              <div className="flex flex-col items-center gap-2">
+                <HashloaderComponent isLoading={true} />
+                <p className="text-lg text-[#64748B] dark:text-[#94A3B8]">Loading call recording audio...</p>
+              </div>
+            ) : audioUrl ? (
+              <>
+                <audio controls autoPlay className="w-full rounded-xl">
+                  <source src={audioUrl} type="audio/mpeg" />
+                  Your browser does not support the audio element.
+                </audio>
 
-              <a
-                href={audioUrl}
-                download={`callmatic_recording_${playingCallId}.mp3`}
-                className="flex items-center gap-1.5 text-lg text-[#4F46E5] dark:text-[#818CF8] font-bold hover:underline"
-              >
-                <Download size={16} /> Download Recording
-              </a>
-            </>
-          ) : (
-            <p className="text-lg text-[#94A3B8]">No recording available for this call</p>
-          )}
-        </div>
-      </Modal>
-    </>
-  );
-};
+                <a
+                  href={audioUrl}
+                  download={`callmatic_recording_${playingCallId}.mp3`}
+                  className="flex items-center gap-1.5 text-lg text-[#4F46E5] dark:text-[#818CF8] font-bold hover:underline"
+                >
+                  <Download size={16} /> Download Recording
+                </a>
+              </>
+            ) : (
+              <p className="text-lg text-[#94A3B8]">No recording available for this call</p>
+            )}
+          </div>
+        </Modal>
+      </>
+    );
+  };
 
   // ============================================================
   // RENDER WORKSPACE DETAIL VIEW (IF LEAD SELECTED)
@@ -1291,7 +1387,7 @@ export default function MetaPage() {
   if (selectedLead) {
     const initials = getInitials(selectedLead.Full_Name);
     const formattedPhone = selectedLead.Phone_Number || "+91 94530 71550";
-    const formattedCity = selectedLead.City || "Delhi";
+    // const formattedCity = selectedLead.City;
     const formattedLeadId = selectedLead.Meta_Lead_Id || "—";
     const formattedFormId = selectedLead.Form_Id || "—";
     const formattedSource = selectedLead.Source || "META_LEAD_ADS";
@@ -1303,11 +1399,17 @@ export default function MetaPage() {
         {/* Top Header Navigation */}
         <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0] dark:border-[#1E293B]">
           <button
-            onClick={() => setSelectedLead(null)}
+            onClick={() => {
+              if (fromParam === "followup") {
+                router.push("/autovyn/meta/followup_lead");
+              } else {
+                setSelectedLead(null);
+              }
+            }}
             className="inline-flex items-center gap-2 text-lg font-bold text-[#818CF8] hover:text-[#4338CA] bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] px-3.5 py-2 rounded-xl shadow-2xs transition-all cursor-pointer"
           >
             <ArrowLeft size={16} />
-            Back to Pipeline
+            {fromParam === "followup" ? "Back to Follow-ups" : "Back to Dashboard"}
           </button>
         </div>
 
@@ -1397,10 +1499,10 @@ export default function MetaPage() {
                   <span className="font-bold text-[#0F172A] dark:text-white">{formattedPhone}</span>
                 </div>
 
-                <div className="flex justify-between items-center">
+                {/* <div className="flex justify-between items-center">
                   <span className="text-[#64748B] font-bold">City</span>
                   <span className="font-bold text-[#334155] dark:text-[#E2E8F0]">{formattedCity}</span>
-                </div>
+                </div> */}
 
                 <div className="flex justify-between items-center">
                   <span className="text-[#64748B] font-bold">Meta Lead ID</span>
@@ -1442,8 +1544,8 @@ export default function MetaPage() {
                     >
                       <div
                         className={`absolute -left-6 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
-                            ? "bg-[#4F46E5] border-[#4F46E5] shadow-xs"
-                            : "bg-white dark:bg-[#0F172A] border-[#CBD5E1] dark:border-[#334155] group-hover:border-[#4F46E5]"
+                          ? "bg-[#4F46E5] border-[#4F46E5] shadow-xs"
+                          : "bg-white dark:bg-[#0F172A] border-[#CBD5E1] dark:border-[#334155] group-hover:border-[#4F46E5]"
                           }`}
                       >
                         {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
@@ -1451,8 +1553,8 @@ export default function MetaPage() {
 
                       <span
                         className={`text-lg font-bold transition-colors ${isActive
-                            ? "text-[#0F172A] dark:text-white"
-                            : "text-[#64748B] dark:text-[#94A3B8] group-hover:text-[#334155]"
+                          ? "text-[#0F172A] dark:text-white"
+                          : "text-[#64748B] dark:text-[#94A3B8] group-hover:text-[#334155]"
                           }`}
                       >
                         {stg}
@@ -1522,7 +1624,7 @@ export default function MetaPage() {
 
                       {/* Icon Badge */}
                       <div className="w-8 h-8 rounded-xl bg-[#EEF2FF] dark:bg-[#1E1B4B] text-[#818CF8] dark:text-[#818CF8] flex items-center justify-center shrink-0 mt-0.5 shadow-2xs border border-[#C7D2FE]/60 dark:border-[#3730A3]/60">
-                        {type === "CALL" ? (
+                        {type === "CALL" || type === "AI_CALL" || type === "AI_CALL_SUMMARY" || type === "CALL_INITIATED" ? (
                           <Phone size={15} />
                         ) : type === "WHATSAPP" ? (
                           <MessageSquare size={15} />
@@ -1758,13 +1860,13 @@ export default function MetaPage() {
               </div>
 
               <div>
-                <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
+                <label className="block text-lg  text-[#334155] dark:text-[#CBD5E1] mb-1">
                   Call Outcome / Result
                 </label>
                 <select
                   value={callResult}
                   onChange={(e) => setCallResult(e.target.value)}
-                  className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-bold text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none"
+                  className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg  text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none"
                 >
                   <option value="CONNECTED">CONNECTED (Call Connected)</option>
                   <option value="NO_ANSWER">NO_ANSWER (No Answer)</option>
@@ -1778,7 +1880,7 @@ export default function MetaPage() {
               </div>
 
               <div>
-                <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
+                <label className="block text-lg  text-[#334155] dark:text-[#CBD5E1] mb-1">
                   Call Notes / Remark
                 </label>
                 <textarea
@@ -1793,6 +1895,7 @@ export default function MetaPage() {
               <div className="flex items-center justify-end gap-3 pt-2">
                 <Button
                   variant="outline"
+                  size="lg"
                   onClick={() => setCallModalOpen(false)}
                   className="text-lg font-bold rounded-xl border-[#E2E8F0] px-4 py-2 cursor-pointer"
                 >
@@ -1800,6 +1903,7 @@ export default function MetaPage() {
                 </Button>
                 <Button
                   onClick={handleSaveCallResult}
+                  size="lg"
                   disabled={isSubmittingActivity}
                   className="bg-[#4F46E5] hover:bg-[#4338CA] text-white text-lg font-bold rounded-xl px-5 py-2 cursor-pointer"
                 >
@@ -2020,140 +2124,143 @@ export default function MetaPage() {
 
       </div>
 
-      {/* ══ QUICK FILTER TRIGGER BAR ══ */}
-      <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-3 sm:p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      {/* ══ ALWAYS-VISIBLE ADVANCED FILTER PANEL ══ */}
+      <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
 
-        {/* Search Input */}
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleApplyFilter()}
-            placeholder="Search leads by name, phone, city, or ID..."
-            className="w-full pl-9 pr-4 py-2 bg-[#F8FAFC] dark:bg-[#1E293B]/80 border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
-          />
-        </div>
-
-        {/* Filter Toggle & Action Buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-lg font-bold border transition-all cursor-pointer ${showFilters
-                ? "bg-[#EEF2FF] text-[#4338CA] border-[#C7D2FE] dark:bg-[#1E1B4B]/60 dark:text-[#A5B4FC] dark:border-[#3730A3]"
-                : "bg-[#F8FAFC] dark:bg-[#1E293B] text-[#334155] dark:text-[#E2E8F0] border-[#E2E8F0] dark:border-[#334155] hover:bg-[#F1F5F9]"
-              }`}
-          >
-            <Filter size={15} />
-            {showFilters ? "Hide Filters" : "Filter Leads"}
-          </button>
-
-          <button
-            onClick={() => fetchMetaLeads(1)}
-            disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#F8FAFC] dark:bg-[#1E293B] text-[#334155] dark:text-[#E2E8F0] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-bold hover:bg-[#F1F5F9] transition-all cursor-pointer"
-          >
-            <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* ══ EXPANDABLE ADVANCED FILTER PANEL ══ */}
-      {showFilters && (
-        <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between border-b pb-3 dark:border-[#1E293B]">
-            <h3 className="text-lg font-bold uppercase tracking-wider text-[#334155] dark:text-[#CBD5E1]">
-              Advanced Filter Parameters
-            </h3>
-            <button
-              onClick={() => setShowFilters(false)}
-              className="text-[#94A3B8] hover:text-[#475569] text-lg font-bold cursor-pointer"
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Ainput
-              title="From Date"
-              type="date"
-              name="fromDate"
-              value={fromDate}
-              handleInputChange={(_, value) => setFromDate(value)}
-              onInput={() => { }}
-              redlabel=""
-              labelClass="text-lg font-bold"
-              className="!h-9 !text-lg"
-            />
-
-            <Ainput
-              title="To Date"
-              type="date"
-              name="toDate"
-              value={toDate}
-              handleInputChange={(_, value) => setToDate(value)}
-              onInput={() => { }}
-              redlabel=""
-              labelClass="text-lg font-bold"
-              className="!h-9 !text-lg"
-            />
-
-            <div>
-              <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
-                Status
-              </label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
-              >
-                <option value="">All Statuses</option>
-                <option value="0">New / Received</option>
-                <option value="1">Processed / Quotation Sent</option>
-                <option value="2">Contacted</option>
-                <option value="3">Interested</option>
-                <option value="4">Demo Scheduled</option>
-              </select>
-            </div>
-
-            <Ainput
-              title="Form ID"
-              type="text"
-              name="filterFormId"
-              value={filterFormId}
-              handleInputChange={(_, value) => setFilterFormId(value)}
-              onInput={() => { }}
-              redlabel=""
-              placeholder="Filter by Form ID"
-              labelClass="text-lg font-bold"
-              className="!h-9 !text-lg"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t dark:border-[#1E293B]">
+        {/* Card Title & Header Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3  pb-3 dark:border-[#1E293B]">
+          <h3 className="text-lg font-bold uppercase tracking-wider text-[#334155] dark:text-[#CBD5E1] flex items-center gap-2">
+            <Filter size={16} className="text-[#4F46E5]" />
+            ADVANCED FILTER PARAMETERS
+          </h3>
+          <div className="flex items-center justify-end gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleResetFilter}
               disabled={isLoading}
-              className="text-lg h-8"
+              className="text-lg font-bold h-9 px-3 cursor-pointer"
             >
               Reset Filters
             </Button>
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleApplyFilter}
               disabled={isLoading}
-              className="text-lg h-8 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold"
+              className="text-lg font-bold h-9 px-4 bg-[#4F46E5] hover:bg-[#4338CA] text-white border-transparent cursor-pointer flex items-center gap-1.5 shadow-2xs"
             >
+              {/* <Filter size={14} /> */}
               Apply Parameters
             </Button>
+
           </div>
+
         </div>
-      )}
+
+        {/* 6-Column Responsive Filter Grid (Including Search Input) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+
+          {/* 1. Search Bar */}
+          <div>
+            <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
+              Search Leads
+            </label>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleApplyFilter()}
+                placeholder="Name, Phone, City, ID..."
+                className="w-full pl-9 pr-3 h-9 bg-[#F8FAFC] dark:bg-[#1E293B]/80 border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+              />
+            </div>
+          </div>
+
+          {/* 2. From Date */}
+          <Ainput
+            title="From Date"
+            type="date"
+            name="fromDate"
+            value={fromDate}
+            handleInputChange={(_, value) => setFromDate(value)}
+            onInput={() => { }}
+            redlabel=""
+            labelClass="text-lg font-bold"
+            className="!h-9 !text-lg"
+          />
+
+          {/* 3. To Date */}
+          <Ainput
+            title="To Date"
+            type="date"
+            name="toDate"
+            value={toDate}
+            handleInputChange={(_, value) => setToDate(value)}
+            onInput={() => { }}
+            redlabel=""
+            labelClass="text-lg font-bold"
+            className="!h-9 !text-lg"
+          />
+
+          {/* 4. Status Filter */}
+          <div>
+            <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
+              Status
+            </label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
+            >
+              <option value="">All Active Statuses</option>
+              <option value="0">New / Received</option>
+              <option value="1">Processed / Quotation Sent</option>
+              <option value="2">Contacted</option>
+              <option value="3">3-Day Exhausted (Stopped)</option>
+              <option value="4">Demo Scheduled</option>
+              <option value="5">Won (Converted)</option>
+              <option value="6">Lost (Dropped Deals)</option>
+            </select>
+          </div>
+
+          {/* 5. Call / Cron Source */}
+          <div>
+            <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
+              Call / Cron Source
+            </label>
+            <select
+              value={filterCallSource}
+              onChange={(e) => setFilterCallSource(e.target.value)}
+              className="w-full h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
+            >
+              <option value="">All Call Sources</option>
+              <option value="AUTO_AI_CALL">🤖 Auto Cron AI Calls</option>
+              <option value="MANUAL_AI_CALL">👤 Manual AI Calls</option>
+              <option value="SCHEDULED">📅 Scheduled Callbacks</option>
+            </select>
+          </div>
+
+          {/* 6. Form ID */}
+          <Ainput
+            title="Form ID"
+            type="text"
+            name="filterFormId"
+            value={filterFormId}
+            handleInputChange={(_, value) => setFilterFormId(value)}
+            onInput={() => { }}
+            redlabel=""
+            placeholder="Filter by Form ID"
+            labelClass="text-lg font-bold"
+            className="!h-9 !text-lg"
+          />
+        </div>
+
+      </div>
+
 
       {/* ══ MAIN TABLE VIEW ══ */}
       <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl shadow-xs overflow-hidden">
@@ -2165,7 +2272,7 @@ export default function MetaPage() {
               <tr className="border-b border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/50 dark:bg-[#1E293B]/30 text-lg font-bold text-[#94A3B8] dark:text-[#64748B] uppercase tracking-wider">
                 <th className="py-3.5 px-4">Customer Name</th>
                 <th className="py-3.5 px-4">Contact</th>
-                <th className="py-3.5 px-4">City</th>
+                {/* <th className="py-3.5 px-4">City</th> */}
                 <th className="py-3.5 px-4">Meta Lead ID</th>
                 <th className="py-3.5 px-4">Source</th>
                 <th className="py-3.5 px-4">Status</th>
@@ -2223,9 +2330,9 @@ export default function MetaPage() {
                       </td>
 
                       {/* City */}
-                      <td className="py-3.5 px-4 text-[#475569] dark:text-[#CBD5E1] font-medium text-lg">
+                      {/* <td className="py-3.5 px-4 text-[#475569] dark:text-[#CBD5E1] font-medium text-lg">
                         {lead.City || "—"}
-                      </td>
+                      </td> */}
 
                       {/* Meta Lead ID */}
                       <td className="py-3.5 px-4 font-mono font-bold text-[#818CF8] dark:text-[#818CF8] text-lg">
@@ -2286,18 +2393,7 @@ export default function MetaPage() {
                             <History size={14} className="text-purple-600 dark:text-purple-400" />
                             History
                           </Button> */}
-                          <Button
-                            onClick={() => handleQuickAction("Demo")}
-                            className="px-2.5 py-1 rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#334155] dark:text-[#E2E8F0] hover:bg-[#F8FAFC] dark:hover:bg-[#334155] text-lg font-bold transition-all shadow-2xs cursor-pointer"
-                          >
-                            Demo
-                          </Button>
-                          <button
-                            onClick={() => handleQuickAction("Followup")}
-                            className="px-2.5 py-1 rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#334155] dark:text-[#E2E8F0] hover:bg-[#F8FAFC] dark:hover:bg-[#334155] text-lg font-bold transition-all shadow-2xs cursor-pointer"
-                          >
-                            Followup
-                          </button>
+                         
                         </div>
                       </td>
 
@@ -2312,9 +2408,32 @@ export default function MetaPage() {
 
         {/* Pagination Footer */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-t border-[#F1F5F9] dark:border-[#1E293B] text-lg text-[#64748B] dark:text-[#94A3B8]">
-          <div>
-            Showing <span className="font-bold text-[#1E293B] dark:text-[#E2E8F0]">{rows.length}</span> of{" "}
-            <span className="font-bold text-[#1E293B] dark:text-[#E2E8F0]">{pagination.totalRecords}</span> leads
+          <div className="flex flex-wrap items-center gap-4">
+            <div>
+              Showing <span className="font-bold text-[#1E293B] dark:text-[#E2E8F0]">{rows.length}</span> of{" "}
+              <span className="font-bold text-[#1E293B] dark:text-[#E2E8F0]">{pagination.totalRecords}</span> leads
+            </div>
+
+            {/* Page Size Selector */}
+            <div className="flex items-center gap-2 font-medium">
+              <span>Rows per page:</span>
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => {
+                  const newSize = Number(e.target.value);
+                  setPagination((prev) => ({ ...prev, pageSize: newSize }));
+                  fetchMetaLeads(1, newSize);
+                }}
+                className="h-8 px-2.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-bold text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -2323,7 +2442,7 @@ export default function MetaPage() {
               size="sm"
               disabled={!pagination.hasPrevPage || isLoading}
               onClick={() => fetchMetaLeads(pagination.currentPage - 1)}
-              className="h-8 text-lg font-bold"
+              className="h-8 text-lg font-bold cursor-pointer"
             >
               Previous
             </Button>
@@ -2337,7 +2456,7 @@ export default function MetaPage() {
               size="sm"
               disabled={!pagination.hasNextPage || isLoading}
               onClick={() => fetchMetaLeads(pagination.currentPage + 1)}
-              className="h-8 text-lg font-bold"
+              className="h-8 text-lg font-bold cursor-pointer"
             >
               Next
             </Button>
