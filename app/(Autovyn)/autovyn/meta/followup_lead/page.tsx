@@ -262,6 +262,17 @@ export default function FollowupLeadPage() {
     fetchFollowups();
   }, [fetchFollowups]);
 
+  // ⚡ Reset all date and category filters & refresh data
+  const handleRefreshQueues = () => {
+    setActiveDateFilter(null);
+    setActiveCategoryFilter(null);
+    const now = new Date();
+    setSelectedDate(now);
+    setCurrentMonthDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    fetchFollowups();
+    showToast("Filters reset & queues refreshed! 🔄", "info");
+  };
+
   const handlePrevMonth = () => {
     setCurrentMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   };
@@ -508,10 +519,11 @@ export default function FollowupLeadPage() {
         </div>
 
         <Button
-          onClick={fetchFollowups}
+          onClick={handleRefreshQueues}
           disabled={isLoading}
           size="lg"
           variant="outline"
+          className="font-bold cursor-pointer"
         >
           Refresh Queues
         </Button>

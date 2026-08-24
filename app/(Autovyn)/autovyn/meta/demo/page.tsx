@@ -325,7 +325,7 @@ export default function DemoPage() {
       {/* ══ HEADER SECTION ══ */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-[#0F172A] dark:text-white tracking-tight">
+          <h1 className="text-3xl font-bold text-[#0F172A] dark:text-white tracking-tight">
            Meta lead Demos
           </h1>
           <p className="text-lg font-medium text-[#64748B] dark:text-[#94A3B8] mt-1">
@@ -337,9 +337,10 @@ export default function DemoPage() {
         <div className="flex items-center gap-3">
           <Button
             onClick={() => setIsAddDemoOpen(true)}
+             
             className="bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold rounded-xl h-10 px-4 flex items-center gap-2 shadow-sm transition-all cursor-pointer"
           >
-            <Plus size={18} />
+            {/* <Plus size={18} /> */}
             Schedule Demo
           </Button>
         </div>
@@ -363,7 +364,7 @@ export default function DemoPage() {
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-xl text-lg font-bold transition-all cursor-pointer ${
                 statusFilter === st
                   ? "bg-[#0F172A] text-white dark:bg-white dark:text-[#0F172A]"
                   : "bg-[#F1F5F9] dark:bg-[#1E293B] text-[#64748B] hover:bg-[#E2E8F0]"

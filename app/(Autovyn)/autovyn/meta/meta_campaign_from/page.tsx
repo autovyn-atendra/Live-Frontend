@@ -20,12 +20,25 @@ import {
   XCircle,
   Tag,
   FileText,
+  Video,
+  Upload,
+  ExternalLink,
+  MessageSquare,
+  FileCode,
 } from "lucide-react";
 
 // ============================================================
 // CONSTANTS & TYPES
 // ============================================================
 const BASE_URL = process.env.NEXT_PUBLIC_URL;
+const IMAGE_FETCH_URL = process.env.NEXT_PUBLIC_imagepath || process.env.NEXT_PUBLIC_IMAGEPATH || "https://erp.autovyn.com/backend/fetch?filePath=";
+
+const getFetchUrl = (pathStr: string | null | undefined): string => {
+  if (!pathStr) return "";
+  if (pathStr.startsWith("http://") || pathStr.startsWith("https://")) return pathStr;
+  const cleanPath = String(pathStr).replace(/\\/g, "/").replace(/^\/+/, "");
+  return `${IMAGE_FETCH_URL}${encodeURIComponent(cleanPath)}`;
+};
 
 type CampaignRecord = {
   UTD: number;
@@ -36,6 +49,12 @@ type CampaignRecord = {
   Meta_Form_Name: string | null;
   Sales_Executive_Number?: string | null;
   Transfer_Number?: string | null;
+  Document_URL?: string | null;
+  Document_Url?: string | null;
+  Video_URL?: string | null;
+  Video_Url?: string | null;
+  Message_Text?: string | null;
+  message_text?: string | null;
   Is_Active: number;
   Remark: string | null;
   Created_By: string | null;
@@ -52,6 +71,9 @@ type FormDataState = {
   Meta_Form_Id: string;
   Meta_Form_Name: string;
   Sales_Executive_Number: string;
+  Document_URL: string;
+  Video_URL: string;
+  Message_Text: string;
   Is_Active: number;
   Remark: string;
 };
@@ -64,6 +86,9 @@ const INITIAL_FORM: FormDataState = {
   Meta_Form_Id: "",
   Meta_Form_Name: "",
   Sales_Executive_Number: "",
+  Document_URL: "",
+  Video_URL: "",
+  Message_Text: "",
   Is_Active: 1,
   Remark: "",
 };
@@ -196,6 +221,161 @@ export default function MetaCampaignFormPage() {
     setFormData(INITIAL_FORM);
   };
 
+  const handleRefreshPage = () => {
+    handleResetForm();
+    setSearchQuery("");
+    fetchCampaigns();
+    showToast("Form and records refreshed! 🔄", "info");
+  };
+
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+
+  const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "Document_URL" | "Video_URL") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileSizeMB = file.size / (1024 * 1024);
+
+    // ── 1. WhatsApp Document Limit Check (Max 100 MB) ────────
+    if (field === "Document_URL" && file.size > 100 * 1024 * 1024) {
+      Swal.fire({
+        icon: "warning",
+        title: "<span style='font-size:20px;font-weight:800;color:#0F172A;'>PDF Size Limit Exceeded</span>",
+        html: `
+          <div style="font-family:inherit;text-align:left;margin-top:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div style="background:#FFF1F2;border:1px solid #FECDD3;border-radius:12px;padding:12px;text-align:center;">
+                <span style="font-size:11px;font-weight:700;color:#E11D48;text-transform:uppercase;letter-spacing:0.5px;display:block;">Selected File</span>
+                <span style="font-size:18px;font-weight:800;color:#9F1239;margin-top:2px;display:block;">${fileSizeMB.toFixed(2)} MB</span>
+              </div>
+              <div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;padding:12px;text-align:center;">
+                <span style="font-size:11px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.5px;display:block;">Max WhatsApp Limit</span>
+                <span style="font-size:18px;font-weight:800;color:#065F46;margin-top:2px;display:block;">100 MB</span>
+              </div>
+            </div>
+            <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:12px;display:flex;gap:10px;align-items:flex-start;">
+              <span style="font-size:18px;line-height:1;">⚠️</span>
+              <p style="font-size:13px;color:#92400E;margin:0;line-height:1.45;font-weight:500;">
+                WhatsApp allows documents up to <b>100 MB</b>. Please select a smaller PDF to ensure seamless customer delivery.
+              </p>
+            </div>
+          </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: "Choose Another File",
+        confirmButtonColor: "#4F46E5",
+        customClass: {
+          popup: "rounded-2xl shadow-2xl border border-[#E2E8F0] p-6",
+          confirmButton: "rounded-xl font-bold text-sm px-6 py-2.5 shadow-md cursor-pointer",
+        },
+      });
+      e.target.value = "";
+      return;
+    }
+
+    // ── 2. WhatsApp Video Limit Check (Max 16 MB) ───────────
+    if (field === "Video_URL" && file.size > 16 * 1024 * 1024) {
+      Swal.fire({
+        icon: "warning",
+        title: "<span style='font-size:20px;font-weight:800;color:#0F172A;'>Video Size Limit Exceeded</span>",
+        html: `
+          <div style="font-family:inherit;text-align:left;margin-top:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div style="background:#FFF1F2;border:1px solid #FECDD3;border-radius:12px;padding:12px;text-align:center;">
+                <span style="font-size:11px;font-weight:700;color:#E11D48;text-transform:uppercase;letter-spacing:0.5px;display:block;">Selected Video</span>
+                <span style="font-size:18px;font-weight:800;color:#9F1239;margin-top:2px;display:block;">${fileSizeMB.toFixed(2)} MB</span>
+              </div>
+              <div style="background:#FAF5FF;border:1px solid #E9D5FF;border-radius:12px;padding:12px;text-align:center;">
+                <span style="font-size:11px;font-weight:700;color:#9333EA;text-transform:uppercase;letter-spacing:0.5px;display:block;">Max WhatsApp Limit</span>
+                <span style="font-size:18px;font-weight:800;color:#6B21A8;margin-top:2px;display:block;">16.00 MB</span>
+              </div>
+            </div>
+            <div style="background:#F3E8FF;border:1px solid #D8B4FE;border-radius:12px;padding:12px;display:flex;gap:10px;align-items:flex-start;">
+              <span style="font-size:18px;line-height:1;">🎬</span>
+              <p style="font-size:13px;color:#581C87;margin:0;line-height:1.45;font-weight:500;">
+                Meta WhatsApp Cloud API <b>strictly rejects videos larger than 16 MB</b>. Please compress or select a video under <b>16 MB</b>.
+              </p>
+            </div>
+          </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: "Select Smaller Video",
+        confirmButtonColor: "#9333EA",
+        customClass: {
+          popup: "rounded-2xl shadow-2xl border border-[#E2E8F0] p-6",
+          confirmButton: "rounded-xl font-bold text-sm px-6 py-2.5 shadow-md cursor-pointer",
+        },
+      });
+      e.target.value = "";
+      return;
+    }
+
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+    formDataUpload.append("customPath", "meta_campaigns");
+    formDataUpload.append("name", user?.name || "ADMIN");
+
+    try {
+      if (field === "Document_URL") setIsUploadingDoc(true);
+      else setIsUploadingVideo(true);
+
+      let uploadedPath = "";
+
+      // 1. Direct upload to central server https://erp.autovyn.com/backend/upload-photo
+      try {
+        const uploadPhotoUrl = "https://erp.autovyn.com/backend/upload-photo";
+        const uploadRes = await axios.post(uploadPhotoUrl, formDataUpload, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          timeout: 30000,
+        });
+
+        if (uploadRes.data) {
+          if (typeof uploadRes.data === "string") {
+            uploadedPath = uploadRes.data;
+          } else if (uploadRes.data.path || uploadRes.data.filePath) {
+            uploadedPath = uploadRes.data.path || uploadRes.data.filePath;
+          } else if (Array.isArray(uploadRes.data) && uploadRes.data[0]?.path) {
+            uploadedPath = uploadRes.data[0].path;
+          }
+        }
+      } catch (photoErr) {
+        console.warn("Direct upload-photo fallback to local backend route:", photoErr);
+      }
+
+      // 2. Fallback: Backend API route /meta/uploadCampaignMedia
+      if (!uploadedPath) {
+        const res = await axios.post(`${BASE_URL}/meta/uploadCampaignMedia`, formDataUpload, {
+          headers: {
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        if (res.data?.success) {
+          uploadedPath = res.data?.filePath || res.data?.path || res.data?.fileUrl;
+        }
+      }
+
+      if (uploadedPath) {
+        const cleanPath = String(uploadedPath).replace(/\\/g, "/").replace(/^\/+/, "");
+        showToast(`${field === "Document_URL" ? "Document / PDF" : "Video"} uploaded successfully! 📁`, "success");
+        handleInputChange(field, cleanPath);
+      } else {
+        showToast("Media upload failed", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message ?? "Failed to upload file", "error");
+    } finally {
+      if (field === "Document_URL") setIsUploadingDoc(false);
+      else setIsUploadingVideo(false);
+      e.target.value = "";
+    }
+  };
+
   const handleSelectForEdit = (item: CampaignRecord) => {
     setFormData({
       UTD: item.UTD,
@@ -205,6 +385,9 @@ export default function MetaCampaignFormPage() {
       Meta_Form_Id: item.Meta_Form_Id || "",
       Meta_Form_Name: item.Meta_Form_Name || "",
       Sales_Executive_Number: item.Sales_Executive_Number || item.Transfer_Number || "",
+      Document_URL: item.Document_URL || item.Document_Url || "",
+      Video_URL: item.Video_URL || item.Video_Url || "",
+      Message_Text: item.Message_Text || item.message_text || "",
       Is_Active: Number(item.Is_Active) ? 1 : 0,
       Remark: item.Remark || "",
     });
@@ -231,6 +414,9 @@ export default function MetaCampaignFormPage() {
         metaFormName: formData.Meta_Form_Name.trim(),
         salesExecutiveNumber: formData.Sales_Executive_Number.trim(),
         transferNumber: formData.Sales_Executive_Number.trim(),
+        documentUrl: formData.Document_URL.trim(),
+        videoUrl: formData.Video_URL.trim(),
+        messageText: formData.Message_Text.trim(),
         isActive: formData.Is_Active,
         remark: formData.Remark.trim(),
       };
@@ -357,6 +543,63 @@ export default function MetaCampaignFormPage() {
         ),
       },
       {
+        Header: "PDF Document",
+        accessor: "Document_URL",
+        Cell: ({ value, row }: any) => {
+          const docPath = value || row.original.Document_Url || row.original.document_url || row.original.documentUrl;
+          if (!docPath) return <span className="text-[#94A3B8] text-lg">—</span>;
+          const fullUrl = getFetchUrl(docPath);
+          return (
+            <a
+              href={fullUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A] hover:bg-[#FEF3C7] dark:bg-[#451A03]/30 dark:text-[#FCD34D] dark:border-[#92400E] transition-colors shadow-xs"
+            >
+              <FileCode size={16} />
+              View PDF
+              <ExternalLink size={12} />
+            </a>
+          );
+        },
+      },
+      {
+        Header: "Campaign Video",
+        accessor: "Video_URL",
+        Cell: ({ value, row }: any) => {
+          const vidPath = value || row.original.Video_Url || row.original.video_url || row.original.videoUrl;
+          if (!vidPath) return <span className="text-[#94A3B8] text-lg">—</span>;
+          const fullUrl = getFetchUrl(vidPath);
+          return (
+            <a
+              href={fullUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold bg-[#FAF5FF] text-[#7E22CE] border border-[#E9D5FF] hover:bg-[#F3E8FF] dark:bg-[#3B0764]/30 dark:text-[#D8B4FE] dark:border-[#6B21A8] transition-colors shadow-xs"
+            >
+              <Video size={16} />
+              Watch Video
+              <ExternalLink size={12} />
+            </a>
+          );
+        },
+      },
+      {
+        Header: "Message Text",
+        accessor: "Message_Text",
+        Cell: ({ value, row }: any) => {
+          const textVal = value || row.original.message_text || row.original.messageText;
+          if (!textVal) return <span className="text-[#94A3B8] text-lg">—</span>;
+          return (
+            <div className="max-w-xs" title={textVal}>
+              <span className="text-base text-[#1E293B] dark:text-[#E2E8F0] font-medium line-clamp-2 block bg-[#F8FAFC] dark:bg-[#1E293B]/60 p-2 rounded-lg border border-[#E2E8F0] dark:border-[#334155]/60">
+                {textVal}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
         Header: "Status",
         accessor: "Is_Active",
         Cell: ({ row }: any) => {
@@ -448,14 +691,14 @@ export default function MetaCampaignFormPage() {
         </div>
 
         <Button
-          onClick={fetchCampaigns}
+          onClick={handleRefreshPage}
           disabled={isLoading}
           size="lg"
           variant="outline"
           className="flex items-center gap-2 font-bold cursor-pointer"
         >
           {/* <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} /> */}
-          Refresh Records
+          Refresh Page
         </Button>
       </div>
 
@@ -576,10 +819,206 @@ export default function MetaCampaignFormPage() {
                 onChange={(e) => handleInputChange("Is_Active", Number(e.target.value))}
                 className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-bold text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none"
               >
-                <option value={1}>ACTIVE (1)</option>
-                <option value={0}>INACTIVE (0)</option>
+                <option value={1}>ACTIVE </option>
+                <option value={0}>INACTIVE </option>
               </select>
             </div>
+          </div>
+
+          {/* ══ MEDIA & MESSAGING SECTION ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 border-t border-[#F1F5F9] dark:border-[#1E293B] pt-5">
+            
+            {/* System PDF / Document Uploader Card */}
+            <div className="bg-[#F8FAFC] dark:bg-[#1E293B]/60 border border-[#E2E8F0] dark:border-[#334155] rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-lg font-bold text-[#334155] dark:text-[#CBD5E1] flex items-center gap-2">
+                    <FileCode size={20} className="text-[#D97706]" />
+                    PDF Document
+                  </label>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#FEF3C7] dark:bg-[#78350F]/60 text-[#92400E] dark:text-[#FDE68A] border border-[#FCD34D] dark:border-[#B45309]">
+                    Max: 100 MB
+                  </span>
+                </div>
+                {formData.Document_URL && (
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange("Document_URL", "")}
+                    className="text-xs font-bold text-[#EF4444] hover:text-[#B91C1C] underline cursor-pointer"
+                  >
+                    Remove File
+                  </button>
+                )}
+              </div>
+
+              {!formData.Document_URL ? (
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#FCD34D] dark:border-[#B45309]/50 hover:border-[#F59E0B] rounded-xl p-5 bg-[#FFFBEB]/50 dark:bg-[#451A03]/20 cursor-pointer transition-colors group">
+                  <Upload size={28} className="text-[#F59E0B] group-hover:scale-110 transition-transform mb-2" />
+                  <span className="text-base font-bold text-[#1E293B] dark:text-[#F1F5F9]">
+                    {isUploadingDoc ? "Uploading PDF to Cloud..." : "Click to Upload PDF from System"}
+                  </span>
+                  <span className="text-xs font-medium text-[#B45309] dark:text-[#FBBF24] mt-1">
+                    Accepts PDF, DOC, DOCX · Max Limit 100 MB
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => handleMediaFileUpload(e, "Document_URL")}
+                    disabled={isUploadingDoc}
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between bg-white dark:bg-[#0F172A] border border-[#FDE68A] dark:border-[#92400E] rounded-xl p-3 shadow-xs">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <div className="p-2 bg-[#FEF3C7] dark:bg-[#451A03]/50 text-[#D97706] rounded-lg">
+                        <FileCode size={22} />
+                      </div>
+                      <div className="truncate">
+                        <p className="text-sm font-bold text-[#0F172A] dark:text-white truncate">
+                          {formData.Document_URL.split("/").pop()}
+                        </p>
+                        <p className="text-xs font-mono text-[#64748B] dark:text-[#94A3B8] truncate">
+                          {formData.Document_URL}
+                        </p>
+                      </div>
+                    </div>
+
+                    <a
+                      href={getFetchUrl(formData.Document_URL)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#F59E0B] hover:bg-[#D97706] text-white rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+                    >
+                      View PDF
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+
+                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#B45309] dark:text-[#FBBF24] hover:underline cursor-pointer">
+                    <Upload size={14} />
+                    {isUploadingDoc ? "Uploading..." : "Replace PDF (Max 100 MB)"}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => handleMediaFileUpload(e, "Document_URL")}
+                      disabled={isUploadingDoc}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* System Video Uploader Card */}
+            <div className="bg-[#F8FAFC] dark:bg-[#1E293B]/60 border border-[#E2E8F0] dark:border-[#334155] rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-lg font-bold text-[#334155] dark:text-[#CBD5E1] flex items-center gap-2">
+                    <Video size={20} className="text-[#9333EA]" />
+                    Campaign Video
+                  </label>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#F3E8FF] dark:bg-[#581C87]/60 text-[#6B21A8] dark:text-[#E9D5FF] border border-[#D8B4FE] dark:border-[#7E22CE]">
+                    Max: 16 MB (WhatsApp Limit)
+                  </span>
+                </div>
+                {formData.Video_URL && (
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange("Video_URL", "")}
+                    className="text-xs font-bold text-[#EF4444] hover:text-[#B91C1C] underline cursor-pointer"
+                  >
+                    Remove Video
+                  </button>
+                )}
+              </div>
+
+              {!formData.Video_URL ? (
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#D8B4FE] dark:border-[#7E22CE]/50 hover:border-[#A855F7] rounded-xl p-5 bg-[#FAF5FF]/50 dark:bg-[#3B0764]/20 cursor-pointer transition-colors group">
+                  <Video size={28} className="text-[#9333EA] group-hover:scale-110 transition-transform mb-2" />
+                  <span className="text-base font-bold text-[#1E293B] dark:text-[#F1F5F9]">
+                    {isUploadingVideo ? "Uploading Video to Cloud..." : "Click to Upload Video from System"}
+                  </span>
+                  <span className="text-xs font-medium text-[#7E22CE] dark:text-[#C084FC] mt-1">
+                    Accepts MP4, WEBM · Strictly Max 16 MB for WhatsApp
+                  </span>
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/*"
+                    onChange={(e) => handleMediaFileUpload(e, "Video_URL")}
+                    disabled={isUploadingVideo}
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <div className="space-y-2">
+                  <div className="bg-white dark:bg-[#0F172A] border border-[#E9D5FF] dark:border-[#6B21A8] rounded-xl p-3 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        <div className="p-2 bg-[#F3E8FF] dark:bg-[#3B0764]/50 text-[#9333EA] rounded-lg">
+                          <Video size={20} />
+                        </div>
+                        <div className="truncate">
+                          <p className="text-sm font-bold text-[#0F172A] dark:text-white truncate">
+                            {formData.Video_URL.split("/").pop()}
+                          </p>
+                          <p className="text-xs font-mono text-[#64748B] dark:text-[#94A3B8] truncate">
+                            {formData.Video_URL}
+                          </p>
+                        </div>
+                      </div>
+
+                      <a
+                        href={getFetchUrl(formData.Video_URL)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#9333EA] hover:bg-[#7E22CE] text-white rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+                      >
+                        Open Video
+                        <ExternalLink size={14} />
+                      </a>
+                    </div>
+
+                    {/* Embedded Video Player Preview */}
+                    <div className="rounded-xl overflow-hidden bg-black border border-[#F3E8FF] dark:border-[#581C87]/50">
+                      <video
+                        src={getFetchUrl(formData.Video_URL)}
+                        controls
+                        className="w-full max-h-44 object-contain"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#7E22CE] dark:text-[#C084FC] hover:underline cursor-pointer">
+                    <Upload size={14} />
+                    {isUploadingVideo ? "Uploading..." : "Replace Video (Max 16 MB)"}
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/*"
+                      onChange={(e) => handleMediaFileUpload(e, "Video_URL")}
+                      disabled={isUploadingVideo}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* WhatsApp Message Text */}
+          <div className="space-y-1.5">
+            <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] flex items-center gap-1.5">
+              <MessageSquare size={18} className="text-[#10B981]" />
+              WhatsApp Message Text (Template / Offer Body)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Enter WhatsApp message text template to be sent to customers..."
+              value={formData.Message_Text}
+              onChange={(e) => handleInputChange("Message_Text", e.target.value)}
+              className="w-full p-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none"
+            />
           </div>
 
           {/* Remark Input */}

@@ -274,6 +274,45 @@ export default function MetaPage() {
   const [filterFormId, setFilterFormId] = useState("");
   const [filterCallSource, setFilterCallSource] = useState("");
 
+  // ── Dynamic Dashboard KPI Statistics State ────────────────
+  const [stats, setStats] = useState<{
+    totalLeads: number;
+    leadsThisWeek: number;
+    leadsToday: number;
+    todayFollowups: number;
+    overdueFollowups: number;
+    upcomingFollowups: number;
+    completedTodayFollowups: number;
+    totalDemos: number;
+    demosThisWeek: number;
+    demosCompletedThisWeek: number;
+    conversionRate: string;
+    totalCalls: number;
+    callsToday: number;
+    leadsCalledToday: number;
+    callsThisWeek: number;
+    totalWhatsAppSent: number;
+    whatsappSentToday: number;
+  }>({
+    totalLeads: 0,
+    leadsThisWeek: 0,
+    leadsToday: 0,
+    todayFollowups: 0,
+    overdueFollowups: 0,
+    upcomingFollowups: 0,
+    completedTodayFollowups: 0,
+    totalDemos: 0,
+    demosThisWeek: 0,
+    demosCompletedThisWeek: 0,
+    conversionRate: "0.0%",
+    totalCalls: 0,
+    callsToday: 0,
+    leadsCalledToday: 0,
+    callsThisWeek: 0,
+    totalWhatsAppSent: 0,
+    whatsappSentToday: 0,
+  });
+
   // ── Detail Workspace State ────────────────────────────────
   const [activeStage, setActiveStage] = useState<string>("New");
   const [leadTemperature, setLeadTemperature] = useState<"Cold" | "Warm" | "Hot">("Hot");
@@ -325,7 +364,7 @@ export default function MetaPage() {
   // FETCH META LEADS
   // ============================================================
   const fetchMetaLeads = useCallback(
-    async (pageToFetch = 1, customLimit?: number) => {
+    async (pageToFetch = 1, customLimit?: number, overrideFilters?: Record<string, any>) => {
       setIsLoading(true);
       try {
         const payload: Record<string, any> = {
@@ -335,12 +374,19 @@ export default function MetaPage() {
           sortOrder: "DESC",
         };
 
-        if (searchQuery.trim()) payload.search = searchQuery.trim();
-        if (fromDate) payload.fromDate = fromDate;
-        if (toDate) payload.toDate = toDate;
-        if (filterStatus !== "") payload.status = Number(filterStatus);
-        if (filterFormId.trim()) payload.formId = filterFormId.trim();
-        if (filterCallSource !== "") payload.filterCallSource = filterCallSource;
+        const activeSearch = overrideFilters ? (overrideFilters.searchQuery ?? "") : searchQuery;
+        const activeFrom = overrideFilters ? (overrideFilters.fromDate ?? "") : fromDate;
+        const activeTo = overrideFilters ? (overrideFilters.toDate ?? "") : toDate;
+        const activeStatus = overrideFilters ? (overrideFilters.filterStatus ?? "") : filterStatus;
+        const activeFormId = overrideFilters ? (overrideFilters.filterFormId ?? "") : filterFormId;
+        const activeSource = overrideFilters ? (overrideFilters.filterCallSource ?? "") : filterCallSource;
+
+        if (activeSearch.trim()) payload.search = activeSearch.trim();
+        if (activeFrom) payload.fromDate = activeFrom;
+        if (activeTo) payload.toDate = activeTo;
+        if (activeStatus !== "") payload.status = Number(activeStatus);
+        if (activeFormId.trim()) payload.formId = activeFormId.trim();
+        if (activeSource !== "") payload.filterCallSource = activeSource;
 
         const res = await axios.post(`${BASE_URL}/meta/getMetaLeads`, payload, {
           headers: {
@@ -416,6 +462,31 @@ export default function MetaPage() {
     [user?.Comp_Code, user?.name]
   );
 
+  // ============================================================
+  // FETCH DYNAMIC DASHBOARD STATS
+  // ============================================================
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/meta/getDashboardStats`,
+        {},
+        {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (res.data?.success && res.data?.data) {
+        setStats(res.data.data);
+      }
+    } catch (err) {
+      console.warn("Failed to load dynamic dashboard stats:", err);
+    }
+  }, [user?.Comp_Code, user?.name]);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadUtdParam = searchParams.get("leadUtd");
@@ -423,6 +494,7 @@ export default function MetaPage() {
 
   useEffect(() => {
     fetchMetaLeads(1);
+    fetchDashboardStats();
     if (leadUtdParam) {
       const leadUtd = Number(leadUtdParam);
       if (leadUtd && !isNaN(leadUtd)) {
@@ -446,20 +518,87 @@ export default function MetaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadUtdParam]);
 
-  const handleApplyFilter = () => {
-    fetchMetaLeads(1);
+  const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // ⚡ Auto-filter handler for dropdowns and date inputs
+  const handleFilterChange = (key: string, value: string) => {
+    if (key === "searchQuery") setSearchQuery(value);
+    if (key === "fromDate") setFromDate(value);
+    if (key === "toDate") setToDate(value);
+    if (key === "filterStatus") setFilterStatus(value);
+    if (key === "filterCallSource") setFilterCallSource(value);
+    if (key === "filterFormId") setFilterFormId(value);
+
+    fetchMetaLeads(1, undefined, { [key]: value });
+  };
+
+  // ⚡ Debounced auto-filter for search input
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchMetaLeads(1, undefined, { searchQuery: val });
+    }, 300);
+  };
+
+  // ⚡ Debounced auto-filter for form ID input
+  const handleFormIdChange = (val: string) => {
+    setFilterFormId(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchMetaLeads(1, undefined, { filterFormId: val });
+    }, 300);
   };
 
   const handleResetFilter = () => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     setSearchQuery("");
     setFromDate("");
     setToDate("");
     setFilterStatus("");
     setFilterFormId("");
     setFilterCallSource("");
+    // ⚡ 1-Click Instant Reset: Explicitly pass empty filter parameters
+    fetchMetaLeads(1, undefined, {
+      searchQuery: "",
+      fromDate: "",
+      toDate: "",
+      filterStatus: "",
+      filterFormId: "",
+      filterCallSource: "",
+    });
+    fetchDashboardStats();
+  };
+
+  // ⚡ Click AI Calls Today Card -> Filter strictly by AI calls made today (irrespective of lead creation date) & Auto Scroll
+  const handleFilterAiCallsToday = () => {
+    setFromDate("");
+    setToDate("");
+    setFilterStatus("");
+    setSearchQuery("");
+    setFilterFormId("");
+    setFilterCallSource("AI_CALL_TODAY");
+
+    fetchMetaLeads(1, undefined, {
+      fromDate: "",
+      toDate: "",
+      searchQuery: "",
+      filterStatus: "",
+      filterFormId: "",
+      filterCallSource: "AI_CALL_TODAY",
+    });
+
     setTimeout(() => {
-      fetchMetaLeads(1);
-    }, 50);
+      document.getElementById("meta-leads-table-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
+  // ⚡ Click Total Leads Card -> View All & Auto Scroll to Table
+  const handleFilterTotalLeads = () => {
+    handleResetFilter();
+    setTimeout(() => {
+      document.getElementById("meta-leads-table-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
   };
 
   // Open Detailed CRM Workspace View when clicking View / row
@@ -2039,86 +2178,101 @@ export default function MetaPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
 
         {/* Card 1: TOTAL LEADS */}
-        <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden">
+        <div
+          onClick={handleFilterTotalLeads}
+          className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden cursor-pointer hover:border-[#0284C7]/50 hover:shadow-md transition-all group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8]">
+            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8] group-hover:text-[#0284C7] transition-colors">
               Total Leads
             </span>
-            <div className="w-9 h-9 rounded-full bg-[#F0F9FF] dark:bg-[#082F49]/70 text-[#0284C7] dark:text-[#38BDF8] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-[#F0F9FF] dark:bg-[#082F49]/70 text-[#0284C7] dark:text-[#38BDF8] flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users size={18} />
             </div>
           </div>
           <div className="mt-2">
             <span className="text-3xl font-bold text-[#0F172A] dark:text-white tracking-tight">
-              {pagination.totalRecords || rows.length}
+              {stats.totalLeads || pagination.totalRecords || rows.length}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1 text-lg font-bold text-[#059669] dark:text-[#34D399]">
             <ArrowUpRight size={15} />
-            <span>+12 this week</span>
+            <span>+{stats.leadsThisWeek} this week ({stats.leadsToday} today)</span>
           </div>
         </div>
 
         {/* Card 2: TODAY'S FOLLOWUPS */}
-        <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden">
+        <div
+          onClick={() => router.push("/autovyn/meta/followup_lead")}
+          className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden cursor-pointer hover:border-[#D97706]/50 hover:shadow-md transition-all group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8]">
+            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8] group-hover:text-[#D97706] transition-colors">
               Today's Followups
             </span>
-            <div className="w-9 h-9 rounded-full bg-[#FFFBEB] dark:bg-[#451A03]/70 text-[#D97706] dark:text-[#FBBF24] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-[#FFFBEB] dark:bg-[#451A03]/70 text-[#D97706] dark:text-[#FBBF24] flex items-center justify-center group-hover:scale-110 transition-transform">
               <Clock size={18} />
             </div>
           </div>
           <div className="mt-2">
             <span className="text-3xl font-bold text-[#0F172A] dark:text-white tracking-tight">
-              6
+              {stats.todayFollowups}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-lg font-bold text-[#E11D48] dark:text-[#FB7185]">
             <AlertCircle size={15} />
-            <span>3 overdue · act now</span>
+            <span>{stats.overdueFollowups} overdue · {stats.upcomingFollowups} upcoming</span>
           </div>
         </div>
 
         {/* Card 3: DEMOS THIS WEEK */}
-        <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden">
+        <div
+          onClick={() => router.push("/autovyn/meta/followup_lead")}
+          className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden cursor-pointer hover:border-[#9333EA]/50 hover:shadow-md transition-all group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8]">
+            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8] group-hover:text-[#9333EA] transition-colors">
               Demos This Week
             </span>
-            <div className="w-9 h-9 rounded-full bg-[#FAF5FF] dark:bg-[#3B0764]/70 text-[#9333EA] dark:text-[#C084FC] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-[#FAF5FF] dark:bg-[#3B0764]/70 text-[#9333EA] dark:text-[#C084FC] flex items-center justify-center group-hover:scale-110 transition-transform">
               <Tv size={18} />
             </div>
           </div>
           <div className="mt-2">
             <span className="text-3xl font-bold text-[#0F172A] dark:text-white tracking-tight">
-              4
+              {stats.demosThisWeek}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1 text-lg font-bold text-[#059669] dark:text-[#34D399]">
             <ArrowUpRight size={15} />
-            <span>2 completed</span>
+            <span>{stats.demosCompletedThisWeek} completed · {stats.totalDemos} total</span>
           </div>
         </div>
 
-        {/* Card 4: CONVERSION RATE */}
-        <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden">
+        {/* Card 4: AI CALLS & CONVERSION */}
+        <div
+          onClick={handleFilterAiCallsToday}
+          className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden cursor-pointer hover:border-[#059669]/50 hover:shadow-md transition-all group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8]">
-              Conversion Rate
+            <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8] group-hover:text-[#059669] transition-colors">
+              AI Calls Today
             </span>
-            <div className="w-9 h-9 rounded-full bg-[#ECFDF5] dark:bg-[#064E3B]/70 text-[#059669] dark:text-[#34D399] flex items-center justify-center">
-              <TrendingUp size={18} />
+            <div className="w-9 h-9 rounded-full bg-[#ECFDF5] dark:bg-[#064E3B]/70 text-[#059669] dark:text-[#34D399] flex items-center justify-center group-hover:scale-110 transition-transform">
+              <PhoneCall size={18} />
             </div>
           </div>
-          <div className="mt-2">
+          <div className="mt-2 flex items-baseline justify-between">
             <span className="text-3xl font-bold text-[#0F172A] dark:text-white tracking-tight">
-              18.4%
+              {stats.leadsCalledToday || stats.callsToday}
+            </span>
+            <span className="text-xs font-bold text-[#059669] dark:text-[#34D399] bg-[#ECFDF5] dark:bg-[#064E3B]/70 px-2 py-0.5 rounded-full">
+              {stats.callsToday} dials ➔
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1 text-lg font-bold text-[#059669] dark:text-[#34D399]">
-            <ArrowUpRight size={15} />
-            <span>+2.1% vs last mo</span>
+            <TrendingUp size={15} />
+            <span>{stats.callsToday} dials today · {stats.conversionRate} conv</span>
           </div>
         </div>
 
@@ -2128,33 +2282,23 @@ export default function MetaPage() {
       <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
 
         {/* Card Title & Header Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3  pb-3 dark:border-[#1E293B]">
-          <h3 className="text-lg font-bold uppercase tracking-wider text-[#334155] dark:text-[#CBD5E1] flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 dark:border-[#1E293B]">
+          <div className="flex items-center gap-2">
             <Filter size={16} className="text-[#4F46E5]" />
-            ADVANCED FILTER PARAMETERS
-          </h3>
+            <h3 className="text-lg font-bold uppercase tracking-wider text-[#334155] dark:text-[#CBD5E1]">
+              FILTER PARAMETERS
+            </h3>
+          </div>
           <div className="flex items-center justify-end gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleResetFilter}
               disabled={isLoading}
-              className="text-lg font-bold h-9 px-3 cursor-pointer"
+              className="text-lg font-bold h-9 px-3 cursor-pointer text-[#E11D48] hover:text-[#BE123C] hover:bg-[#FFF1F2] dark:hover:bg-[#4C0519]/40 border-[#FECDD3] dark:border-[#881337]"
             >
-              Reset Filters
+              Reset All Filters
             </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleApplyFilter}
-              disabled={isLoading}
-              className="text-lg font-bold h-9 px-4 bg-[#4F46E5] hover:bg-[#4338CA] text-white border-transparent cursor-pointer flex items-center gap-1.5 shadow-2xs"
-            >
-              {/* <Filter size={14} /> */}
-              Apply Parameters
-            </Button>
-
           </div>
 
         </div>
@@ -2172,9 +2316,8 @@ export default function MetaPage() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleApplyFilter()}
-                placeholder="Name, Phone, City, ID..."
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Name, Phone, City..."
                 className="w-full pl-9 pr-3 h-9 bg-[#F8FAFC] dark:bg-[#1E293B]/80 border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
               />
             </div>
@@ -2186,7 +2329,7 @@ export default function MetaPage() {
             type="date"
             name="fromDate"
             value={fromDate}
-            handleInputChange={(_, value) => setFromDate(value)}
+            handleInputChange={(_, value) => handleFilterChange("fromDate", value)}
             onInput={() => { }}
             redlabel=""
             labelClass="text-lg font-bold"
@@ -2199,7 +2342,7 @@ export default function MetaPage() {
             type="date"
             name="toDate"
             value={toDate}
-            handleInputChange={(_, value) => setToDate(value)}
+            handleInputChange={(_, value) => handleFilterChange("toDate", value)}
             onInput={() => { }}
             redlabel=""
             labelClass="text-lg font-bold"
@@ -2213,7 +2356,7 @@ export default function MetaPage() {
             </label>
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => handleFilterChange("filterStatus", e.target.value)}
               className="w-full h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
             >
               <option value="">All Active Statuses</option>
@@ -2234,10 +2377,11 @@ export default function MetaPage() {
             </label>
             <select
               value={filterCallSource}
-              onChange={(e) => setFilterCallSource(e.target.value)}
+              onChange={(e) => handleFilterChange("filterCallSource", e.target.value)}
               className="w-full h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
             >
               <option value="">All Call Sources</option>
+              <option value="AI_CALL_TODAY">⚡ AI Calls Made Today</option>
               <option value="AUTO_AI_CALL">🤖 Auto Cron AI Calls</option>
               <option value="MANUAL_AI_CALL">👤 Manual AI Calls</option>
               <option value="SCHEDULED">📅 Scheduled Callbacks</option>
@@ -2250,7 +2394,7 @@ export default function MetaPage() {
             type="text"
             name="filterFormId"
             value={filterFormId}
-            handleInputChange={(_, value) => setFilterFormId(value)}
+            handleInputChange={(_, value) => handleFormIdChange(value)}
             onInput={() => { }}
             redlabel=""
             placeholder="Filter by Form ID"
@@ -2263,7 +2407,7 @@ export default function MetaPage() {
 
 
       {/* ══ MAIN TABLE VIEW ══ */}
-      <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl shadow-xs overflow-hidden">
+      <div id="meta-leads-table-section" className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl shadow-xs overflow-hidden scroll-mt-6">
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1000px]">
 
