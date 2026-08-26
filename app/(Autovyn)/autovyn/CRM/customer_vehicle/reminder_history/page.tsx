@@ -12,6 +12,9 @@ import {
     BarChart3,
     PhoneCall,
     Download,
+    CalendarCheck,
+    CheckCircle2,
+    AlertCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -116,6 +119,18 @@ type CallRecord = {
     appointmentSlot: string | null;
     summary: string | null;
     category: string | null;
+    customerResponse?: string | null;
+    appointmentStatus?: string | null;
+    appointmentRemark?: string | null;
+    formResponse?: {
+        hasSubmittedForm: boolean;
+        scheduledDate: string | null;
+        scheduledTime: string | null;
+        serviceType: string | null;
+        customerResponse: string | null;
+        appointmentStatus: string | null;
+        submittedAt: string | null;
+    };
     transferInfo: TransferInfo;
     chat: CallChat;
     slotsOffered: SlotsOffered;
@@ -368,6 +383,38 @@ const Page = () => {
         setPlayingCallId(null);
     };
 
+    const [isFormResponseOpen, setIsFormResponseOpen] = useState(false);
+
+    const openTranscriptModal = (call: CallRecord) => {
+        setSelectedCall(call);
+        setIsTranscriptOpen(true);
+    };
+
+    const closeTranscriptModal = () => {
+        setIsTranscriptOpen(false);
+        setSelectedCall(null);
+    };
+
+    const openInsightsModal = (call: CallRecord) => {
+        setSelectedCall(call);
+        setIsInsightsOpen(true);
+    };
+
+    const closeInsightsModal = () => {
+        setIsInsightsOpen(false);
+        setSelectedCall(null);
+    };
+
+    const openFormResponseModal = (call: CallRecord) => {
+        setSelectedCall(call);
+        setIsFormResponseOpen(true);
+    };
+
+    const closeFormResponseModal = () => {
+        setIsFormResponseOpen(false);
+        setSelectedCall(null);
+    };
+
     // initialize Loc_Code once
     useEffect(() => {
         const defaultLoc =
@@ -581,26 +628,6 @@ const Page = () => {
         if (searchParams?.get("vehicleNo")) {
             router.replace("/autovyn/CRM/customer_vehicle/reminder_history");
         }
-    };
-
-    const openTranscriptModal = (call: CallRecord) => {
-        setSelectedCall(call);
-        setIsTranscriptOpen(true);
-    };
-
-    const closeTranscriptModal = () => {
-        setIsTranscriptOpen(false);
-        setSelectedCall(null);
-    };
-
-    const openInsightsModal = (call: CallRecord) => {
-        setSelectedCall(call);
-        setIsInsightsOpen(true);
-    };
-
-    const closeInsightsModal = () => {
-        setIsInsightsOpen(false);
-        setSelectedCall(null);
     };
 
     const handleCallNow = (phoneNumber: string) => {
@@ -1000,6 +1027,7 @@ const Page = () => {
                                             {/* <th className="px-2 py-2 text-center">Placeholders</th> */}
                                             <th className="px-2 py-2 text-center">Transcript</th>
                                             <th className="px-2 py-2 text-center">Summary</th>
+                                            <th className="px-2 py-2 text-center">Form Response</th>
                                             {/* <th className="px-2 py-2 text-center">Call</th> */}
                                         </tr>
                                     </thead>
@@ -1086,6 +1114,20 @@ const Page = () => {
                                                             className="text-[#9333EA] hover:text-[#6B21A8]"
                                                         >
                                                             <BarChart3 size={18} />
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-2 py-3 text-center">
+                                                        <button
+                                                            title="View Form Booking Response"
+                                                            onClick={() => openFormResponseModal(call)}
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[14px] font-bold transition-all shadow-xs cursor-pointer ${
+                                                                call.formResponse?.hasSubmittedForm
+                                                                    ? "bg-[#DCFCE7] hover:bg-[#BBF7D0] text-[#15803D] dark:bg-[#14532D]/40 dark:text-[#4ADE80] border border-[#86EFAC] dark:border-[#166534]"
+                                                                    : "bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#64748B] dark:bg-[#1E293B] dark:text-[#94A3B8] border border-[#CBD5E1] dark:border-[#334155]"
+                                                            }`}
+                                                        >
+                                                            <CalendarCheck size={16} />
+                                                            {call.formResponse?.hasSubmittedForm ? "Form Booked" : "Form Response"}
                                                         </button>
                                                     </td>
                                                     {/* <td className="px-2 py-3 text-center">
@@ -1231,6 +1273,20 @@ const Page = () => {
                     <InsightRow label="Category" value={selectedCall?.category || "-"} />
                     <InsightRow label="Summary" value={selectedCall?.summary || "-"} />
                     <InsightRow
+                        label="Customer Response"
+                        value={
+                            selectedCall?.customerResponse ||
+                            selectedCall?.appointmentRemark ||
+                            (selectedCall?.appointmentSet ? "Appointment Confirmed" : "-")
+                        }
+                    />
+                    {selectedCall?.appointmentRemark && (
+                        <InsightRow label="Appointment Remark" value={selectedCall.appointmentRemark} />
+                    )}
+                    {selectedCall?.appointmentStatus && (
+                        <InsightRow label="Appointment Status" value={selectedCall.appointmentStatus} />
+                    )}
+                    <InsightRow
                         label="Appointment Set"
                         value={selectedCall?.appointmentSet ? "Yes" : "No"}
                     />
@@ -1265,6 +1321,71 @@ const Page = () => {
                                 value={selectedCall.transferInfo.transferTime}
                             />
                         </>
+                    )}
+                </div>
+            </Modal>
+
+            {/* ============================================================
+                FORM RESPONSE MODAL (WHATSAPP APPOINTMENT FORM SUBMISSION)
+            ============================================================ */}
+            <Modal
+                isOpen={isFormResponseOpen}
+                onClose={closeFormResponseModal}
+                widthClass="max-w-lg"
+                zIndexClass="z-50"
+            >
+                <div className="flex items-center justify-between border-b bg-[#0D9488] text-white border-borderColor px-4 py-3 dark:border-borderColor-dark">
+                    <h3 className="flex items-center gap-2 text-[18px] font-bold">
+                        <CalendarCheck size={20} className="text-white" />
+                        WhatsApp Form Booking Response
+                    </h3>
+                    <button onClick={closeFormResponseModal} className="hover:opacity-80">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4 text-[17px]">
+                    {selectedCall?.formResponse?.hasSubmittedForm ? (
+                        <>
+                            <div className="p-3 bg-[#ECFDF5] dark:bg-[#064E3B]/40 border border-[#A7F3D0] dark:border-[#047857] rounded-xl text-[#065F46] dark:text-[#6EE7B7] font-semibold text-[15px] flex items-center gap-2">
+                                <CheckCircle2 size={18} className="text-[#059669] dark:text-[#34D399] shrink-0" />
+                                Customer has confirmed appointment via WhatsApp link form.
+                            </div>
+
+                            <InsightRow
+                                label="Scheduled Date (From Form)"
+                                value={formatDate(selectedCall.formResponse.scheduledDate)}
+                            />
+                            {/* <InsightRow
+                                label="Scheduled Time (From Form)"
+                                value={selectedCall.formResponse.scheduledTime || "-"}
+                            /> */}
+                            <InsightRow
+                                label="Service Type / Remark"
+                                value={selectedCall.formResponse.serviceType || "-"}
+                            />
+                           
+                            <InsightRow
+                                label="Appointment Status"
+                                value={selectedCall.formResponse.appointmentStatus || "SCHEDULED"}
+                            />
+                            {selectedCall.formResponse.submittedAt && (
+                                <InsightRow
+                                    label="Form Submitted On"
+                                    value={selectedCall.formResponse.submittedAt}
+                                />
+                            )}
+                        </>
+                    ) : (
+                        <div className="text-center py-8 space-y-2">
+                            <AlertCircle size={36} className="mx-auto text-[#F59E0B]" />
+                            <p className="font-bold text-[17px] text-[#1F2937] dark:text-white">
+                                No Form Submitted Yet
+                            </p>
+                            <p className="text-[15px] text-[#6B7280] dark:text-[#9CA3AF]">
+                                The customer has received the WhatsApp link but has not confirmed the appointment on the form yet.
+                            </p>
+                        </div>
                     )}
                 </div>
             </Modal>

@@ -204,6 +204,25 @@ const formatDateForDisplay = (dateStr: string | null): string => {
   }
 };
 
+const formatFieldKey = (key: string) => {
+  if (!key) return "";
+  return key
+    .replace(/_/g, " ")
+    .replace(/\?/g, "")
+    .trim()
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
+const formatFieldValue = (val: any) => {
+  if (val === null || val === undefined) return "N/A";
+  if (typeof val === "boolean") return val ? "Yes" : "No";
+  if (Array.isArray(val)) return val.join(", ");
+  const str = String(val);
+  return str.replace(/_/g, " ").trim();
+};
+
 const getInitials = (name: string | null) => {
   if (!name) return "VG";
   const parts = name.trim().split(" ");
@@ -213,17 +232,25 @@ const getInitials = (name: string | null) => {
 
 const STAGES = [
   "New",
+  "Shortlisted",
   "Contacted",
   "Interested",
   "Demo Scheduled",
   "Quotation Sent",
   "Won",
   "Lost",
+  "Junk",
 ];
 
 // Map status to badge style & text using explicit hex colors
 const getStatusDetails = (statusVal: number | string | null) => {
-  if (statusVal === 1 || statusVal === "Processed" || statusVal === "Won") {
+  if (statusVal === 10 || statusVal === "Shortlisted" || statusVal === "SHORTLISTED") {
+    return {
+      label: "Shortlisted",
+      className: "bg-[#EEF2FF] text-[#4F46E5] border-[#C7D2FE] dark:bg-[#312E81]/50 dark:text-[#A5B4FC] dark:border-[#4338CA]",
+    };
+  }
+  if (statusVal === 1 || statusVal === "Processed" || statusVal === "Quotation Sent") {
     return {
       label: "Quotation Sent",
       className: "bg-[#F3E8FF] text-[#7E22CE] border-[#E9D5FF] dark:bg-[#3B0764]/50 dark:text-[#D8B4FE] dark:border-[#581C87]",
@@ -245,6 +272,30 @@ const getStatusDetails = (statusVal: number | string | null) => {
     return {
       label: "Demo Scheduled",
       className: "bg-[#FEF3C7] text-[#B45309] border-[#FDE68A] dark:bg-[#78350F]/50 dark:text-[#FDE68A] dark:border-[#92400E]",
+    };
+  }
+  if (statusVal === 5 || statusVal === "Won") {
+    return {
+      label: "Won",
+      className: "bg-[#DCFCE7] text-[#15803D] border-[#BBF7D0] dark:bg-[#14532D]/50 dark:text-[#86EFAC] dark:border-[#16A34A]",
+    };
+  }
+  if (statusVal === 6 || statusVal === "Lost") {
+    return {
+      label: "Lost",
+      className: "bg-[#FEE2E2] text-[#B91C1C] border-[#FECACA] dark:bg-[#7F1D1D]/50 dark:text-[#FCA5A5] dark:border-[#991B1B]",
+    };
+  }
+  if (statusVal === 8 || statusVal === "Junk" || statusVal === "JUNK") {
+    return {
+      label: "Junk",
+      className: "bg-[#F1F5F9] text-[#64748B] border-[#CBD5E1] dark:bg-[#1E293B]/70 dark:text-[#94A3B8] dark:border-[#475569]",
+    };
+  }
+  if (statusVal === 9 || statusVal === "3-Day Exhausted") {
+    return {
+      label: "3-Day Exhausted",
+      className: "bg-[#FEE2E2] text-[#991B1B] border-[#FECACA] dark:bg-[#7F1D1D]/50 dark:text-[#F87171] dark:border-[#991B1B]",
     };
   }
   return {
@@ -451,6 +502,16 @@ export default function MetaPage() {
 
         if (res.data?.success) {
           setActivities(Array.isArray(res.data.data) ? res.data.data : []);
+          if (res.data.All_Fields || res.data.lead) {
+            setSelectedLead((prev: any) => {
+              if (!prev || prev.UTD !== leadUtd) return prev;
+              return {
+                ...prev,
+                ...(res.data.lead || {}),
+                All_Fields: res.data.All_Fields || res.data.lead?.All_Fields || prev.All_Fields,
+              };
+            });
+          }
         } else {
           setActivities([]);
         }
@@ -629,15 +690,47 @@ export default function MetaPage() {
     }
     const stageMap: Record<string, number> = {
       "New": 0,
+      "Shortlisted": 10,
       "Contacted": 2,
       "Interested": 3,
       "Demo Scheduled": 4,
       "Quotation Sent": 1,
       "Won": 5,
       "Lost": 6,
+      "Junk": 8,
     };
     const newStatusVal = stageMap[targetStage] !== undefined ? stageMap[targetStage] : 0;
     let customRemark = `Stage changed to ${targetStage}`;
+
+    if (targetStage === "Junk") {
+      const { isConfirmed } = await Swal.fire({
+        html: `
+          <div style="text-align: center; padding-top: 4px;">
+            <div style="width: 54px; height: 54px; margin: 0 auto 16px auto; border-radius: 50%; background: #F1F5F9; border: 1.5px solid #CBD5E1; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #64748B;">
+              🗑️
+            </div>
+            <h3 style="font-size: 24px; font-weight: 800; color: #0F172A; margin: 0 0 8px 0; tracking: -0.02em;">
+              Mark Lead as Junk?
+            </h3>
+            <p style="color: #64748B; font-size: 16px; margin: 0 0 16px 0; font-weight: 500; line-height: 1.5;">
+              Are you sure you want to mark <b>${selectedLead.Full_Name || "this customer"}</b> as 
+              <span style="color: #64748B; font-weight: 700;">Junk / Invalid</span>? Future automated calls will be stopped.
+            </p>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Yes, Mark as Junk 🗑️",
+        cancelButtonText: "Cancel",
+        buttonsStyling: false,
+        customClass: {
+          popup: "rounded-3xl p-6 border border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#0F172A] max-w-md shadow-2xl font-sans",
+          confirmButton: "px-5 py-2.5 bg-[#64748B] hover:bg-[#475569] text-white font-bold text-sm rounded-xl cursor-pointer shadow-md transition-all",
+          cancelButton: "px-4 py-2.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold text-sm rounded-xl cursor-pointer transition-all mr-3",
+        },
+      });
+      if (!isConfirmed) return;
+      customRemark = "Lead marked as Junk / Invalid";
+    }
 
     if (targetStage === "Lost") {
       const { value: lossReason, isConfirmed } = await Swal.fire({
@@ -712,7 +805,7 @@ export default function MetaPage() {
       const isSuccess = res.data?.success || res.data?.Status || res.data?.status;
       if (isSuccess) {
         showToast(res.data?.message || `Stage updated to ${targetStage}`, "success");
-        if (targetStage === "Lost" || targetStage === "Won") {
+        if (targetStage === "Lost" || targetStage === "Won" || targetStage === "Junk") {
           setSelectedLead(null);
         } else {
           setActiveStage(targetStage);
@@ -1662,6 +1755,50 @@ export default function MetaPage() {
                   <span className="text-[#64748B] font-bold">Received</span>
                   <span className="font-medium text-[#475569] dark:text-[#CBD5E1] text-lg">{formattedReceived}</span>
                 </div>
+
+                {/* ── META LEAD SUBMITTED FORM RESPONSES (ALL_FIELDS) ── */}
+                {selectedLead.All_Fields && (
+                  (() => {
+                    let fieldsObj: Record<string, any> = {};
+                    try {
+                      if (typeof selectedLead.All_Fields === "string") {
+                        fieldsObj = JSON.parse(selectedLead.All_Fields);
+                      } else if (typeof selectedLead.All_Fields === "object" && selectedLead.All_Fields !== null) {
+                        fieldsObj = selectedLead.All_Fields;
+                      }
+                    } catch (_) {}
+
+                    const entries = Object.entries(fieldsObj).filter(
+                      ([k, v]) => v !== null && v !== undefined && String(v).trim() !== ""
+                    );
+
+                    if (entries.length === 0) return null;
+
+                    return (
+                      <div className="pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-2">
+                        <div className="flex items-center gap-1.5 text-lg font-bold uppercase tracking-wider text-[#4F46E5] dark:text-[#818CF8]">
+                          <FileText size={14} />
+                          <span>Submitted Form Details</span>
+                        </div>
+                        <div className="space-y-2 bg-[#F8FAFC] dark:bg-[#1E293B]/60 p-3 rounded-xl border border-[#E2E8F0] dark:border-[#334155]">
+                          {entries.map(([k, v]) => (
+                            <div
+                              key={k}
+                              className="flex flex-col pb-2 last:pb-0 border-b border-[#E2E8F0]/70 dark:border-[#334155]/70 last:border-b-0"
+                            >
+                              <span className="text-lg font-semibold text-[#64748B] dark:text-[#94A3B8]">
+                                {formatFieldKey(k)}
+                              </span>
+                              <span className="text-md text-[#0F172A] dark:text-white mt-0.5 capitalize">
+                                {formatFieldValue(v)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
 
             </div>
@@ -1725,8 +1862,8 @@ export default function MetaPage() {
             </div>
 
             {/* Add Remark Input Box */}
-            <div className="bg-[#F8FAFC] dark:bg-[#1E293B]/60 border border-[#E2E8F0] dark:border-[#334155] rounded-2xl p-2.5 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-[#4F46E5] text-white font-bold text-lg flex items-center justify-center shrink-0">
+            <div className="bg-[#F8FAFC] dark:bg-[#1E293B]/60 border border-[#E2E8F0] dark:border-[#334155] rounded-2xl p-2.5 flex  items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-[#4F46E5] text-white font-bold text-lg flex items-center justify-center shrink-0 hidden">
                 {getInitials(user?.name)}
               </div>
               <input
@@ -1734,14 +1871,14 @@ export default function MetaPage() {
                 value={newRemarkText}
                 onChange={(e) => setNewRemarkText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddRemark()}
-                placeholder="What was discussed? Add a remark..."
+                placeholder="What was discussed?"
                 disabled={isSubmittingActivity}
                 className="flex-1 bg-transparent text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] placeholder:text-[#94A3B8] focus:outline-none px-1"
               />
               <button
                 onClick={handleAddRemark}
                 disabled={isSubmittingActivity || !newRemarkText.trim()}
-                className="px-4 py-1.5 bg-[#4F46E5] hover:bg-[#4338CA] disabled:opacity-50 text-white rounded-xl text-lg font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+                className="px-4 py-1.5 bg-[#4F46E5] hover:bg-[#4338CA] disabled:opacity-50 text-white rounded-xl text-lg font-bold transition-all shadow-xs shrink-0 cursor-pointer absolute right-16 sm:relative sm:right-0 "
               >
                 Add
               </button>
@@ -2266,7 +2403,7 @@ export default function MetaPage() {
             <span className="text-3xl font-bold text-[#0F172A] dark:text-white tracking-tight">
               {stats.leadsCalledToday || stats.callsToday}
             </span>
-            <span className="text-xs font-bold text-[#059669] dark:text-[#34D399] bg-[#ECFDF5] dark:bg-[#064E3B]/70 px-2 py-0.5 rounded-full">
+            <span className="text-lg font-bold text-[#059669] dark:text-[#34D399] bg-[#ECFDF5] dark:bg-[#064E3B]/70 px-2 py-0.5 rounded-full">
               {stats.callsToday} dials ➔
             </span>
           </div>
@@ -2361,12 +2498,15 @@ export default function MetaPage() {
             >
               <option value="">All Active Statuses</option>
               <option value="0">New / Received</option>
-              <option value="1">Processed / Quotation Sent</option>
+              <option value="10">Shortlisted</option>
               <option value="2">Contacted</option>
-              <option value="3">3-Day Exhausted (Stopped)</option>
+              <option value="3">Interested</option>
               <option value="4">Demo Scheduled</option>
+              <option value="1">Processed / Quotation Sent</option>
               <option value="5">Won (Converted)</option>
               <option value="6">Lost (Dropped Deals)</option>
+              <option value="8">Junk / Invalid</option>
+              <option value="9">3-Day Exhausted (Stopped)</option>
             </select>
           </div>
 
