@@ -46,6 +46,9 @@ import {
   History,
   Volume2,
   BarChart2,
+  UserPlus,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 
@@ -324,6 +327,39 @@ export default function MetaPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterFormId, setFilterFormId] = useState("");
   const [filterCallSource, setFilterCallSource] = useState("");
+  const [filterLeadSource, setFilterLeadSource] = useState("");
+
+  // ── Campaign Dropdown & Manual Lead State ──────────────────
+  const [campaignsList, setCampaignsList] = useState<any[]>([]);
+  const [addLeadModalOpen, setAddLeadModalOpen] = useState<boolean>(false);
+  const [isSubmittingLead, setIsSubmittingLead] = useState<boolean>(false);
+  const [newLeadForm, setNewLeadForm] = useState<{
+    dealerName: string;
+    phoneNumber: string;
+    designation: string;
+    companyName: string;
+    noOfEmployees: string;
+    customNoOfEmployees?: string;
+    module: string;
+    customModule?: string;
+    campaignId: string;
+    email: string;
+    city: string;
+    customQuestions: Array<{ question: string; answer: string }>;
+  }>({
+    dealerName: "",
+    phoneNumber: "",
+    designation: "",
+    companyName: "",
+    noOfEmployees: "",
+    customNoOfEmployees: "",
+    module: "HR Setu",
+    customModule: "",
+    campaignId: "",
+    email: "",
+    city: "",
+    customQuestions: [],
+  });
 
   // ── Dynamic Dashboard KPI Statistics State ────────────────
   const [stats, setStats] = useState<{
@@ -431,6 +467,7 @@ export default function MetaPage() {
         const activeStatus = overrideFilters ? (overrideFilters.filterStatus ?? "") : filterStatus;
         const activeFormId = overrideFilters ? (overrideFilters.filterFormId ?? "") : filterFormId;
         const activeSource = overrideFilters ? (overrideFilters.filterCallSource ?? "") : filterCallSource;
+        const activeLeadSource = overrideFilters ? (overrideFilters.filterLeadSource ?? "") : filterLeadSource;
 
         if (activeSearch.trim()) payload.search = activeSearch.trim();
         if (activeFrom) payload.fromDate = activeFrom;
@@ -438,6 +475,7 @@ export default function MetaPage() {
         if (activeStatus !== "") payload.status = Number(activeStatus);
         if (activeFormId.trim()) payload.formId = activeFormId.trim();
         if (activeSource !== "") payload.filterCallSource = activeSource;
+        if (activeLeadSource !== "") payload.filterLeadSource = activeLeadSource;
 
         const res = await axios.post(`${BASE_URL}/meta/getMetaLeads`, payload, {
           headers: {
@@ -548,6 +586,23 @@ export default function MetaPage() {
     }
   }, [user?.Comp_Code, user?.name]);
 
+  const fetchCampaigns = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/meta/getCampaigns`, {
+        headers: {
+          accept: "application/json",
+          compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+        },
+      });
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const activeCamps = res.data.data.filter((c: any) => c.Is_Active !== 0 && c.Is_Active !== false);
+        setCampaignsList(activeCamps);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch campaigns for dropdown:", err);
+    }
+  };
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadUtdParam = searchParams.get("leadUtd");
@@ -556,6 +611,7 @@ export default function MetaPage() {
   useEffect(() => {
     fetchMetaLeads(1);
     fetchDashboardStats();
+    fetchCampaigns();
     if (leadUtdParam) {
       const leadUtd = Number(leadUtdParam);
       if (leadUtd && !isNaN(leadUtd)) {
@@ -589,6 +645,7 @@ export default function MetaPage() {
     if (key === "filterStatus") setFilterStatus(value);
     if (key === "filterCallSource") setFilterCallSource(value);
     if (key === "filterFormId") setFilterFormId(value);
+    if (key === "filterLeadSource") setFilterLeadSource(value);
 
     fetchMetaLeads(1, undefined, { [key]: value });
   };
@@ -619,6 +676,7 @@ export default function MetaPage() {
     setFilterStatus("");
     setFilterFormId("");
     setFilterCallSource("");
+    setFilterLeadSource("");
     // ⚡ 1-Click Instant Reset: Explicitly pass empty filter parameters
     fetchMetaLeads(1, undefined, {
       searchQuery: "",
@@ -724,8 +782,8 @@ export default function MetaPage() {
         buttonsStyling: false,
         customClass: {
           popup: "rounded-3xl p-6 border border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#0F172A] max-w-md shadow-2xl font-sans",
-          confirmButton: "px-5 py-2.5 bg-[#64748B] hover:bg-[#475569] text-white font-bold text-sm rounded-xl cursor-pointer shadow-md transition-all",
-          cancelButton: "px-4 py-2.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold text-sm rounded-xl cursor-pointer transition-all mr-3",
+          confirmButton: "px-5 py-2.5 bg-[#64748B] hover:bg-[#475569] text-white font-bold text-lg rounded-xl cursor-pointer shadow-md transition-all",
+          cancelButton: "px-4 py-2.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold text-lg rounded-xl cursor-pointer transition-all mr-3",
         },
       });
       if (!isConfirmed) return;
@@ -765,8 +823,8 @@ export default function MetaPage() {
         buttonsStyling: false,
         customClass: {
           popup: "rounded-3xl p-6 border border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#0F172A] max-w-md shadow-2xl font-sans",
-          confirmButton: "px-5 py-2.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-sm rounded-xl cursor-pointer shadow-md transition-all",
-          cancelButton: "px-4 py-2.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold text-sm rounded-xl cursor-pointer transition-all mr-3",
+          confirmButton: "px-5 py-2.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-lg rounded-xl cursor-pointer shadow-md transition-all",
+          cancelButton: "px-4 py-2.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold text-lg rounded-xl cursor-pointer transition-all mr-3",
         },
         focusConfirm: false,
         preConfirm: () => {
@@ -1196,6 +1254,116 @@ export default function MetaPage() {
       fetchLeadActivities(selectedLead.UTD);
     } catch (err) {
       showToast(`Action ${actionName} completed`, "info");
+    }
+  };
+
+  // ── Manual Lead Form Handlers ─────────────────────────────
+  const handleAddCustomQuestion = () => {
+    setNewLeadForm((prev) => ({
+      ...prev,
+      customQuestions: [...prev.customQuestions, { question: "", answer: "" }],
+    }));
+  };
+
+  const handleCustomQuestionChange = (
+    index: number,
+    field: "question" | "answer",
+    value: string
+  ) => {
+    setNewLeadForm((prev) => {
+      const updated = [...prev.customQuestions];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, customQuestions: updated };
+    });
+  };
+
+  const handleRemoveCustomQuestion = (index: number) => {
+    setNewLeadForm((prev) => ({
+      ...prev,
+      customQuestions: prev.customQuestions.filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const handleCreateManualLead = async () => {
+    if (!newLeadForm.dealerName.trim()) {
+      showToast("Please enter Dealer / Contact Person Name", "warning");
+      return;
+    }
+    if (!newLeadForm.phoneNumber.trim()) {
+      showToast("Please enter Mobile / Phone Number", "warning");
+      return;
+    }
+
+    try {
+      setIsSubmittingLead(true);
+      const finalEmployees =
+        newLeadForm.noOfEmployees === "Other"
+          ? (newLeadForm.customNoOfEmployees || "").trim()
+          : newLeadForm.noOfEmployees.trim();
+
+      const finalModule =
+        newLeadForm.module === "Other"
+          ? (newLeadForm.customModule || "").trim()
+          : newLeadForm.module.trim();
+
+      const res = await axios.post(
+        `${BASE_URL}/meta/createManualLead`,
+        {
+          dealerName: newLeadForm.dealerName.trim(),
+          phoneNumber: newLeadForm.phoneNumber.trim(),
+          designation: newLeadForm.designation.trim(),
+          companyName: newLeadForm.companyName.trim(),
+          noOfEmployees: finalEmployees,
+          module: finalModule,
+          campaignId: newLeadForm.campaignId.trim(),
+          email: newLeadForm.email.trim(),
+          city: newLeadForm.city.trim(),
+          customQuestions: newLeadForm.customQuestions.filter(
+            (q) => q.question.trim() || q.answer.trim()
+          ),
+        },
+        {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (res.data?.success || res.data?.Status) {
+        showToast("Lead created successfully! 🎉", "success");
+        setAddLeadModalOpen(false);
+        setNewLeadForm({
+          dealerName: "",
+          phoneNumber: "",
+          designation: "",
+          companyName: "",
+          noOfEmployees: "",
+          customNoOfEmployees: "",
+          module: "HR Setu",
+          customModule: "",
+          campaignId: "",
+          email: "",
+          city: "",
+          customQuestions: [],
+        });
+        fetchMetaLeads(1);
+        fetchDashboardStats();
+      } else {
+        showToast(res.data?.message || "Failed to create lead", "error");
+      }
+    } catch (err: any) {
+      console.error("Create manual lead error:", err);
+      showToast(
+        err?.response?.data?.message ||
+          err?.response?.data?.Message ||
+          "Error creating manual lead",
+        "error"
+      );
+    } finally {
+      setIsSubmittingLead(false);
     }
   };
 
@@ -1633,7 +1801,7 @@ export default function MetaPage() {
           <button
             onClick={() => {
               if (fromParam === "followup") {
-                router.push("/autovyn/meta/followup_lead");
+                router.push("/autovyn/admin/HRMS/Meta_Lead/followup_lead");
               } else {
                 setSelectedLead(null);
               }
@@ -1789,7 +1957,7 @@ export default function MetaPage() {
                               <span className="text-lg font-semibold text-[#64748B] dark:text-[#94A3B8]">
                                 {formatFieldKey(k)}
                               </span>
-                              <span className="text-md text-[#0F172A] dark:text-white mt-0.5 capitalize">
+                              <span className="text-lg text-[#0F172A] dark:text-white mt-0.5 capitalize">
                                 {formatFieldValue(v)}
                               </span>
                             </div>
@@ -2306,8 +2474,37 @@ export default function MetaPage() {
             Pipeline
           </h1>
           <p className="text-lg font-medium text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-            {pagination.totalRecords} leads across {STAGES.length} stages · Meta Ad Leads
+            {pagination.totalRecords} leads across {STAGES.length} stages · Meta & Manual Leads
           </p>
+        </div>
+
+        {/* Header Action Buttons */}
+        <div className="flex items-center gap-3">
+          <Button
+           size="lg"
+           variant="save"
+            onClick={() => {
+              setNewLeadForm({
+                dealerName: "",
+                phoneNumber: "",
+                designation: "",
+                companyName: "",
+                noOfEmployees: "",
+                customNoOfEmployees: "",
+                module: "HR Setu",
+                customModule: "",
+                campaignId: campaignsList[0]?.Campaign_Id || campaignsList[0]?.Meta_Form_Id || "",
+                email: "",
+                city: "",
+                customQuestions: [],
+              });
+              setAddLeadModalOpen(true);
+            }}
+            // className=" hover:from-[#4338CA] hover:to-[#4F46E5] text-white font-bold text-lg rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-md shadow-[#4F46E5]/20 cursor-pointer transition-all hover:scale-[1.02]"
+          >
+            {/* <UserPlus size={18} /> */}
+            <span>+ Add Manual Lead</span>
+          </Button>
         </div>
       </div>
 
@@ -2340,7 +2537,7 @@ export default function MetaPage() {
 
         {/* Card 2: TODAY'S FOLLOWUPS */}
         <div
-          onClick={() => router.push("/autovyn/meta/followup_lead")}
+          onClick={() => router.push("/autovyn/admin/HRMS/Meta_Lead/followup_lead")}
           className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden cursor-pointer hover:border-[#D97706]/50 hover:shadow-md transition-all group"
         >
           <div className="flex items-center justify-between">
@@ -2364,7 +2561,7 @@ export default function MetaPage() {
 
         {/* Card 3: DEMOS THIS WEEK */}
         <div
-          onClick={() => router.push("/autovyn/meta/followup_lead")}
+          onClick={() => router.push("/autovyn/admin/HRMS/Meta_Lead/followup_lead")}
           className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between relative overflow-hidden cursor-pointer hover:border-[#9333EA]/50 hover:shadow-md transition-all group"
         >
           <div className="flex items-center justify-between">
@@ -2440,8 +2637,8 @@ export default function MetaPage() {
 
         </div>
 
-        {/* 6-Column Responsive Filter Grid (Including Search Input) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+        {/* 7-Column Responsive Filter Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 items-end">
 
           {/* 1. Search Bar */}
           <div>
@@ -2460,7 +2657,23 @@ export default function MetaPage() {
             </div>
           </div>
 
-          {/* 2. From Date */}
+          {/* 2. Lead Source (Meta vs Manual) */}
+          <div>
+            <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
+              Lead Origin
+            </label>
+            <select
+              value={filterLeadSource}
+              onChange={(e) => handleFilterChange("filterLeadSource", e.target.value)}
+              className="w-full h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
+            >
+              <option value="">All Lead Origins</option>
+              <option value="META">🌐 Meta Ad Leads</option>
+              <option value="MANUAL">✍️ Manual / Direct Leads</option>
+            </select>
+          </div>
+
+          {/* 3. From Date */}
           <Ainput
             title="From Date"
             type="date"
@@ -2473,7 +2686,7 @@ export default function MetaPage() {
             className="!h-9 !text-lg"
           />
 
-          {/* 3. To Date */}
+          {/* 4. To Date */}
           <Ainput
             title="To Date"
             type="date"
@@ -2486,7 +2699,7 @@ export default function MetaPage() {
             className="!h-9 !text-lg"
           />
 
-          {/* 4. Status Filter */}
+          {/* 5. Status Filter */}
           <div>
             <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
               Status
@@ -2510,7 +2723,7 @@ export default function MetaPage() {
             </select>
           </div>
 
-          {/* 5. Call / Cron Source */}
+          {/* 6. Call / Cron Source */}
           <div>
             <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
               Call / Cron Source
@@ -2528,7 +2741,7 @@ export default function MetaPage() {
             </select>
           </div>
 
-          {/* 6. Form ID */}
+          {/* 7. Form ID */}
           <Ainput
             title="Form ID"
             type="text"
@@ -2554,14 +2767,13 @@ export default function MetaPage() {
             {/* Table Header */}
             <thead>
               <tr className="border-b border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/50 dark:bg-[#1E293B]/30 text-lg font-bold text-[#94A3B8] dark:text-[#64748B] uppercase tracking-wider">
-                <th className="py-3.5 px-4">Customer Name</th>
-                <th className="py-3.5 px-4">Contact</th>
-                {/* <th className="py-3.5 px-4">City</th> */}
-                <th className="py-3.5 px-4">Meta Lead ID</th>
-                <th className="py-3.5 px-4">Source</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4">Received At</th>
-                <th className="py-3.5 px-4 text-center">Action</th>
+                <th className="py-3 px-4 whitespace-nowrap">Customer Name</th>
+                <th className="py-3 px-4 whitespace-nowrap">Contact</th>
+                <th className="py-3 px-4 whitespace-nowrap">Meta Lead ID</th>
+                <th className="py-3 px-4 whitespace-nowrap">Source</th>
+                <th className="py-3 px-4 whitespace-nowrap">Status</th>
+                <th className="py-3 px-4 whitespace-nowrap">Received At</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap">Action</th>
               </tr>
             </thead>
 
@@ -2569,7 +2781,7 @@ export default function MetaPage() {
             <tbody className="divide-y divide-[#F1F5F9] dark:divide-[#1E293B]/70 text-lg">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-[#94A3B8]">
+                  <td colSpan={7} className="py-12 text-center text-[#94A3B8]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw size={24} className="animate-spin text-[#818CF8]" />
                       <span className="font-bold text-lg text-[#475569] dark:text-[#CBD5E1]">Fetching Meta ad leads...</span>
@@ -2578,7 +2790,7 @@ export default function MetaPage() {
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-[#94A3B8]">
+                  <td colSpan={7} className="py-12 text-center text-[#94A3B8]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Tag size={32} className="text-[#CBD5E1] dark:text-[#334155]" />
                       <span className="font-bold text-lg text-[#475569] dark:text-[#94A3B8]">No Meta leads found</span>
@@ -2597,90 +2809,70 @@ export default function MetaPage() {
                       className="hover:bg-[#F8FAFC]/80 dark:hover:bg-[#1E293B]/50 transition-colors group cursor-pointer"
                     >
                       {/* Customer Name */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-[#64748B] dark:text-[#94A3B8] text-lg">
+                      <td className="py-2 px-4 whitespace-nowrap">
+                        <div
+                          title={lead.Full_Name || "—"}
+                          className="font-bold text-[#334155] dark:text-[#F1F5F9] text-lg max-w-[190px] truncate leading-snug"
+                        >
                           {lead.Full_Name || "—"}
                         </div>
-                        <div className="text-lg font-bold text-[#94A3B8] dark:text-[#64748B] uppercase tracking-wider mt-0.5">
-                          {lead.Company_Name || "SELF-EMPLOYED"}
+                        <div
+                          title={lead.Company_Name || "Self-Employed"}
+                          className="text-lg font-semibold text-[#64748B] dark:text-[#94A3B8] max-w-[190px] truncate leading-tight"
+                        >
+                          {lead.Company_Name || "Self-Employed"}
                         </div>
                       </td>
 
                       {/* Contact */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-4 whitespace-nowrap">
                         <span className="font-bold text-[#818CF8] dark:text-[#818CF8] text-lg">
                           {lead.Phone_Number || "—"}
                         </span>
                       </td>
 
-                      {/* City */}
-                      {/* <td className="py-3.5 px-4 text-[#475569] dark:text-[#CBD5E1] font-medium text-lg">
-                        {lead.City || "—"}
-                      </td> */}
-
                       {/* Meta Lead ID */}
-                      <td className="py-3.5 px-4 font-mono font-bold text-[#818CF8] dark:text-[#818CF8] text-lg">
+                      <td className="py-2.5 px-4 whitespace-nowrap font-mono font-bold text-[#818CF8] dark:text-[#818CF8] text-lg">
                         {lead.Meta_Lead_Id || "—"}
                       </td>
 
                       {/* Source */}
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-lg font-bold bg-[#EEF2FF] text-[#818CF8] border border-[#C7D2FE] dark:bg-[#1E1B4B]/60 dark:text-[#A5B4FC] dark:border-[#3730A3] font-mono tracking-wider">
-                          {lead.Source || "META_LEAD_ADS"}
-                        </span>
+                      <td className="py-2.5 px-4 whitespace-nowrap">
+                        {lead.Source === "MANUAL_ENTRY" || String(lead.Source || "").toUpperCase().includes("MANUAL") ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-lg font-bold bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] dark:bg-[#14532D]/40 dark:text-[#86EFAC] dark:border-[#166534]">
+                            ✍️ MANUAL
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-lg font-bold bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] dark:bg-[#1E1B4B]/60 dark:text-[#A5B4FC] dark:border-[#3730A3]">
+                            🌐 META AD
+                          </span>
+                        )}
                       </td>
 
                       {/* Status */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-lg border ${statusInfo.className}`}>
                           {statusInfo.label}
                         </span>
                       </td>
 
                       {/* Received At */}
-                      <td className="py-3.5 px-4 text-[#64748B] dark:text-[#94A3B8] font-medium whitespace-nowrap text-lg">
+                      <td className="py-2.5 px-4 text-[#64748B] dark:text-[#94A3B8] font-medium whitespace-nowrap text-lg">
                         {formatDateForDisplay(lead.Created_At || lead.Meta_Created_At || null)}
                       </td>
 
                       {/* Action Buttons */}
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-2.5 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           <Button
                             onClick={() => handleOpenDetailView(lead)}
                             variant="outline"
                             size="sm"
-
-                          // className="px-2.5 py-1 rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#334155] dark:text-[#E2E8F0] hover:bg-[#F8FAFC] dark:hover:bg-[#334155] text-lg font-bold transition-all shadow-2xs cursor-pointer"
                           >
                             View
                           </Button>
-                          {/* <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTriggerAiCall(lead.UTD);
-                            }}
-                            disabled={triggeringAiCall}
-                            variant="outline"
-                            size="sm"
-                          >
-                            <Bot size={14} className={triggeringAiCall ? "animate-spin" : ""} />
-                            AI Call
-                          </Button> */}
-                          {/* <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenCallHistory(lead);
-                            }}
-                            variant="outline"
-                            size="sm"
-                          >
-                            <History size={14} className="text-purple-600 dark:text-purple-400" />
-                            History
-                          </Button> */}
-                         
                         </div>
                       </td>
-
                     </tr>
                   );
                 })
@@ -2749,6 +2941,254 @@ export default function MetaPage() {
       </div>
 
       {renderCallModals()}
+
+      {/* ══ ADD MANUAL LEAD MODAL ══ */}
+      {addLeadModalOpen && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col font-sans">
+            {/* Modal Header */}
+            <div className="flex items-center bg-header text-white justify-between px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center font-bold shadow-xs">
+                  <UserPlus size={20} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-medium leading-tight">Add Manual Lead</h3>
+                  <p className="text-lg  mt-0.5">Create a direct dealer lead & link with Callmatic Campaign</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAddLeadModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center  transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {/* 2-Column Grid for Primary Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Dealer / Customer Name */}
+                <div>
+                  <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
+                    Dealer / Contact Person <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newLeadForm.dealerName}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, dealerName: e.target.value })}
+                    placeholder="e.g. Ramesh Sharma"
+                    className="w-full h-10 px-3.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+                  />
+                </div>
+
+                {/* Mobile Number */}
+                <div>
+                  <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
+                    Mobile Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newLeadForm.phoneNumber}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, phoneNumber: e.target.value })}
+                    placeholder="e.g. 9876543210"
+                    className="w-full h-10 px-3.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+                  />
+                </div>
+
+                {/* Designation */}
+                <div>
+                  <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
+                    Designation / Role
+                  </label>
+                  <input
+                    type="text"
+                    value={newLeadForm.designation}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, designation: e.target.value })}
+                    placeholder="e.g. Managing Director / GM"
+                    className="w-full h-10 px-3.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+                  />
+                </div>
+
+                {/* Company / Dealership Name */}
+                <div>
+                  <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
+                    Company / Dealership Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newLeadForm.companyName}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, companyName: e.target.value })}
+                    placeholder="e.g. ABC Motors Pvt Ltd"
+                    className="w-full h-10 px-3.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+                  />
+                </div>
+
+                {/* Number of Employees */}
+                <div>
+                  <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
+                    Number of Employees
+                  </label>
+                  <select
+                    value={newLeadForm.noOfEmployees}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, noOfEmployees: e.target.value })}
+                    className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Select Employee Range</option>
+                    <option value="1-10 Employees">1-10 Employees</option>
+                    <option value="11-50 Employees">11-50 Employees</option>
+                    <option value="51-200 Employees">51-200 Employees</option>
+                    <option value="201-500 Employees">201-500 Employees</option>
+                    <option value="500+ Employees">500+ Employees</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {newLeadForm.noOfEmployees === "Other" && (
+                    <input
+                      type="text"
+                      value={newLeadForm.customNoOfEmployees || ""}
+                      onChange={(e) =>
+                        setNewLeadForm({ ...newLeadForm, customNoOfEmployees: e.target.value })
+                      }
+                      placeholder="Enter number of employees (e.g. 750, 1500+)"
+                      className="mt-2 w-full h-10 px-3.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20 animate-in fade-in duration-200"
+                    />
+                  )}
+                </div>
+
+                {/* Module / Product */}
+                <div>
+                  <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
+                    Module / Product Interest
+                  </label>
+                  <select
+                    value={newLeadForm.module}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, module: e.target.value })}
+                    className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
+                  >
+                    <option value="HR Setu">HR Setu (Attendance & Payroll)</option>
+                    <option value="DMS Workshop">DMS Workshop & Service</option>
+                    <option value="Sales CRM">Sales CRM & Pipeline</option>
+                    <option value="Full ERP Suite">Full ERP Suite</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {newLeadForm.module === "Other" && (
+                    <input
+                      type="text"
+                      value={newLeadForm.customModule || ""}
+                      onChange={(e) =>
+                        setNewLeadForm({ ...newLeadForm, customModule: e.target.value })
+                      }
+                      placeholder="Enter module or product name (e.g. Inventory, Billing)"
+                      className="mt-2 w-full h-10 px-3.5 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20 animate-in fade-in duration-200"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Callmatic Campaign Link Dropdown */}
+              <div className="bg-[#EEF2FF] dark:bg-[#1E1B4B]/30 border border-[#C7D2FE] dark:border-[#3730A3] p-4 rounded-2xl">
+                <label className="block text-lg font-medium text-[#4338CA] dark:text-[#A5B4FC] mb-1">
+                  🎯 Meta Callmatic Campaign (For AI Calling & WhatsApp)
+                </label>
+                <select
+                  value={newLeadForm.campaignId}
+                  onChange={(e) => setNewLeadForm({ ...newLeadForm, campaignId: e.target.value })}
+                  className="w-full h-10 px-3 bg-white dark:bg-[#0F172A] border border-[#A5B4FC] dark:border-[#4338CA] rounded-xl text-lg font-medium text-[#1E1B4B] dark:text-[#E0E7FF] focus:outline-none cursor-pointer"
+                >
+                  <option value="">Default / General Campaign</option>
+                  {campaignsList.map((camp: any) => (
+                    <option key={camp.UTD || camp.Campaign_Id} value={camp.Campaign_Id || camp.Meta_Form_Id}>
+                      {camp.Campaign_Name || camp.Campaign_Id} {camp.Meta_Form_Id ? `(Form: ${camp.Meta_Form_Id})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dynamic Custom Questions / Fields */}
+              <div className="pt-2 border-t border-[#E2E8F0] dark:border-[#1E293B]">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-lg font-medium text-[#334155] dark:text-[#CBD5E1]">
+                    Custom Questions / Additional Fields
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomQuestion}
+                    className="text-lg font-bold text-[#4F46E5] hover:text-[#4338CA] bg-[#EEF2FF] hover:bg-[#E0E7FF] dark:bg-[#312E81]/40 dark:text-[#A5B4FC] px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus size={14} /> Add Custom Question
+                  </button>
+                </div>
+
+                {newLeadForm.customQuestions.length === 0 ? (
+                  <p className="text-lg text-[#94A3B8] italic">
+                    No custom questions added yet. Click &quot;Add Custom Question&quot; to add dynamic fields.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                    {newLeadForm.customQuestions.map((q, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={q.question}
+                          onChange={(e) => handleCustomQuestionChange(idx, "question", e.target.value)}
+                          placeholder="e.g. Current Software / Budget"
+                          className="flex-1 h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={q.answer}
+                          onChange={(e) => handleCustomQuestionChange(idx, "answer", e.target.value)}
+                          placeholder="e.g. Tally / 50k"
+                          className="flex-1 h-9 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCustomQuestion(idx)}
+                          className="p-2 text-[#EF4444] hover:bg-[#FEE2E2] dark:hover:bg-[#7F1D1D]/40 rounded-xl transition-all cursor-pointer"
+                          title="Remove Field"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-[#F8FAFC] dark:bg-[#090D16] border-t border-[#E2E8F0] dark:border-[#1E293B]">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => setAddLeadModalOpen(false)}
+                className="text-lg font-bold rounded-xl border-[#CBD5E1] px-5 py-2 cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateManualLead}
+                disabled={isSubmittingLead}
+                size="lg"
+                className="bg-[#4F46E5] hover:bg-[#4338CA] text-white text-lg font-bold rounded-xl px-6 py-2 cursor-pointer shadow-md shadow-[#4F46E5]/20 flex items-center gap-2"
+              >
+                {isSubmittingLead ? (
+                  <>
+                    {/* <RefreshCw size={16} className="animate-spin" />  */}
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    {/* <Check size={16} /> */}
+                     Create Lead
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
