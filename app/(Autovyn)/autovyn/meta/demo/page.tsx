@@ -49,86 +49,12 @@ export type DemoRecord = {
   rawDate?: string;
 };
 
-// Default Demo Records (Matching exact design screenshot)
-const DEFAULT_DEMOS: DemoRecord[] = [
-  {
-    id: 1,
-    UTD: 101,
-    Meta_Lead_UTD: 150,
-    customerName: "Ramesh Yadav",
-    companyName: "SHREE MOTORS",
-    phone: "+91 98765 43210",
-    demoDate: "18 Aug 2026",
-    demoTime: "02:00 PM",
-    mode: "Onsite",
-    status: "Scheduled",
-    quotationSent: false,
-    rawDate: "2026-08-18",
-  },
-  {
-    id: 2,
-    UTD: 102,
-    Meta_Lead_UTD: 151,
-    customerName: "Vicky",
-    companyName: "DEVASVI AUTO SALES",
-    phone: "+91 91234 56789",
-    demoDate: "20 Aug 2026",
-    demoTime: "04:00 PM",
-    mode: "Online",
-    status: "Scheduled",
-    quotationSent: false,
-    rawDate: "2026-08-20",
-  },
-  {
-    id: 3,
-    UTD: 103,
-    Meta_Lead_UTD: 152,
-    customerName: "Suresh Nair",
-    companyName: "KERALA AUTO WORLD",
-    phone: "+91 94530 71550",
-    demoDate: "16 Aug 2026",
-    demoTime: "02:00 PM",
-    mode: "Online",
-    status: "Completed",
-    quotationSent: false,
-    rawDate: "2026-08-16",
-  },
-  {
-    id: 4,
-    UTD: 104,
-    Meta_Lead_UTD: 153,
-    customerName: "Deepak Sharma",
-    companyName: "SHARMA MOTORS",
-    phone: "+91 99887 76655",
-    demoDate: "13 Aug 2026",
-    demoTime: "11:00 AM",
-    mode: "Onsite",
-    status: "Completed",
-    quotationSent: false,
-    rawDate: "2026-08-13",
-  },
-  {
-    id: 5,
-    UTD: 105,
-    Meta_Lead_UTD: 154,
-    customerName: "Amit Kulkarni",
-    companyName: "KULKARNI AUTO",
-    phone: "+91 97654 32109",
-    demoDate: "14 Aug 2026",
-    demoTime: "03:30 PM",
-    mode: "Online",
-    status: "No-show",
-    quotationSent: false,
-    rawDate: "2026-08-14",
-  },
-];
-
 export default function DemoPage() {
   const router = useRouter();
   const user = useCurrentUser();
 
   // State Management
-  const [demos, setDemos] = useState<DemoRecord[]>(DEFAULT_DEMOS);
+  const [demos, setDemos] = useState<DemoRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -151,7 +77,7 @@ export default function DemoPage() {
   });
 
   // ============================================================
-  // FETCH DEMO RECORDS FROM BACKEND (OR MERGE WITH DEFAULT)
+  // FETCH DEMO RECORDS FROM BACKEND
   // ============================================================
   useEffect(() => {
     const fetchDemos = async () => {
@@ -162,7 +88,7 @@ export default function DemoPage() {
           { limit: 500 },
           {
             headers: {
-              compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "autovyn",
+              compcode: user?.Comp_Code,
               name: user?.name,
               "Content-Type": "application/json",
             },
@@ -204,13 +130,13 @@ export default function DemoPage() {
               } as DemoRecord;
             });
 
-          if (apiDemos.length > 0) {
-            // Merge with default demos without duplicates
-            setDemos((prev) => [...apiDemos, ...DEFAULT_DEMOS]);
-          }
+          setDemos(apiDemos);
+        } else {
+          setDemos([]);
         }
       } catch (err) {
-        console.warn("Could not load backend demos, using default demonstration dataset.");
+        console.warn("Could not load backend demos.");
+        setDemos([]);
       } finally {
         setIsLoading(false);
       }
@@ -250,32 +176,75 @@ export default function DemoPage() {
   };
 
   // ============================================================
-  // SEND QUOTATION HANDLER
+  // SEND QUOTATION HANDLER (REDIRECT TO CLIENT INTAKE FORM)
   // ============================================================
+  const handleSendQuotationRedirect = async (demo: DemoRecord) => {
+    if (!demo) return;
+
+    if (demo.Meta_Lead_UTD) {
+      try {
+        await axios.post(
+          `${BASE_URL}/meta/updateLeadStatus`,
+          {
+            metaLeadUtd: demo.Meta_Lead_UTD,
+            status: 1,
+            remark: "Quotation triggered from Demo - stage changed to Quotation Sent",
+          },
+          {
+            headers: {
+              accept: "application/json",
+              compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+              name: user?.name,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        await axios.post(
+          `${BASE_URL}/meta/addActivity`,
+          {
+            metaLeadUtd: demo.Meta_Lead_UTD,
+            activityType: "QUOTATION",
+            activityStatus: "TRIGGERED",
+            remark: `Quotation triggered for ${demo.customerName}`,
+          },
+          {
+            headers: {
+              accept: "application/json",
+              compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+              name: user?.name,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      } catch (err) {}
+    }
+
+    setDemos((prev) =>
+      prev.map((d) => (d.id === demo.id ? { ...d, quotationSent: true } : d))
+    );
+
+    showToast(`Opening Client Intake Form for ${demo.customerName}...`, "info");
+
+    const cleanMobile = (demo.phone || "").replace(/[^0-9]/g, "").slice(-10);
+    const queryParams = new URLSearchParams();
+    queryParams.set("action", "new");
+    queryParams.set("source", "meta_demo");
+    if (demo.companyName) queryParams.set("company", demo.companyName);
+    if (demo.customerName) queryParams.set("stakeholder", demo.customerName);
+    if (cleanMobile) queryParams.set("mobile", cleanMobile);
+    if (demo.email) queryParams.set("email", demo.email);
+    if (demo.Meta_Lead_UTD) queryParams.set("leadUtd", String(demo.Meta_Lead_UTD));
+
+    router.push(`/autovyn/admin/HRMS/ClientIntakeForm?${queryParams.toString()}`);
+  };
+
   const handleSendQuotationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDemoForQuotation) return;
-
-    setIsSendingQuotation(true);
-    try {
-      // Simulate or call backend API
-      await new Promise((r) => setTimeout(r, 1000));
-
-      setDemos((prev) =>
-        prev.map((d) =>
-          d.id === selectedDemoForQuotation.id ? { ...d, quotationSent: true } : d
-        )
-      );
-
-      showToast(`Quotation sent successfully to ${selectedDemoForQuotation.customerName}!`, "success");
-      setSelectedDemoForQuotation(null);
-      setQuotationAmount("");
-      setQuotationRemarks("");
-    } catch (err) {
-      showToast("Failed to send quotation. Please try again.", "error");
-    } finally {
-      setIsSendingQuotation(false);
-    }
+    const demo = selectedDemoForQuotation;
+    setSelectedDemoForQuotation(null);
+    await handleSendQuotationRedirect(demo);
   };
 
   // ============================================================
@@ -457,7 +426,7 @@ export default function DemoPage() {
                   ) : (
                     <Button
                       variant="outline"
-                      onClick={() => setSelectedDemoForQuotation(demo)}
+                      onClick={() => handleSendQuotationRedirect(demo)}
                       className="w-full bg-white dark:bg-[#1E293B] hover:bg-[#F8FAFC] text-[#334155] dark:text-[#E2E8F0] border border-[#E2E8F0] dark:border-[#334155] rounded-xl h-10 font-bold text-lg flex items-center justify-center gap-2 cursor-pointer transition-all shadow-2xs"
                     >
                       {/* <FileText size={16} className="text-[#475569]" /> */}
@@ -473,7 +442,7 @@ export default function DemoPage() {
                     variant="outline"
                     onClick={() => {
                       if (demo.Meta_Lead_UTD) {
-                        router.push(`/autovyn/meta/dashboard?leadUtd=${demo.Meta_Lead_UTD}&from=demo`);
+                        router.push(`/autovyn/admin/HRMS/Meta_Lead/dashboard?leadUtd=${demo.Meta_Lead_UTD}&from=demo`);
                       } else {
                         showToast(`Viewing Lead details for ${demo.customerName}`, "info");
                       }

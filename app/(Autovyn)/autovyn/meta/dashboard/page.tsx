@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import Swal from "sweetalert2";
@@ -116,6 +116,7 @@ type MetaLead = {
   Raw_Webhook_Value: Record<string, any> | string | null;
   Source: string | null;
   status: number | string | null;
+  Temperature?: "Cold" | "Warm" | "Hot" | string | null;
   Created_By: string | null;
   Created_At: string | null;
 };
@@ -307,14 +308,41 @@ const getStatusDetails = (statusVal: number | string | null) => {
   };
 };
 
+// Map temperature to badge style & text
+const getTemperatureDetails = (tempVal: string | null | undefined) => {
+  const str = String(tempVal || "").trim().toLowerCase();
+  if (str === "hot") {
+    return {
+      label: "Hot",
+      className: "bg-[#FFE4E6] text-[#E11D48] border-[#FECDD3] dark:bg-[#E11D48]/20 dark:text-[#FDA4AF] dark:border-[#E11D48]/40",
+      dotColor: "bg-[#E11D48]",
+    };
+  }
+  if (str === "cold") {
+    return {
+      label: "Cold",
+      className: "bg-[#E0F2FE] text-[#0284C7] border-[#BAE6FD] dark:bg-[#0284C7]/20 dark:text-[#7DD3FC] dark:border-[#0284C7]/40",
+      dotColor: "bg-[#0284C7]",
+    };
+  }
+  return {
+    label: "Warm",
+    className: "bg-[#FEF3C7] text-[#D97706] border-[#FDE68A] dark:bg-[#D97706]/20 dark:text-[#FDE68A] dark:border-[#D97706]/40",
+    dotColor: "bg-[#D97706]",
+  };
+};
+
 // ============================================================
 // MAIN PAGE COMPONENT
 // ============================================================
 export default function MetaPage() {
   const user: any = useCurrentUser();
+  const router = useRouter();
 
-  // ── Selected Lead State for Detail Workspace View ────────
+  // ── Selected & Last Viewed Lead State for Scroll Retention ────────
   const [selectedLead, setSelectedLead] = useState<MetaLead | null>(null);
+  const [lastViewedLeadUtd, setLastViewedLeadUtd] = useState<number | null>(null);
+  const scrollPositionRef = React.useRef<number>(0);
 
   // ── Table State ──────────────────────────────────────────
   const [rows, setRows] = useState<MetaLead[]>([]);
@@ -402,7 +430,7 @@ export default function MetaPage() {
 
   // ── Detail Workspace State ────────────────────────────────
   const [activeStage, setActiveStage] = useState<string>("New");
-  const [leadTemperature, setLeadTemperature] = useState<"Cold" | "Warm" | "Hot">("Hot");
+  const [leadTemperature, setLeadTemperature] = useState<"Cold" | "Warm" | "Hot">("Warm");
   const [followupDate, setFollowupDate] = useState<string>("");
   const [followupTime, setFollowupTime] = useState<string>("11:00");
   const [followupType, setFollowupType] = useState<string>("CALL");
@@ -541,6 +569,9 @@ export default function MetaPage() {
         if (res.data?.success) {
           setActivities(Array.isArray(res.data.data) ? res.data.data : []);
           if (res.data.All_Fields || res.data.lead) {
+            if (res.data.lead?.Temperature) {
+              setLeadTemperature(res.data.lead.Temperature as any);
+            }
             setSelectedLead((prev: any) => {
               if (!prev || prev.UTD !== leadUtd) return prev;
               return {
@@ -603,7 +634,7 @@ export default function MetaPage() {
     }
   };
 
-  const router = useRouter();
+ 
   const searchParams = useSearchParams();
   const leadUtdParam = searchParams.get("leadUtd");
   const fromParam = searchParams.get("from");
@@ -634,6 +665,31 @@ export default function MetaPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadUtdParam]);
+
+  // ⚡ Synchronously scroll to top before browser paint to eliminate any flicker
+  useLayoutEffect(() => {
+    if (selectedLead) {
+      const mainEl = document.querySelector("main");
+      if (mainEl) mainEl.scrollTop = 0;
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  }, [selectedLead?.UTD]);
+
+  // ⚡ Auto-scroll back to active lead row upon returning to dashboard
+  useEffect(() => {
+    if (!selectedLead && lastViewedLeadUtd) {
+      const scrollTimer = setTimeout(() => {
+        const rowEl = document.getElementById(`lead-row-${lastViewedLeadUtd}`);
+        if (rowEl) {
+          rowEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+
+      return () => clearTimeout(scrollTimer);
+    }
+  }, [selectedLead, lastViewedLeadUtd]);
 
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -722,7 +778,19 @@ export default function MetaPage() {
 
   // Open Detailed CRM Workspace View when clicking View / row
   const handleOpenDetailView = (lead: MetaLead) => {
+    const mainEl = document.querySelector("main");
+    scrollPositionRef.current = mainEl ? mainEl.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+    setLastViewedLeadUtd(lead.UTD);
+
+    if (mainEl) mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    setActivities([]); // Reset timeline immediately to prevent stale data flash
+    setLeadTemperature((lead.Temperature as any) || "Warm");
     setSelectedLead(lead);
+
     const info = getStatusDetails(lead.status);
     setActiveStage(info.label || "New");
 
@@ -870,13 +938,57 @@ export default function MetaPage() {
           setSelectedLead({ ...selectedLead, status: newStatusVal });
           fetchLeadActivities(selectedLead.UTD);
         }
-        fetchMetaLeads(1);
+        fetchMetaLeads(pagination.currentPage);
       } else {
         showToast(res.data?.message || "Failed to update lead status", "error");
       }
     } catch (err: any) {
       console.error("Update Lead Stage Error:", err);
       showToast(err?.response?.data?.message || err?.message || "Failed to update lead status", "error");
+    } finally {
+      setIsSubmittingActivity(false);
+    }
+  };
+
+  // Update Lead Temperature Handler (Persisted in DB)
+  const handleUpdateTemperature = async (temp: "Cold" | "Warm" | "Hot") => {
+    if (!selectedLead || isSubmittingActivity || leadTemperature === temp) return;
+    const oldTemp = leadTemperature;
+    setLeadTemperature(temp);
+    setSelectedLead((prev: any) => (prev ? { ...prev, Temperature: temp } : prev));
+    setRows((prev) =>
+      prev.map((r) => (r.UTD === selectedLead.UTD ? { ...r, Temperature: temp } : r))
+    );
+
+    try {
+      setIsSubmittingActivity(true);
+      const res = await axios.post(
+        `${BASE_URL}/meta/updateLeadTemperature`,
+        {
+          metaLeadUtd: selectedLead.UTD,
+          temperature: temp,
+        },
+        {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (res.data?.success) {
+        showToast(`Lead marked as ${temp} 🔥`, "success");
+        fetchLeadActivities(selectedLead.UTD);
+      } else {
+        setLeadTemperature(oldTemp);
+        showToast(res.data?.message || "Failed to update temperature", "error");
+      }
+    } catch (err: any) {
+      setLeadTemperature(oldTemp);
+      console.error("Update temperature error:", err);
+      showToast(err?.response?.data?.message || "Failed to update lead temperature", "error");
     } finally {
       setIsSubmittingActivity(false);
     }
@@ -1232,12 +1344,95 @@ export default function MetaPage() {
       openScheduleDemoModal();
       return;
     }
+
+    if (actionName.toLowerCase().includes("quotation")) {
+      try {
+        // 1. Update Lead Status to "Quotation Sent" (Status = 1)
+        await axios.post(
+          `${BASE_URL}/meta/updateLeadStatus`,
+          {
+            metaLeadUtd: selectedLead.UTD,
+            status: 1,
+            remark: "Quotation triggered - stage changed to Quotation Sent",
+          },
+          {
+            headers: {
+              accept: "application/json",
+              compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+              name: user?.name,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        // 2. Add activity log
+        await axios.post(
+          `${BASE_URL}/meta/addActivity`,
+          {
+            metaLeadUtd: selectedLead.UTD,
+            activityType: "QUOTATION",
+            activityStatus: "TRIGGERED",
+            remark: `${actionName} action triggered`,
+          },
+          {
+            headers: {
+              accept: "application/json",
+              compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+              name: user?.name,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        showToast(`${actionName} triggered! Stage updated to Quotation Sent 📄`, "success");
+        setActiveStage("Quotation Sent");
+        setSelectedLead((prev: any) => (prev ? { ...prev, status: 1 } : prev));
+        setRows((prev) =>
+          prev.map((r) => (r.UTD === selectedLead.UTD ? { ...r, status: 1 } : r))
+        );
+        fetchLeadActivities(selectedLead.UTD);
+      } catch (err) {
+        showToast(`Action ${actionName} completed`, "info");
+      }
+
+      // Extract details from selectedLead or All_Fields
+      let company = selectedLead.Company_Name || "";
+      let designation = "";
+
+      if (!company && selectedLead.All_Fields) {
+        try {
+          const parsed = typeof selectedLead.All_Fields === "string" ? JSON.parse(selectedLead.All_Fields) : selectedLead.All_Fields;
+          if (parsed) {
+            company = parsed.company_name || parsed.company || parsed.organization_name || parsed.dealer_name || "";
+            designation = parsed.designation || parsed.job_title || "";
+          }
+        } catch (e) {}
+      }
+
+      const queryParams = new URLSearchParams();
+      queryParams.set("action", "new");
+      queryParams.set("source", "meta_lead");
+      if (company) queryParams.set("company", company);
+      if (selectedLead.Full_Name) queryParams.set("stakeholder", selectedLead.Full_Name);
+      if (selectedLead.Phone_Number) {
+        const cleanMobile = selectedLead.Phone_Number.replace(/[^0-9]/g, "").slice(-10);
+        queryParams.set("mobile", cleanMobile);
+      }
+      if (selectedLead.Email) queryParams.set("email", selectedLead.Email);
+      if (selectedLead.City) queryParams.set("headquarters", selectedLead.City);
+      if (designation) queryParams.set("designation", designation);
+      if (selectedLead.UTD) queryParams.set("leadUtd", String(selectedLead.UTD));
+
+      router.push(`/autovyn/admin/HRMS/ClientIntakeForm?${queryParams.toString()}`);
+      return;
+    }
+
     try {
       await axios.post(
         `${BASE_URL}/meta/addActivity`,
         {
           metaLeadUtd: selectedLead.UTD,
-          activityType: actionName.toUpperCase().includes("DEMO") ? "DEMO" : "QUOTATION",
+          activityType: "QUOTATION",
           activityStatus: "TRIGGERED",
           remark: `${actionName} action triggered`,
         },
@@ -1358,8 +1553,8 @@ export default function MetaPage() {
       console.error("Create manual lead error:", err);
       showToast(
         err?.response?.data?.message ||
-          err?.response?.data?.Message ||
-          "Error creating manual lead",
+        err?.response?.data?.Message ||
+        "Error creating manual lead",
         "error"
       );
     } finally {
@@ -1710,8 +1905,8 @@ export default function MetaPage() {
 
                     <div
                       className={`relative max-w-[82%] p-3 rounded-2xl text-lg leading-relaxed shadow-xs ${isUser
-                          ? "bg-[#DCF8C6] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-none border border-[#B9E69B]/50 dark:border-[#005C4B]"
-                          : "bg-white dark:bg-[#202C33] text-[#111B21] dark:text-[#E9EDEF] rounded-tl-none border border-[#E2E8F0] dark:border-[#2A3942]"
+                        ? "bg-[#DCF8C6] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-none border border-[#B9E69B]/50 dark:border-[#005C4B]"
+                        : "bg-white dark:bg-[#202C33] text-[#111B21] dark:text-[#E9EDEF] rounded-tl-none border border-[#E2E8F0] dark:border-[#2A3942]"
                         }`}
                     >
                       <p className="whitespace-pre-wrap font-sans text-lg">{messageText}</p>
@@ -1794,7 +1989,7 @@ export default function MetaPage() {
     const formattedReceived = formatDateForDisplay(selectedLead.Created_At || selectedLead.Meta_Created_At);
 
     return (
-      <div className="w-full min-h-screen bg-[#F8FAFC] dark:bg-[#090D16] p-4 sm:p-6 flex flex-col gap-6 font-sans text-[#334155] dark:text-[#F1F5F9]">
+      <div id="meta-lead-detail-workspace-top" className="w-full min-h-screen bg-[#F8FAFC] dark:bg-[#090D16] p-4 sm:p-6 flex flex-col gap-6 font-sans text-[#334155] dark:text-[#F1F5F9]">
 
         {/* Top Header Navigation */}
         <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0] dark:border-[#1E293B]">
@@ -1838,8 +2033,16 @@ export default function MetaPage() {
                   </div>
                 </div>
 
-                {/* Hot Badge */}
-                <span className="inline-flex items-center gap-1 bg-[#FFE4E6] text-[#E11D48] border border-[#FECDD3] text-lg font-bold px-2.5 py-0.5 rounded-full shadow-2xs">
+                {/* Temperature Badge */}
+                <span
+                  className={`inline-flex items-center gap-1 text-lg font-bold px-2.5 py-0.5 rounded-full shadow-2xs border ${
+                    leadTemperature === "Hot"
+                      ? "bg-[#FFE4E6] text-[#E11D48] border-[#FECDD3] dark:bg-[#E11D48]/20 dark:text-[#FDA4AF] dark:border-[#E11D48]/40"
+                      : leadTemperature === "Warm"
+                      ? "bg-[#FEF3C7] text-[#D97706] border-[#FDE68A] dark:bg-[#D97706]/20 dark:text-[#FDE68A] dark:border-[#D97706]/40"
+                      : "bg-[#E0F2FE] text-[#0284C7] border-[#BAE6FD] dark:bg-[#0284C7]/20 dark:text-[#BAE6FD] dark:border-[#0284C7]/40"
+                  }`}
+                >
                   <Flame size={13} fill="currentColor" />
                   {leadTemperature}
                 </span>
@@ -1934,7 +2137,7 @@ export default function MetaPage() {
                       } else if (typeof selectedLead.All_Fields === "object" && selectedLead.All_Fields !== null) {
                         fieldsObj = selectedLead.All_Fields;
                       }
-                    } catch (_) {}
+                    } catch (_) { }
 
                     const entries = Object.entries(fieldsObj).filter(
                       ([k, v]) => v !== null && v !== undefined && String(v).trim() !== ""
@@ -2072,6 +2275,8 @@ export default function MetaPage() {
                           <Phone size={15} />
                         ) : type === "WHATSAPP" ? (
                           <MessageSquare size={15} />
+                        ) : type === "TEMPERATURE_CHANGE" ? (
+                          <Flame size={15} />
                         ) : type === "STATUS_CHANGE" ? (
                           <RefreshCw size={15} />
                         ) : type === "FOLLOWUP_CREATED" ? (
@@ -2251,7 +2456,15 @@ export default function MetaPage() {
                 <span className="text-lg font-bold uppercase tracking-wider text-[#94A3B8]">
                   Lead Temperature
                 </span>
-                <span className="text-lg font-bold text-[#E11D48]">
+                <span
+                  className={`text-lg font-bold ${
+                    leadTemperature === "Hot"
+                      ? "text-[#E11D48]"
+                      : leadTemperature === "Warm"
+                      ? "text-[#D97706]"
+                      : "text-[#0284C7]"
+                  }`}
+                >
                   {leadTemperature}
                 </span>
               </div>
@@ -2259,19 +2472,28 @@ export default function MetaPage() {
               {/* 3 Color Bars */}
               <div className="grid grid-cols-3 gap-1.5 pt-1">
                 <button
-                  onClick={() => setLeadTemperature("Cold")}
-                  className={`h-2 rounded-full transition-all cursor-pointer ${leadTemperature === "Cold" ? "bg-[#0284C7] ring-2 ring-[#0284C7]/30" : "bg-[#0284C7]/30"
-                    }`}
+                  onClick={() => handleUpdateTemperature("Cold")}
+                  disabled={isSubmittingActivity}
+                  title="Mark as Cold"
+                  className={`h-2 rounded-full transition-all cursor-pointer disabled:opacity-50 ${
+                    leadTemperature === "Cold" ? "bg-[#0284C7] ring-2 ring-[#0284C7]/30" : "bg-[#0284C7]/30"
+                  }`}
                 />
                 <button
-                  onClick={() => setLeadTemperature("Warm")}
-                  className={`h-2 rounded-full transition-all cursor-pointer ${leadTemperature === "Warm" ? "bg-[#D97706] ring-2 ring-[#D97706]/30" : "bg-[#D97706]/30"
-                    }`}
+                  onClick={() => handleUpdateTemperature("Warm")}
+                  disabled={isSubmittingActivity}
+                  title="Mark as Warm"
+                  className={`h-2 rounded-full transition-all cursor-pointer disabled:opacity-50 ${
+                    leadTemperature === "Warm" ? "bg-[#D97706] ring-2 ring-[#D97706]/30" : "bg-[#D97706]/30"
+                  }`}
                 />
                 <button
-                  onClick={() => setLeadTemperature("Hot")}
-                  className={`h-2 rounded-full transition-all cursor-pointer ${leadTemperature === "Hot" ? "bg-[#E11D48] ring-2 ring-[#E11D48]/30" : "bg-[#E11D48]/30"
-                    }`}
+                  onClick={() => handleUpdateTemperature("Hot")}
+                  disabled={isSubmittingActivity}
+                  title="Mark as Hot"
+                  className={`h-2 rounded-full transition-all cursor-pointer disabled:opacity-50 ${
+                    leadTemperature === "Hot" ? "bg-[#E11D48] ring-2 ring-[#E11D48]/30" : "bg-[#E11D48]/30"
+                  }`}
                 />
               </div>
 
@@ -2481,8 +2703,8 @@ export default function MetaPage() {
         {/* Header Action Buttons */}
         <div className="flex items-center gap-3">
           <Button
-           size="lg"
-           variant="save"
+            size="lg"
+            variant="save"
             onClick={() => {
               setNewLeadForm({
                 dealerName: "",
@@ -2500,7 +2722,7 @@ export default function MetaPage() {
               });
               setAddLeadModalOpen(true);
             }}
-            // className=" hover:from-[#4338CA] hover:to-[#4F46E5] text-white font-bold text-lg rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-md shadow-[#4F46E5]/20 cursor-pointer transition-all hover:scale-[1.02]"
+          // className=" hover:from-[#4338CA] hover:to-[#4F46E5] text-white font-bold text-lg rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-md shadow-[#4F46E5]/20 cursor-pointer transition-all hover:scale-[1.02]"
           >
             {/* <UserPlus size={18} /> */}
             <span>+ Add Manual Lead</span>
@@ -2769,9 +2991,10 @@ export default function MetaPage() {
               <tr className="border-b border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/50 dark:bg-[#1E293B]/30 text-lg font-bold text-[#94A3B8] dark:text-[#64748B] uppercase tracking-wider">
                 <th className="py-3 px-4 whitespace-nowrap">Customer Name</th>
                 <th className="py-3 px-4 whitespace-nowrap">Contact</th>
-                <th className="py-3 px-4 whitespace-nowrap">Meta Lead ID</th>
+                <th className="py-3 px-4 whitespace-nowrap">Meta Form Id</th>
                 <th className="py-3 px-4 whitespace-nowrap">Source</th>
                 <th className="py-3 px-4 whitespace-nowrap">Status</th>
+                <th className="py-3 px-4 whitespace-nowrap">Temperature</th>
                 <th className="py-3 px-4 whitespace-nowrap">Received At</th>
                 <th className="py-3 px-4 text-center whitespace-nowrap">Action</th>
               </tr>
@@ -2801,12 +3024,17 @@ export default function MetaPage() {
               ) : (
                 rows.map((lead) => {
                   const statusInfo = getStatusDetails(lead.status);
+                  const isLastViewed = lead.UTD === lastViewedLeadUtd;
 
                   return (
                     <tr
                       key={lead.UTD}
+                      id={`lead-row-${lead.UTD}`}
                       onDoubleClick={() => handleOpenDetailView(lead)}
-                      className="hover:bg-[#F8FAFC]/80 dark:hover:bg-[#1E293B]/50 transition-colors group cursor-pointer"
+                      className={`hover:bg-[#F8FAFC]/80 dark:hover:bg-[#1E293B]/50 transition-colors group cursor-pointer ${isLastViewed
+                          ? "bg-[#EEF2FF]/80 dark:bg-[#1E1B4B]/60 ring-2 ring-inset ring-[#818CF8]/60"
+                          : ""
+                        }`}
                     >
                       {/* Customer Name */}
                       <td className="py-2 px-4 whitespace-nowrap">
@@ -2833,7 +3061,7 @@ export default function MetaPage() {
 
                       {/* Meta Lead ID */}
                       <td className="py-2.5 px-4 whitespace-nowrap font-mono font-bold text-[#818CF8] dark:text-[#818CF8] text-lg">
-                        {lead.Meta_Lead_Id || "—"}
+                        {lead.Form_Id || "—"}
                       </td>
 
                       {/* Source */}
@@ -2854,6 +3082,19 @@ export default function MetaPage() {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-lg border ${statusInfo.className}`}>
                           {statusInfo.label}
                         </span>
+                      </td>
+
+                      {/* Temperature */}
+                      <td className="py-2.5 px-4 whitespace-nowrap">
+                        {(() => {
+                          const tempInfo = getTemperatureDetails(lead.Temperature);
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-lg font-semibold border ${tempInfo.className}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${tempInfo.dotColor}`} />
+                              {tempInfo.label}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Received At */}
@@ -3181,7 +3422,7 @@ export default function MetaPage() {
                 ) : (
                   <>
                     {/* <Check size={16} /> */}
-                     Create Lead
+                    Create Lead
                   </>
                 )}
               </Button>

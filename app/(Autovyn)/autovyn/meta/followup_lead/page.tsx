@@ -175,7 +175,7 @@ export default function FollowupLeadPage() {
 
   const handleViewLeadDetail = (leadUtd: number) => {
     if (!leadUtd) return;
-    router.push(`/autovyn/meta/dashboard?leadUtd=${leadUtd}&from=followup`);
+    router.push(`/autovyn/admin/HRMS/Meta_Lead/dashboard?leadUtd=${leadUtd}&from=followup`);
   };
 
   // ── Dynamic Calendar State ──────────────────────────────
