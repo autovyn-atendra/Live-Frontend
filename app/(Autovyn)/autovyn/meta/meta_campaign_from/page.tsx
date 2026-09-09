@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import axios from "axios";
 import DataTable from "@/components/Templates/servicetable";
@@ -45,6 +45,7 @@ type CampaignRecord = {
   Campaign_Id: string;
   Campaign_Name: string | null;
   Campaign_Type: string | null;
+  Bon_voice_Prompt_Name?: string | null;
   Meta_Form_Id: string | null;
   Meta_Form_Name: string | null;
   Sales_Executive_Number?: string | null;
@@ -68,6 +69,7 @@ type FormDataState = {
   Campaign_Id: string;
   Campaign_Name: string;
   Campaign_Type: string;
+  Bon_voice_Prompt_Name: string;
   Meta_Form_Id: string;
   Meta_Form_Name: string;
   Sales_Executive_Number: string;
@@ -83,6 +85,7 @@ const INITIAL_FORM: FormDataState = {
   Campaign_Id: "",
   Campaign_Name: "",
   Campaign_Type: "CALLMATIC",
+  Bon_voice_Prompt_Name: "",
   Meta_Form_Id: "",
   Meta_Form_Name: "",
   Sales_Executive_Number: "",
@@ -166,6 +169,7 @@ const formatDateForDisplay = (dateStr: string | null): string => {
 // ============================================================
 export default function MetaCampaignFormPage() {
   const user: any = useCurrentUser();
+  const formRef = useRef<HTMLDivElement>(null);
 
   // ── State ─────────────────────────────────────────────────
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
@@ -173,6 +177,7 @@ export default function MetaCampaignFormPage() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [formData, setFormData] = useState<FormDataState>(INITIAL_FORM);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [updatingTypeUtd, setUpdatingTypeUtd] = useState<number | null>(null);
 
   // ============================================================
   // FETCH CAMPAIGNS FROM BACKEND API
@@ -382,6 +387,7 @@ export default function MetaCampaignFormPage() {
       Campaign_Id: item.Campaign_Id || "",
       Campaign_Name: item.Campaign_Name || "",
       Campaign_Type: item.Campaign_Type || "CALLMATIC",
+      Bon_voice_Prompt_Name: item.Bon_voice_Prompt_Name || "",
       Meta_Form_Id: item.Meta_Form_Id || "",
       Meta_Form_Name: item.Meta_Form_Name || "",
       Sales_Executive_Number: item.Sales_Executive_Number || item.Transfer_Number || "",
@@ -391,7 +397,13 @@ export default function MetaCampaignFormPage() {
       Is_Active: Number(item.Is_Active) ? 1 : 0,
       Remark: item.Remark || "",
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 50);
   };
 
   const handleSubmitForm = async (e: React.FormEvent) => {
@@ -409,7 +421,8 @@ export default function MetaCampaignFormPage() {
       const payload: Record<string, any> = {
         campaignId: formData.Campaign_Id.trim(),
         campaignName: formData.Campaign_Name.trim(),
-        campaignType: formData.Campaign_Type.trim(),
+        campaignType: "CALLMATIC",
+        bonVoicePromptName: formData.Bon_voice_Prompt_Name.trim(),
         metaFormId: formData.Meta_Form_Id.trim(),
         metaFormName: formData.Meta_Form_Name.trim(),
         salesExecutiveNumber: formData.Sales_Executive_Number.trim(),
@@ -476,6 +489,37 @@ export default function MetaCampaignFormPage() {
     }
   };
 
+  const handleChangeCampaignType = async (utd: number, newType: string) => {
+    try {
+      setUpdatingTypeUtd(utd);
+      const res = await axios.post(
+        `${BASE_URL}/meta/updateCampaign`,
+        { utd, campaignType: newType },
+        {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (res.data?.success) {
+        showToast(`Campaign type updated to ${newType}!`, "success");
+        setCampaigns((prev) =>
+          prev.map((c) => (c.UTD === utd ? { ...c, Campaign_Type: newType } : c))
+        );
+      } else {
+        showToast(res.data?.message || "Failed to update campaign type", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message ?? "Failed to update campaign type", "error");
+    } finally {
+      setUpdatingTypeUtd(null);
+    }
+  };
+
   // ============================================================
   // DATATABLE COLUMN DEFINITIONS
   // ============================================================
@@ -498,20 +542,20 @@ export default function MetaCampaignFormPage() {
         ),
       },
       {
-        Header: "Campaign Name",
-        accessor: "Campaign_Name",
+        Header: "Prompt Name",
+        accessor: "Bon_voice_Prompt_Name",
         Cell: ({ value }: { value: string | null }) => (
-          <span className="font-bold text-[#0F172A] dark:text-white text-lg">
+          <span className="font-semibold text-[#4338CA] dark:text-[#A5B4FC] text-lg">
             {value || "—"}
           </span>
         ),
       },
       {
-        Header: "Type",
-        accessor: "Campaign_Type",
+        Header: "Campaign Name",
+        accessor: "Campaign_Name",
         Cell: ({ value }: { value: string | null }) => (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-lg font-bold bg-[#EEF2FF] text-[#818CF8] border border-[#C7D2FE] font-mono uppercase tracking-wider">
-            {value || "CALLMATIC"}
+          <span className="font-bold text-[#0F172A] dark:text-white text-lg">
+            {value || "—"}
           </span>
         ),
       },
@@ -638,6 +682,38 @@ export default function MetaCampaignFormPage() {
         ),
       },
       {
+        Header: "Call Type",
+        accessor: "Campaign_Type",
+        Cell: ({ value, row }: any) => {
+          const item = row.original;
+          const currentType = (value || item.Campaign_Type || "CALLMATIC").toUpperCase();
+          const isUpdating = updatingTypeUtd === item.UTD;
+
+          return (
+            <div className="flex items-center gap-1.5 min-w-[130px]">
+              <select
+                disabled={isUpdating}
+                value={currentType}
+                onChange={(e) => handleChangeCampaignType(item.UTD, e.target.value)}
+                className={`text-sm font-bold rounded-lg px-2.5 py-1.5 border transition-all cursor-pointer outline-hidden shadow-2xs ${
+                  currentType === "BONVOICE"
+                    ? "bg-[#FAF5FF] text-[#7E22CE] border-[#D8B4FE] dark:bg-[#3B0764]/40 dark:text-[#D8B4FE] dark:border-[#6B21A8]"
+                    : "bg-[#EEF2FF] text-[#4F46E5] border-[#C7D2FE] dark:bg-[#312E81]/40 dark:text-[#A5B4FC] dark:border-[#4338CA]"
+                } ${isUpdating ? "opacity-50 cursor-wait" : ""}`}
+              >
+                <option value="CALLMATIC" className="bg-white text-[#0F172A] dark:bg-[#0F172A] dark:text-white font-bold">
+                  CALLMATIC
+                </option>
+                <option value="BONVOICE" className="bg-white text-[#0F172A] dark:bg-[#0F172A] dark:text-white font-bold">
+                  BONVOICE
+                </option>
+              </select>
+              {isUpdating && <RefreshCw size={14} className="animate-spin text-[#818CF8]" />}
+            </div>
+          );
+        },
+      },
+      {
         Header: "Actions",
         accessor: "actions",
         disableSortBy: true,
@@ -672,7 +748,7 @@ export default function MetaCampaignFormPage() {
         },
       },
     ],
-    []
+    [updatingTypeUtd]
   );
 
   return (
@@ -703,7 +779,7 @@ export default function MetaCampaignFormPage() {
       </div>
 
       {/* ══ CAMPAIGN FORM CARD (CREATE / UPDATE) ══ */}
-      <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
+      <div ref={formRef} className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
         <div className="flex items-center justify-between border-b border-[#F1F5F9] dark:border-[#1E293B] pb-3">
           <h3 className="text-xl font-bold text-[#0F172A] dark:text-white flex items-center gap-2">
             <Sparkles size={20} className="text-[#818CF8]" />
@@ -739,6 +815,20 @@ export default function MetaCampaignFormPage() {
               className="!h-10 !text-lg"
             />
 
+            {/* Bon Voice Prompt Name */}
+            <Ainput
+              type="text"
+              name="Bon_voice_Prompt_Name"
+              title="Bon Voice Prompt Name"
+              placeholder="e.g. Prompt_Greeting_01"
+              value={formData.Bon_voice_Prompt_Name}
+              handleInputChange={(_, value) => handleInputChange("Bon_voice_Prompt_Name", value)}
+              onInput={() => {}}
+              redlabel=""
+              labelClass="text-lg font-bold"
+              className="!h-10 !text-lg"
+            />
+
             {/* Campaign Name */}
             <Ainput
               type="text"
@@ -747,20 +837,6 @@ export default function MetaCampaignFormPage() {
               placeholder="e.g. Festive Auto Offer 2026"
               value={formData.Campaign_Name}
               handleInputChange={(_, value) => handleInputChange("Campaign_Name", value)}
-              onInput={() => {}}
-              redlabel=""
-              labelClass="text-lg font-bold"
-              className="!h-10 !text-lg"
-            />
-
-            {/* Campaign Type */}
-            <Ainput
-              type="text"
-              name="Campaign_Type"
-              title="Campaign Type"
-              placeholder="e.g. CALLMATIC, OUTBOUND, WHATSAPP"
-              value={formData.Campaign_Type}
-              handleInputChange={(_, value) => handleInputChange("Campaign_Type", value)}
               onInput={() => {}}
               redlabel=""
               labelClass="text-lg font-bold"

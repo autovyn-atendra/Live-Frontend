@@ -9,22 +9,17 @@ import HashloaderComponent from "@/components/Templates/hashloader";
 import axios from "axios";
 import Ainput from "@/components/atoms/Input";
 import {
-  Share2,
+
   RefreshCw,
   Search,
-  Eye,
   Calendar,
-  User,
   Phone,
   Mail,
-  MapPin,
-  Building2,
   Tag,
   Clock,
   TrendingUp,
   Tv,
   Users,
-  Kanban,
   Table as TableIcon,
   CheckCircle2,
   AlertCircle,
@@ -33,22 +28,18 @@ import {
   X,
   ArrowLeft,
   MessageSquare,
-  Send,
   Flame,
   FileText,
   Monitor,
-  Check,
   PhoneCall,
-  ExternalLink,
   Bot,
   PlayCircle,
   Download,
-  History,
-  Volume2,
   BarChart2,
   UserPlus,
   Plus,
   Trash2,
+  Edit3,
 } from "lucide-react";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 
@@ -238,6 +229,7 @@ const STAGES = [
   "New",
   "Shortlisted",
   "Contacted",
+  "Busy",
   "Interested",
   "Demo Scheduled",
   "Quotation Sent",
@@ -264,6 +256,12 @@ const getStatusDetails = (statusVal: number | string | null) => {
     return {
       label: "Contacted",
       className: "bg-[#E0F2FE] text-[#0369A1] border-[#BAE6FD] dark:bg-[#075985]/50 dark:text-[#7DD3FC] dark:border-[#0369A1]",
+    };
+  }
+  if (statusVal === 7 || statusVal === "Busy" || statusVal === "BUSY") {
+    return {
+      label: "Busy",
+      className: "bg-[#FFF7ED] text-[#C2410C] border-[#FFEDD5] dark:bg-[#7C2D12]/50 dark:text-[#FDBA74] dark:border-[#9A3412]",
     };
   }
   if (statusVal === 3 || statusVal === "Interested") {
@@ -440,6 +438,12 @@ export default function MetaPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [isSubmittingActivity, setIsSubmittingActivity] = useState<boolean>(false);
 
+  // ── Edit Submitted Form Details & Email Modal State ────────
+  const [isEditFormModalOpen, setIsEditFormModalOpen] = useState<boolean>(false);
+  const [editEmail, setEditEmail] = useState<string>("");
+  const [editFormFields, setEditFormFields] = useState<Array<{ key: string; value: string }>>([]);
+  const [isSavingLeadDetails, setIsSavingLeadDetails] = useState<boolean>(false);
+
   // ── Call Modal State ──────────────────────────────────────
   const [callModalOpen, setCallModalOpen] = useState<boolean>(false);
   const [callResult, setCallResult] = useState<string>("CONNECTED");
@@ -460,7 +464,7 @@ export default function MetaPage() {
     const dd = String(tomorrow.getDate()).padStart(2, "0");
     setDemoDate(`${yyyy}-${mm}-${dd}`);
     setDemoTime("11:00");
-    setDemoType("ONLINE");
+    setDemoType("MICROSOFT_TEAMS");
     setDemoRemark("");
     setScheduleDemoModalOpen(true);
   };
@@ -818,6 +822,7 @@ export default function MetaPage() {
       "New": 0,
       "Shortlisted": 10,
       "Contacted": 2,
+      "Busy": 7,
       "Interested": 3,
       "Demo Scheduled": 4,
       "Quotation Sent": 1,
@@ -1155,6 +1160,7 @@ export default function MetaPage() {
   const [isLoadingCallHistory, setIsLoadingCallHistory] = useState<boolean>(false);
 
   const [selectedCallTranscript, setSelectedCallTranscript] = useState<any>(null);
+  const [selectedCallItem, setSelectedCallItem] = useState<any>(null);
   const [isTranscriptModalOpen, setIsTranscriptModalOpen] = useState<boolean>(false);
 
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState<boolean>(false);
@@ -1247,11 +1253,80 @@ export default function MetaPage() {
 
   // Confirm Schedule Demo Handler
   const handleConfirmScheduleDemo = async () => {
-    if (!selectedLead || !demoDate || isSubmittingActivity) {
+    if (!selectedLead || isSubmittingActivity) return;
+
+    if (!demoDate) {
       showToast("Please enter a demo date", "warning");
       return;
     }
+    if (!demoTime) {
+      showToast("Please enter a demo time", "warning");
+      return;
+    }
 
+    // ── MICROSOFT TEAMS SCHEDULING FLOW ──
+    if (demoType === "MICROSOFT_TEAMS") {
+      const email = selectedLead.Email ? String(selectedLead.Email).trim() : "";
+      if (!email || !email.includes("@")) {
+        showToast("Customer email is required for Microsoft Teams meeting. Please click 'Edit' to add customer email first.", "warning");
+        return;
+      }
+
+      try {
+        setIsSubmittingActivity(true);
+
+        const res = await axios.post(
+          `${BASE_URL}/meta/scheduleTeamsDemo`,
+          {
+            leadUtd: selectedLead.UTD,
+            metaLeadId: selectedLead.Meta_Lead_Id || null,
+            customerName: selectedLead.Full_Name || "Customer",
+            customerEmail: email,
+            customerMobile: selectedLead.Phone_Number || null,
+            demoDate: demoDate,
+            demoTime: demoTime,
+            demoRemark: demoRemark.trim() || `Product Demo Session`,
+            demoPlatform: "MICROSOFT_TEAMS",
+            userCode: user?.user_id || user?.usercode || user?.id || user?.name || "ADMIN",
+            userName: user?.name || "Admin",
+            userEmail: user?.email || user?.Email || null,
+          },
+          {
+            headers: {
+              accept: "application/json",
+              compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+              name: user?.name,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (res.data?.success) {
+          showToast("Demo scheduled successfully and Teams meeting invitation sent.", "success");
+          setScheduleDemoModalOpen(false);
+          setActiveStage("Demo Scheduled");
+          setSelectedLead((prev: any) => (prev ? { ...prev, status: 4 } : prev));
+          fetchLeadActivities(selectedLead.UTD);
+          fetchMetaLeads(pagination.currentPage);
+        } else {
+          showToast(res.data?.message || "Failed to schedule Microsoft Teams demo", "error");
+        }
+      } catch (err: any) {
+        console.error("Teams demo scheduling error:", err);
+        showToast(
+          err?.response?.data?.message ||
+            err?.response?.data?.Message ||
+            err?.message ||
+            "Error scheduling Microsoft Teams demo",
+          "error"
+        );
+      } finally {
+        setIsSubmittingActivity(false);
+      }
+      return;
+    }
+
+    // ── STANDARD FLOW (ONLINE / IN_PERSON / CLIENT_LOCATION) ──
     try {
       setIsSubmittingActivity(true);
 
@@ -1449,6 +1524,137 @@ export default function MetaPage() {
       fetchLeadActivities(selectedLead.UTD);
     } catch (err) {
       showToast(`Action ${actionName} completed`, "info");
+    }
+  };
+
+  // ── Edit Submitted Form Details & Email Modal State ────────
+  const editFieldsContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handleOpenEditFormModal = () => {
+    if (!selectedLead) return;
+    setEditEmail(selectedLead.Email || "");
+
+    let fieldsObj: Record<string, any> = {};
+    try {
+      if (typeof selectedLead.All_Fields === "string") {
+        fieldsObj = JSON.parse(selectedLead.All_Fields);
+      } else if (typeof selectedLead.All_Fields === "object" && selectedLead.All_Fields !== null) {
+        fieldsObj = selectedLead.All_Fields;
+      }
+    } catch (_) { }
+
+    const entries = Object.entries(fieldsObj).map(([k, v]) => ({
+      key: k,
+      value: v !== null && v !== undefined ? String(v) : "",
+    }));
+
+    if (entries.length === 0) {
+      setEditFormFields([
+        { key: "Dealer / Contact Person", value: selectedLead.Full_Name || "" },
+        { key: "Company Name", value: selectedLead.Company_Name || "" },
+      ]);
+    } else {
+      setEditFormFields(entries);
+    }
+
+    setIsEditFormModalOpen(true);
+  };
+
+  const handleAddEditFormField = () => {
+    setEditFormFields((prev) => [...prev, { key: "", value: "" }]);
+    setTimeout(() => {
+      if (editFieldsContainerRef.current) {
+        editFieldsContainerRef.current.scrollTo({
+          top: editFieldsContainerRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+        const inputs = editFieldsContainerRef.current.querySelectorAll<HTMLInputElement>("input");
+        if (inputs.length > 0) {
+          const lastQuestionInput = inputs[inputs.length - 2];
+          if (lastQuestionInput) lastQuestionInput.focus();
+        }
+      }
+    }, 60);
+  };
+
+  const handleEditFormFieldChange = (index: number, field: "key" | "value", val: string) => {
+    setEditFormFields((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
+    });
+  };
+
+  const handleRemoveEditFormField = (index: number) => {
+    setEditFormFields((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveLeadDetails = async () => {
+    if (!selectedLead || isSavingLeadDetails) return;
+
+    try {
+      setIsSavingLeadDetails(true);
+
+      const allFieldsObj: Record<string, any> = {};
+      editFormFields.forEach((item) => {
+        const trimmedKey = item.key.trim();
+        if (trimmedKey) {
+          allFieldsObj[trimmedKey] = item.value.trim();
+        }
+      });
+
+      const cleanEmail = editEmail.trim();
+
+      const res = await axios.post(
+        `${BASE_URL}/meta/updateLeadDetails`,
+        {
+          metaLeadUtd: selectedLead.UTD,
+          email: cleanEmail,
+          allFields: allFieldsObj,
+        },
+        {
+          headers: {
+            accept: "application/json",
+            compcode: user?.Comp_Code || process.env.NEXT_PUBLIC_COMP_CODE || "1",
+            name: user?.name,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (res.data?.success || res.data?.Status) {
+        showToast("Lead details & email updated successfully! 🎉", "success");
+        setSelectedLead((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                Email: cleanEmail,
+                All_Fields: allFieldsObj,
+              }
+            : prev
+        );
+        setRows((prev) =>
+          prev.map((r) =>
+            r.UTD === selectedLead.UTD
+              ? { ...r, Email: cleanEmail, All_Fields: allFieldsObj }
+              : r
+          )
+        );
+        setIsEditFormModalOpen(false);
+        fetchLeadActivities(selectedLead.UTD);
+      } else {
+        showToast(res.data?.message || "Failed to update lead details", "error");
+      }
+    } catch (err: any) {
+      console.error("Save lead details error:", err);
+      showToast(
+        err?.response?.data?.message ||
+          err?.response?.data?.Message ||
+          "Error saving lead details",
+        "error"
+      );
+    } finally {
+      setIsSavingLeadDetails(false);
     }
   };
 
@@ -1729,8 +1935,10 @@ export default function MetaPage() {
                               </td>
 
                               {/* DURATION */}
-                              <td className="px-4 py-3.5 text-[#334155] dark:text-[#E2E8F0] whitespace-nowrap">
-                                {call.duration ? `${call.duration} sec` : "0 sec"}
+                              <td className="px-4 py-3.5 text-[#334155] dark:text-[#E2E8F0] whitespace-nowrap font-semibold">
+                                {call.duration !== null && call.duration !== undefined && !isNaN(Number(call.duration)) && Number(call.duration) > 0
+                                  ? `${Number(call.duration)} sec`
+                                  : "0 sec"}
                               </td>
 
                               {/* CHANNEL */}
@@ -1770,6 +1978,7 @@ export default function MetaPage() {
                                   <button
                                     onClick={() => {
                                       setSelectedCallTranscript(call.transcript);
+                                      setSelectedCallItem(call);
                                       setIsTranscriptModalOpen(true);
                                     }}
                                     className="p-1.5 text-[#7C3AED] hover:bg-[#F5F3FF] dark:hover:bg-[#1E293B] rounded-full transition-all cursor-pointer inline-flex items-center justify-center"
@@ -1826,7 +2035,7 @@ export default function MetaPage() {
               <div className="text-center py-16 space-y-2 bg-white dark:bg-[#0F172A] rounded-xl border border-[#E2E8F0] dark:border-[#334155]">
                 <Bot size={44} className="mx-auto text-[#94A3B8] opacity-50" />
                 <p className="text-lg font-bold text-[#64748B] dark:text-[#94A3B8]">No AI Call Records Found</p>
-                <p className="text-lg text-[#94A3B8]">Trigger a Callmatic AI Call to view real-time call status and recordings here.</p>
+                <p className="text-lg text-[#94A3B8]">Trigger an AI Call to view real-time call status and recordings here.</p>
               </div>
             )}
           </div>
@@ -1869,10 +2078,15 @@ export default function MetaPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold leading-tight">
-                  Callmatic AI Voice Call Transcript
+                  {(selectedCallItem?.Provider || (String(selectedCallItem?.Call_Type || "").includes("BONVOICE") ? "Bonvoice" : "Callmatic"))} AI Voice Call Transcript
                 </h3>
-                <p className="text-lg text-[#E0F2F1] dark:text-[#8696A0]">
-                  Customer: <span className="font-semibold">{callHistoryLead?.Full_Name || "Customer"}</span>
+                <p className="text-lg text-[#E0F2F1] dark:text-[#8696A0] flex items-center gap-2 flex-wrap">
+                  <span>Customer: <span className="font-semibold">{callHistoryLead?.Full_Name || selectedCallItem?.Full_Name || "Customer"}</span></span>
+                  {selectedCallItem?.duration !== undefined && selectedCallItem?.duration !== null && Number(selectedCallItem.duration) > 0 ? (
+                    <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                      ⏱ {Number(selectedCallItem.duration)} sec
+                    </span>
+                  ) : null}
                 </p>
               </div>
             </div>
@@ -1886,48 +2100,99 @@ export default function MetaPage() {
 
           {/* WhatsApp Chat Wallpaper Background */}
           <div className="p-4 max-h-[70vh] overflow-y-auto space-y-3 bg-[#E5DDD5] dark:bg-[#0B141A] min-h-[350px]">
-            {Array.isArray(selectedCallTranscript) && selectedCallTranscript.length > 0 ? (
-              selectedCallTranscript.map((tItem: any, idx: number) => {
-                const isUser = isCustomerMessage(tItem, idx);
-                const messageText =
-                  typeof tItem === "string"
-                    ? tItem
-                    : tItem.content || tItem.text || tItem.message || tItem.transcript || JSON.stringify(tItem);
+            {(() => {
+              // Parse transcript if string or array
+              let msgs: any[] = [];
+              if (Array.isArray(selectedCallTranscript)) {
+                msgs = selectedCallTranscript;
+              } else if (typeof selectedCallTranscript === "string") {
+                const trimmed = selectedCallTranscript.trim();
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (Array.isArray(parsed)) msgs = parsed;
+                } catch (_) {}
 
-                return (
-                  <div
-                    key={idx}
-                    className={`flex flex-col ${isUser ? "items-end" : "items-start"} mb-1`}
-                  >
-                    <span className="text-[14px] font-semibold text-[#54656F] dark:text-[#8696A0] mb-0.5 px-1">
-                      {isUser ? (callHistoryLead?.Full_Name || "Customer") : "Callmatic AI Agent"}
-                    </span>
+                if (msgs.length === 0 && trimmed) {
+                  const splitRegex = /(Agent:|User:|Bot:|Human:|Caller:|Customer:|Assistant:)/i;
+                  const tokens = trimmed.split(splitRegex);
+                  if (tokens.length > 1) {
+                    let currentSpeaker = "";
+                    for (let i = 0; i < tokens.length; i++) {
+                      const token = tokens[i].trim();
+                      if (!token) continue;
+                      if (/^(Agent|User|Bot|Human|Caller|Customer|Assistant):$/i.test(token)) {
+                        currentSpeaker = token.replace(":", "").toLowerCase();
+                      } else if (currentSpeaker) {
+                        const isU = currentSpeaker.includes("user") || currentSpeaker.includes("human") || currentSpeaker.includes("customer") || currentSpeaker.includes("caller");
+                        const cleanText = token.replace(/^["'`]|["'`]$/g, "").trim();
+                        if (cleanText) {
+                          msgs.push({
+                            sender: isU ? "human" : "bot",
+                            role: isU ? "user" : "agent",
+                            speaker: isU ? (callHistoryLead?.Full_Name || "Customer") : `${selectedCallItem?.Provider || "AI"} AI Agent`,
+                            text: cleanText,
+                            message: cleanText,
+                          });
+                        }
+                        currentSpeaker = "";
+                      }
+                    }
+                  } else {
+                    msgs = [{
+                      sender: "bot",
+                      role: "agent",
+                      speaker: `${selectedCallItem?.Provider || "AI"} AI Agent`,
+                      text: trimmed,
+                      message: trimmed,
+                    }];
+                  }
+                }
+              }
 
+              const providerLabel = selectedCallItem?.Provider || (String(selectedCallItem?.Call_Type || "").includes("BONVOICE") ? "Bonvoice" : "Callmatic");
+
+              return msgs.length > 0 ? (
+                msgs.map((tItem: any, idx: number) => {
+                  const isUser = isCustomerMessage(tItem, idx);
+                  const messageText =
+                    typeof tItem === "string"
+                      ? tItem
+                      : tItem.content || tItem.text || tItem.message || tItem.transcript || JSON.stringify(tItem);
+
+                  return (
                     <div
-                      className={`relative max-w-[82%] p-3 rounded-2xl text-lg leading-relaxed shadow-xs ${isUser
-                        ? "bg-[#DCF8C6] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-none border border-[#B9E69B]/50 dark:border-[#005C4B]"
-                        : "bg-white dark:bg-[#202C33] text-[#111B21] dark:text-[#E9EDEF] rounded-tl-none border border-[#E2E8F0] dark:border-[#2A3942]"
-                        }`}
+                      key={idx}
+                      className={`flex flex-col ${isUser ? "items-end" : "items-start"} mb-1`}
                     >
-                      <p className="whitespace-pre-wrap font-sans text-lg">{messageText}</p>
+                      <span className="text-[14px] font-semibold text-[#54656F] dark:text-[#8696A0] mb-0.5 px-1">
+                        {isUser ? (callHistoryLead?.Full_Name || selectedCallItem?.Full_Name || "Customer") : (tItem.speaker || `${providerLabel} AI Agent`)}
+                      </span>
 
-                      {/* Time & Read Ticks */}
-                      <div className={`flex items-center justify-end gap-1 text-[14px] mt-1 ${isUser ? "text-[#54656F] dark:text-[#8696A0]" : "text-[#8696A0]"}`}>
+                      <div
+                        className={`relative max-w-[82%] p-3 rounded-2xl text-lg leading-relaxed shadow-xs ${isUser
+                          ? "bg-[#DCF8C6] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-none border border-[#B9E69B]/50 dark:border-[#005C4B]"
+                          : "bg-white dark:bg-[#202C33] text-[#111B21] dark:text-[#E9EDEF] rounded-tl-none border border-[#E2E8F0] dark:border-[#2A3942]"
+                          }`}
+                      >
+                        <p className="whitespace-pre-wrap font-sans text-lg">{messageText}</p>
 
-                        {isUser && <span className="text-[#53BDEB]  font-bold">✓✓</span>}
+                        {/* Time & Read Ticks */}
+                        <div className={`flex items-center justify-end gap-1 text-[14px] mt-1 ${isUser ? "text-[#54656F] dark:text-[#8696A0]" : "text-[#8696A0]"}`}>
+                          {isUser && <span className="text-[#53BDEB] font-bold">✓✓</span>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <MessageSquare size={36} className="text-[#8696A0] opacity-60 mb-2" />
-                <p className="text-lg font-semibold text-[#54656F] dark:text-[#8696A0]">
-                  {typeof selectedCallTranscript === "string" ? selectedCallTranscript : "No voice transcript messages found."}
-                </p>
-              </div>
-            )}
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <MessageSquare size={36} className="text-[#8696A0] opacity-60 mb-2" />
+                  <p className="text-lg font-semibold text-[#54656F] dark:text-[#8696A0]">
+                    {typeof selectedCallTranscript === "string" ? selectedCallTranscript : "No voice transcript messages found."}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         </Modal>
 
@@ -1970,6 +2235,165 @@ export default function MetaPage() {
             ) : (
               <p className="text-lg text-[#94A3B8]">No recording available for this call</p>
             )}
+          </div>
+        </Modal>
+
+        {/* ══ EDIT SUBMITTED FORM DETAILS & EMAIL MODAL ══ */}
+        <Modal
+          isOpen={isEditFormModalOpen}
+          onClose={() => setIsEditFormModalOpen(false)}
+          widthClass="max-w-2xl"
+          zIndexClass="z-[999999]"
+        >
+          {/* Modal Header */}
+          <div className="flex items-center justify-between bg-header dark:bg-[#1E293B] px-6 py-4 text-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center font-bold text-white shadow-xs">
+                <Edit3 size={20} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold leading-tight">
+                  Edit Form Details & Email
+                </h3>
+                <p className="text-lg text-[#E0E7FF] dark:text-[#94A3B8] mt-0.5">
+                  Lead: <span className="font-semibold">{selectedLead?.Full_Name || "Customer"}</span> {selectedLead?.Phone_Number ? `• ${selectedLead.Phone_Number}` : ""}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsEditFormModalOpen(false)}
+              className="p-1.5 rounded-full hover:bg-white/10 transition-all cursor-pointer text-white"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-6 max-h-[75vh] overflow-y-auto space-y-5 bg-[#F8FAFC] dark:bg-[#090D16]">
+
+            {/* 1. Email Address Field */}
+            <div className="bg-white dark:bg-[#0F172A] p-4 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-2xs space-y-2">
+              <label className="block text-lg font-bold uppercase tracking-wider text-[#4F46E5] dark:text-[#818CF8]">
+                Customer Email Address
+              </label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="e.g. customer@example.com"
+                  className="w-full pl-10 pr-3.5 h-10 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-base font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+                />
+              </div>
+            </div>
+
+            {/* 2. Form Questions & Answers List */}
+            <div className="bg-white dark:bg-[#0F172A] p-4 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-lg font-bold uppercase tracking-wider text-[#334155] dark:text-[#CBD5E1]">
+                    Form Questions & Answers ({editFormFields.length})
+                  </h4>
+                  <p className="text-xs text-[#94A3B8] mt-0.5">
+                    Modify existing questions or add new custom fields
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddEditFormField}
+                  className="text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] bg-[#EEF2FF] hover:bg-[#E0E7FF] dark:bg-[#312E81]/40 dark:text-[#A5B4FC] px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                >
+                  <Plus size={14} /> Add Question / Field
+                </button>
+              </div>
+
+              {editFormFields.length === 0 ? (
+                <div className="text-center py-6 text-[#94A3B8] italic text-lg">
+                  No questions or fields. Click &quot;Add Question / Field&quot; to add.
+                </div>
+              ) : (
+                <div ref={editFieldsContainerRef} className="space-y-3 max-h-[320px] overflow-y-auto pr-1 scroll-smooth">
+                  {editFormFields.map((field, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-[#F8FAFC] dark:bg-[#1E293B]/60 border border-[#E2E8F0] dark:border-[#334155] rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+                    >
+                      {/* Question / Field Key */}
+                      <div className="flex-1">
+                        <label className="block text-lg font-bold text-[#64748B] dark:text-[#94A3B8] uppercase mb-1">
+                          Question / Field Name
+                        </label>
+                        <input
+                          type="text"
+                          value={field.key}
+                          onChange={(e) => handleEditFormFieldChange(idx, "key", e.target.value)}
+                          placeholder="e.g. Budget, City, Requirement"
+                          className="w-full h-9 px-3 bg-white dark:bg-[#0F172A] border border-[#CBD5E1] dark:border-[#334155] rounded-lg text-lg font-semibold text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
+                        />
+                      </div>
+
+                      {/* Answer / Field Value */}
+                      <div className="flex-1">
+                        <label className="block text-lg font-bold text-[#64748B] dark:text-[#94A3B8] uppercase mb-1">
+                          Answer / Value
+                        </label>
+                        <input
+                          type="text"
+                          value={field.value}
+                          onChange={(e) => handleEditFormFieldChange(idx, "value", e.target.value)}
+                          placeholder="e.g. 50k, Delhi, CRM Software"
+                          className="w-full h-9 px-3 bg-white dark:bg-[#0F172A] border border-[#CBD5E1] dark:border-[#334155] rounded-lg text-lg font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
+                        />
+                      </div>
+
+                      {/* Remove Button */}
+                      <div className="sm:self-end">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditFormField(idx)}
+                          className="h-9 px-2.5 text-[#EF4444] hover:bg-[#FEE2E2] dark:hover:bg-[#7F1D1D]/40 rounded-lg transition-all cursor-pointer flex items-center justify-center"
+                          title="Delete Field"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Modal Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-[#F8FAFC] dark:bg-[#090D16] border-t border-[#E2E8F0] dark:border-[#1E293B]">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setIsEditFormModalOpen(false)}
+              className="text-lg font-bold rounded-xl border-[#CBD5E1] px-4 py-2 cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveLeadDetails}
+              disabled={isSavingLeadDetails}
+              size="lg"
+              className="bg-[#4F46E5] hover:bg-[#4338CA] text-white text-lg font-bold rounded-xl px-5 py-2 cursor-pointer shadow-md shadow-[#4F46E5]/20 flex items-center gap-2"
+            >
+              {isSavingLeadDetails ? (
+                <>
+                  {/* <RefreshCw size={15} className="animate-spin" /> */}
+                  Saving Changes...
+                </>
+              ) : (
+                <>
+                  {/* <Check size={16} /> */}
+                  Save Changes
+                </>
+              )}
+            </Button>
           </div>
         </Modal>
       </>
@@ -2102,10 +2526,12 @@ export default function MetaPage() {
                   <span className="font-bold text-[#0F172A] dark:text-white">{formattedPhone}</span>
                 </div>
 
-                {/* <div className="flex justify-between items-center">
-                  <span className="text-[#64748B] font-bold">City</span>
-                  <span className="font-bold text-[#334155] dark:text-[#E2E8F0]">{formattedCity}</span>
-                </div> */}
+                <div className="flex justify-between items-center">
+                  <span className="text-[#64748B] font-bold">Email</span>
+                  <span className="font-bold text-[#0F172A] dark:text-white truncate max-w-[200px]" title={selectedLead.Email || "—"}>
+                    {selectedLead.Email || "—"}
+                  </span>
+                </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-[#64748B] font-bold">Meta Lead ID</span>
@@ -2128,29 +2554,39 @@ export default function MetaPage() {
                 </div>
 
                 {/* ── META LEAD SUBMITTED FORM RESPONSES (ALL_FIELDS) ── */}
-                {selectedLead.All_Fields && (
-                  (() => {
-                    let fieldsObj: Record<string, any> = {};
-                    try {
-                      if (typeof selectedLead.All_Fields === "string") {
-                        fieldsObj = JSON.parse(selectedLead.All_Fields);
-                      } else if (typeof selectedLead.All_Fields === "object" && selectedLead.All_Fields !== null) {
-                        fieldsObj = selectedLead.All_Fields;
-                      }
-                    } catch (_) { }
+                {(() => {
+                  let fieldsObj: Record<string, any> = {};
+                  try {
+                    if (typeof selectedLead.All_Fields === "string") {
+                      fieldsObj = JSON.parse(selectedLead.All_Fields);
+                    } else if (typeof selectedLead.All_Fields === "object" && selectedLead.All_Fields !== null) {
+                      fieldsObj = selectedLead.All_Fields;
+                    }
+                  } catch (_) { }
 
-                    const entries = Object.entries(fieldsObj).filter(
-                      ([k, v]) => v !== null && v !== undefined && String(v).trim() !== ""
-                    );
+                  const entries = Object.entries(fieldsObj).filter(
+                    ([k, v]) => v !== null && v !== undefined && String(v).trim() !== ""
+                  );
 
-                    if (entries.length === 0) return null;
-
-                    return (
-                      <div className="pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-2">
+                  return (
+                    <div className="pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-2">
+                      <div className="flex items-center justify-between gap-2 pb-1">
                         <div className="flex items-center gap-1.5 text-lg font-bold uppercase tracking-wider text-[#4F46E5] dark:text-[#818CF8]">
-                          <FileText size={14} />
+                          <FileText size={16} />
                           <span>Submitted Form Details</span>
                         </div>
+                        <Button
+                          variant="save"
+                          size="lg"
+                          onClick={handleOpenEditFormModal}
+                          className="text-lg px-3 flex items-center gap-1.5 cursor-pointer  font-bold shadow-md hover:scale-105 transition-all"
+                        >
+                          {/* <Edit3 size={13} /> */}
+                          <span>Edit</span>
+                        </Button>
+                      </div>
+
+                      {entries.length > 0 ? (
                         <div className="space-y-2 bg-[#F8FAFC] dark:bg-[#1E293B]/60 p-3 rounded-xl border border-[#E2E8F0] dark:border-[#334155]">
                           {entries.map(([k, v]) => (
                             <div
@@ -2166,10 +2602,14 @@ export default function MetaPage() {
                             </div>
                           ))}
                         </div>
-                      </div>
-                    );
-                  })()
-                )}
+                      ) : (
+                        <div className="p-3 bg-[#F8FAFC] dark:bg-[#1E293B]/40 rounded-xl border border-dashed border-[#CBD5E1] dark:border-[#334155] text-center">
+                          <p className="text-xs text-[#94A3B8]">No extra form questions. Click &quot;Edit&quot; to add or update details.</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
             </div>
@@ -2634,8 +3074,9 @@ export default function MetaPage() {
                 <select
                   value={demoType}
                   onChange={(e) => setDemoType(e.target.value)}
-                  className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl text-lg  text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none"
+                  className="w-full h-10 px-3 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-lg font-medium text-[#1E293B] dark:text-[#F1F5F9] focus:outline-none cursor-pointer"
                 >
+                  <option value="MICROSOFT_TEAMS">Microsoft Teams (Auto-generate Teams Meeting & Invite)</option>
                   <option value="ONLINE">ONLINE (Google Meet / Zoom / Screen Share)</option>
                   <option value="IN_PERSON">IN_PERSON (Company Office Visit)</option>
                   <option value="CLIENT_LOCATION">CLIENT_LOCATION (Client Site Visit)</option>
@@ -2935,6 +3376,7 @@ export default function MetaPage() {
               <option value="0">New / Received</option>
               <option value="10">Shortlisted</option>
               <option value="2">Contacted</option>
+              <option value="7">Busy / No Answer</option>
               <option value="3">Interested</option>
               <option value="4">Demo Scheduled</option>
               <option value="1">Processed / Quotation Sent</option>
