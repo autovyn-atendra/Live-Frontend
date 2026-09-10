@@ -108,6 +108,7 @@ type MetaLead = {
   Source: string | null;
   status: number | string | null;
   Temperature?: "Cold" | "Warm" | "Hot" | string | null;
+  Demo_CC_Emails?: string | null;
   Created_By: string | null;
   Created_At: string | null;
 };
@@ -455,6 +456,10 @@ export default function MetaPage() {
   const [demoTime, setDemoTime] = useState<string>("11:00");
   const [demoType, setDemoType] = useState<string>("ONLINE");
   const [demoRemark, setDemoRemark] = useState<string>("");
+  const [demoCcEmails, setDemoCcEmails] = useState<string[]>([]);
+  const [newCcEmailInput, setNewCcEmailInput] = useState<string>("");
+  const [showAddCcInput, setShowAddCcInput] = useState<boolean>(false);
+  const [saveCcToCampaign, setSaveCcToCampaign] = useState<boolean>(true);
 
   const openScheduleDemoModal = () => {
     const tomorrow = new Date();
@@ -466,7 +471,60 @@ export default function MetaPage() {
     setDemoTime("11:00");
     setDemoType("MICROSOFT_TEAMS");
     setDemoRemark("");
+    setNewCcEmailInput("");
+    setShowAddCcInput(false);
+    setSaveCcToCampaign(true);
+
+    // Collect all candidate CC emails from selectedLead and campaignsList
+    const collectedEmails = new Set<string>();
+
+    // 1. From selectedLead.Demo_CC_Emails (if saved earlier)
+    if (selectedLead?.Demo_CC_Emails) {
+      String(selectedLead.Demo_CC_Emails)
+        .split(/[,;]/)
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e && e.includes("@"))
+        .forEach((e) => collectedEmails.add(e));
+    }
+
+    // 2. From campaignsList (from Meta_Callmatic_Campaign_Tbl)
+    campaignsList.forEach((camp: any) => {
+      if (camp.Demo_CC_Emails) {
+        String(camp.Demo_CC_Emails)
+          .split(/[,;]/)
+          .map((e) => e.trim().toLowerCase())
+          .filter((e) => e && e.includes("@"))
+          .forEach((e) => collectedEmails.add(e));
+      }
+    });
+
+    setDemoCcEmails(Array.from(collectedEmails));
     setScheduleDemoModalOpen(true);
+  };
+
+  const handleAddCcEmail = () => {
+    const trimmed = newCcEmailInput.trim().toLowerCase();
+    if (!trimmed) {
+      showToast("Please enter an email address", "warning");
+      return;
+    }
+    if (!trimmed.includes("@") || !trimmed.includes(".")) {
+      showToast("Please enter a valid email address (e.g. name@example.com)", "warning");
+      return;
+    }
+    if (demoCcEmails.some((e) => e.toLowerCase() === trimmed)) {
+      showToast("Email is already in the CC list", "info");
+      setNewCcEmailInput("");
+      return;
+    }
+    setDemoCcEmails((prev) => [...prev, trimmed]);
+    setNewCcEmailInput("");
+    setShowAddCcInput(false);
+    showToast("CC email added", "success");
+  };
+
+  const handleRemoveCcEmail = (emailToRemove: string) => {
+    setDemoCcEmails((prev) => prev.filter((e) => e.toLowerCase() !== emailToRemove.toLowerCase()));
   };
 
   // ── Pagination State ─────────────────────────────────────
@@ -1287,6 +1345,8 @@ export default function MetaPage() {
             demoTime: demoTime,
             demoRemark: demoRemark.trim() || `Product Demo Session`,
             demoPlatform: "MICROSOFT_TEAMS",
+            demoCcEmails: demoCcEmails,
+            saveToCampaign: saveCcToCampaign,
             userCode: user?.user_id || user?.usercode || user?.id || user?.name || "ADMIN",
             userName: user?.name || "Admin",
             userEmail: user?.email || user?.Email || null,
@@ -1305,7 +1365,27 @@ export default function MetaPage() {
           showToast("Demo scheduled successfully and Teams meeting invitation sent.", "success");
           setScheduleDemoModalOpen(false);
           setActiveStage("Demo Scheduled");
-          setSelectedLead((prev: any) => (prev ? { ...prev, status: 4 } : prev));
+          const ccStr = demoCcEmails.join(", ");
+          setSelectedLead((prev: any) => (prev ? { ...prev, status: 4, Demo_CC_Emails: ccStr } : prev));
+          setRows((prev) =>
+            prev.map((r) => (r.UTD === selectedLead.UTD ? { ...r, status: 4, Demo_CC_Emails: ccStr } : r))
+          );
+          if (saveCcToCampaign && demoCcEmails.length > 0) {
+            setCampaignsList((prev) =>
+              prev.map((c) => ({
+                ...c,
+                Demo_CC_Emails: Array.from(
+                  new Set([
+                    ...String(c.Demo_CC_Emails || "")
+                      .split(/[,;]/)
+                      .map((e) => e.trim().toLowerCase())
+                      .filter((e) => e && e.includes("@")),
+                    ...demoCcEmails.map((e) => e.toLowerCase()),
+                  ])
+                ).join(", "),
+              }))
+            );
+          }
           fetchLeadActivities(selectedLead.UTD);
           fetchMetaLeads(pagination.currentPage);
         } else {
@@ -3022,8 +3102,8 @@ export default function MetaPage() {
 
         {/* ══ SCHEDULE DEMO MODAL ══ */}
         {scheduleDemoModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-3xl p-6 shadow-2xl w-full max-w-lg space-y-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#1E293B] rounded-3xl p-6 shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto space-y-4">
               <div className="flex items-center justify-between border-b border-[#F1F5F9] dark:border-[#1E293B] pb-3">
                 <h3 className="text-xl text-[#0F172A] dark:text-white font-bold flex items-center gap-2">
                   <Monitor size={20} className="text-[#818CF8]" />
@@ -3037,10 +3117,23 @@ export default function MetaPage() {
                 </button>
               </div>
 
-              <p className="text-lg font-bold text-[#64748B] dark:text-[#94A3B8]">
-                Scheduling demo for <span className="font-medium text-[#0F172A] dark:text-white">{selectedLead?.Full_Name || "Customer"}</span>
-              </p>
+              {/* Customer Email & Profile Status */}
+              <div className="bg-[#F8FAFC] dark:bg-[#1E293B]/60 p-3 rounded-2xl border border-[#E2E8F0] dark:border-[#334155] flex flex-wrap items-center justify-between gap-2">
+                <p className="text-base font-bold text-[#64748B] dark:text-[#94A3B8]">
+                  Scheduling demo for <span className="font-semibold text-[#0F172A] dark:text-white">{selectedLead?.Full_Name || "Customer"}</span>
+                </p>
+                {selectedLead?.Email ? (
+                  <span className="font-semibold text-sm text-[#4F46E5] dark:text-[#818CF8] bg-white dark:bg-[#0F172A] px-3 py-1 rounded-xl border border-[#CBD5E1] dark:border-[#334155] flex items-center gap-1.5 shadow-2xs">
+                    <Mail size={14} /> {selectedLead.Email}
+                  </span>
+                ) : (
+                  <span className="text-sm font-bold text-[#DC2626] bg-[#FEE2E2] dark:bg-[#7F1D1D]/40 px-3 py-1 rounded-xl border border-[#FECACA]">
+                    ⚠️ No Email Found (Click Edit on profile to add)
+                  </span>
+                )}
+              </div>
 
+              {/* Date & Time Grid */}
               <div className="grid grid-cols-2 gap-3">
                 <Ainput
                   type="date"
@@ -3067,6 +3160,7 @@ export default function MetaPage() {
                 />
               </div>
 
+              {/* Demo Mode / Platform */}
               <div>
                 <label className="block text-lg font-medium text-[#334155] dark:text-[#CBD5E1] mb-1">
                   Demo Mode / Platform
@@ -3083,12 +3177,131 @@ export default function MetaPage() {
                 </select>
               </div>
 
+              {/* ── TEAM CC RECIPIENTS & EMAIL MANAGEMENT ── */}
+              <div className="bg-[#F8FAFC] dark:bg-[#1E293B]/60 p-4 rounded-2xl border border-[#E2E8F0] dark:border-[#334155] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-base font-bold text-[#334155] dark:text-[#CBD5E1]">
+                      👥 Team CC Recipients ({demoCcEmails.length})
+                    </label>
+                    <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
+                      Invited to Microsoft Teams meeting & receives notifications (Loaded from Campaign & Lead)
+                    </p>
+                  </div>
+                  {!showAddCcInput && (
+                    <Button
+                      type="button"
+                      onClick={() => setShowAddCcInput(true)}
+                      size="lg"
+                      variant="outline"
+                      className="text-lg font-bold text-[#4F46E5] hover:text-[#4338CA] bg-[#EEF2FF] hover:bg-[#E0E7FF] dark:bg-[#312E81]/40 dark:text-[#A5B4FC] border-[#C7D2FE] dark:border-[#4338CA] px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                    >
+                      {/* <Plus size={15} />  */}
+                      Add CC
+                    </Button>
+                  )}
+                </div>
+
+                {/* CC Email Chips List */}
+                {demoCcEmails.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                    {demoCcEmails.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-[#0F172A] border border-[#CBD5E1] dark:border-[#475569] rounded-xl text-sm font-medium text-[#1E293B] dark:text-[#F1F5F9] shadow-2xs group"
+                      >
+                        <Mail size={13} className="text-[#4F46E5] dark:text-[#818CF8]" />
+                        <span>{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCcEmail(email)}
+                          className="ml-1 p-0.5 text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEE2E2] dark:hover:bg-[#7F1D1D]/40 rounded-full transition-all cursor-pointer"
+                          title="Remove from CC"
+                        >
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#94A3B8] italic py-1">
+                    No CC emails added yet. Click &quot;Add CC&quot; to add internal recipients.
+                  </p>
+                )}
+
+                {/* Add New Email Input Box (Opens dynamically when Add CC is clicked) */}
+                {showAddCcInput && (
+                  <div className="p-3 bg-white dark:bg-[#0F172A] border border-[#C7D2FE] dark:border-[#4338CA] rounded-2xl space-y-2 animate-in fade-in duration-200 shadow-2xs">
+                    <label className="block text-xs font-bold text-[#4F46E5] dark:text-[#818CF8] uppercase tracking-wider">
+                      Enter New CC Email Address
+                    </label>
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="relative flex-1">
+                        <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+                        <input
+                          type="email"
+                          autoFocus
+                          value={newCcEmailInput}
+                          onChange={(e) => setNewCcEmailInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddCcEmail();
+                            } else if (e.key === "Escape") {
+                              setShowAddCcInput(false);
+                              setNewCcEmailInput("");
+                            }
+                          }}
+                          placeholder="e.g. manager@autovyn.com"
+                          className="w-full pl-9 pr-3 h-10 bg-[#F8FAFC] dark:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#334155] rounded-xl text-sm font-medium text-[#0F172A] dark:text-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+                        />
+                      </div>
+                     <div className="flex gap-2 justify-between">
+                       <Button
+                        type="button"
+                        onClick={handleAddCcEmail}
+                        size="lg"
+                        className="bg-[#4F46E5] hover:bg-[#4338CA] text-white"
+                      >
+                        {/* <Plus size={15} /> ] */}
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowAddCcInput(false);
+                          setNewCcEmailInput("");
+                        }}
+                        size="lg"
+                        className="text-sm  border-[#CBD5E1] dark:border-[#334155] cursor-pointer"
+                      >
+                        Cancel
+                      </Button>
+                     </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sync to Campaign Checkbox */}
+                <label className="flex items-center gap-2 text-xs font-semibold text-[#475569] dark:text-[#CBD5E1] cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={saveCcToCampaign}
+                    onChange={(e) => setSaveCcToCampaign(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#CBD5E1] text-[#4F46E5] focus:ring-[#4F46E5] cursor-pointer"
+                  />
+                  <span>💾 Also save & sync these CC emails to Campaign (for all future demos)</span>
+                </label>
+              </div>
+
+              {/* Demo Agenda / Remark */}
               <div>
                 <label className="block text-lg font-bold text-[#334155] dark:text-[#CBD5E1] mb-1">
                   Demo Agenda / Remark
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={demoRemark}
                   onChange={(e) => setDemoRemark(e.target.value)}
                   placeholder="Enter demo agenda, client requirements, or special notes..."
