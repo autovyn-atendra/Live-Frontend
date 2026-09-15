@@ -374,6 +374,11 @@ export const treeData = [
             title: "AI Knowledge Management |",
             key: "13.1.2",
             url: "/autovyn/ai/knowledge",
+          },
+          {
+            title: "AI Image Assistant |",
+            key: "13.1.3",
+            url: "/autovyn/ai/ai_image_assistant",
           }
         ],
       },

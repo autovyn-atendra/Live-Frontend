@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-
+import Link from "next/link";
 import {
   Bot,
   Loader2,
@@ -23,14 +23,36 @@ import {
   Check,
   RefreshCw,
   Sparkles,
+  Search,
+  Zap,
+  Layers,
+  Database,
+  Calendar,
+  Users,
+  DollarSign,
+  Car,
+  BarChart3,
+  AlertCircle,
+  FileSpreadsheet,
+  CornerDownLeft,
+  BookOpen,
+  Volume2,
+  VolumeX,
+  ThumbsUp,
+  ThumbsDown,
+  Mic,
+  MicOff,
+  Clock,
+  ArrowRight,
+  ShieldCheck,
+  Sparkle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios, { AxiosError } from "axios";
 
 // ============================================================
-// CONSTANTS
+// CONSTANTS & BASE URL
 // ============================================================
 const BASE_URL = process.env.NEXT_PUBLIC_URL;
 
@@ -48,7 +70,13 @@ interface AIQueryResponse {
   data?: {
     answer?: string;
     conversationId?: string;
-    request?: { message?: string };
+    mode?: string;
+    intent?: string;
+    responseTimeMs?: number;
+    confidence?: {
+      level?: string;
+      score?: number;
+    };
     query?: {
       intent?: string;
       sensitivity?: string;
@@ -80,6 +108,9 @@ interface ConversationMessage {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt?: string;
+  routeType?: string;
+  responseTimeMs?: number;
+  metadata?: any;
 }
 
 interface ConversationDetailResponse {
@@ -111,10 +142,14 @@ interface ChatMessage {
   content: string;
   createdAt: Date;
   isError?: boolean;
+  mode?: string;
+  responseTimeMs?: number;
+  confidence?: string;
+  liked?: boolean | null;
 }
 
 // ============================================================
-// UTILS
+// UTILITIES & HELPERS
 // ============================================================
 const buildAIHeaders = (user?: any) => {
   const compcode =
@@ -174,6 +209,17 @@ const getConversation = async (
   return response.data;
 };
 
+const deleteConversationAPI = async (
+  conversationId: string,
+  user?: any
+): Promise<{ success: boolean }> => {
+  const response = await axios.delete(
+    `${BASE_URL}/ai/conversations/${encodeURIComponent(conversationId)}`,
+    { headers: buildAIHeaders(user) }
+  );
+  return response.data;
+};
+
 const generateMessageId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -185,13 +231,13 @@ const getErrorMessage = (error: unknown): string => {
     if (axiosError.response?.status === 401)
       return "Your session has expired. Please log in again.";
     if (axiosError.response?.status === 403)
-      return "You are not authorized to access this information.";
+      return "You are not authorized to access this ERP data.";
     if (axiosError.response?.status === 404)
       return "AI API endpoint was not found.";
     if (axiosError.response?.status === 429)
-      return "Too many AI requests. Please try again shortly.";
+      return "Too many AI requests. Please wait a few moments.";
     if (axiosError.code === "ERR_NETWORK")
-      return "Unable to connect to the AI server.";
+      return "Unable to connect to the AI backend server.";
     return axiosError.message || "AI request failed.";
   }
   if (error instanceof Error) return error.message;
@@ -201,33 +247,81 @@ const getErrorMessage = (error: unknown): string => {
 const formatMessageTime = (date: Date) =>
   date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-const formatSessionDate = (dateStr?: string) => {
-  if (!dateStr) return "Active Session";
-  const d = new Date(dateStr);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString([], { day: "2-digit", month: "short" });
+const getTimeGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 };
 
 // ============================================================
-// SUGGESTION CHIPS
+// STARTER PROMPT CATEGORIES
 // ============================================================
-const SUGGESTIONS = [
-  "1600161 ki July ki attendance nikalo",
-  "Meri latest salary kya hai?",
-  "Top 10 employee salary batao",
-  "Service reminders due today",
-  "Branch wise sales report",
+const STARTER_CATEGORIES = [
+  {
+    icon: Users,
+    title: "HR & Attendance",
+    badge: "Attendance Master",
+    color: "text-blue-600 dark:text-blue-400",
+    bg: "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50",
+    prompts: [
+      "21/10/2025 ko kitne log absent the?",
+      "19001162 ki attendance details dikhao",
+      "Kaun kaun aaj leave par hai?",
+    ],
+  },
+  {
+    icon: DollarSign,
+    title: "Salary & Payroll",
+    badge: "Salary Register",
+    color: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50",
+    prompts: [
+      "19001162 ki April 2026 ki salary nikalo",
+      "Pramod Arun Palve ki designation aur CTC",
+      "Top 5 highest employee salaries",
+    ],
+  },
+  {
+    icon: Calendar,
+    title: "Employee Master & Bio",
+    badge: "Master DB",
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50",
+    prompts: [
+      "19001162 ka birthday kab aata hai?",
+      "Iska permanent address kya hai?",
+      "Employee 1600161 ka mobile aur email",
+    ],
+  },
+  {
+    icon: Car,
+    title: "Vehicles & Reminders",
+    badge: "Operations",
+    color: "text-purple-600 dark:text-purple-400",
+    bg: "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900/50",
+    prompts: [
+      "Today's service reminders due list",
+      "Pending vehicle delivery status",
+      "Upcoming customer follow-ups",
+    ],
+  },
+];
+
+// Quick follow-up contextual suggestion chips
+const QUICK_SUGGESTION_CHIPS = [
+  "Iska permanent address nikalo",
+  "Iska birthday kab aata hai?",
+  "April 2026 ki salary slip",
+  "21/10/2025 absent count",
+  "Kaun kaun aaj present hai?",
+  "Top 10 highest employee salary",
 ];
 
 // ============================================================
-// COPY BUTTON COMPONENT
+// COPY BUTTON WITH TOAST FEEDBACK
 // ============================================================
-const CopyButton = ({ text }: { text: string }) => {
+const CopyButton = ({ text, label }: { text: string; label?: string }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -244,107 +338,116 @@ const CopyButton = ({ text }: { text: string }) => {
     <button
       type="button"
       onClick={handleCopy}
-      title="Copy message"
-      className="rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity
-        text-[#9CA3AF] hover:text-[#374151] dark:hover:text-[#E5E7EB]
-        hover:bg-[#F3F4F6] dark:hover:bg-white/10"
+      title={label || "Copy to clipboard"}
+      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all
+        text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-white bg-slate-100 dark:bg-[#1e293b] hover:bg-slate-200 dark:hover:bg-[#334155] border border-slate-200 dark:border-[#334155]"
     >
       {copied ? (
-        <Check size={13} className="text-[#16A34A]" />
+        <>
+          <Check size={13} className="text-emerald-600 dark:text-emerald-400" />
+          <span className="text-emerald-600 dark:text-emerald-400 font-bold">Copied!</span>
+        </>
       ) : (
-        <Copy size={13} />
+        <>
+          <Copy size={13} />
+          {label && <span>{label}</span>}
+        </>
       )}
     </button>
   );
 };
 
 // ============================================================
-// TYPING INDICATOR DOTS
+// TEXT-TO-SPEECH (TTS) BUTTON
 // ============================================================
-const TypingDots = () => (
-  <div className="flex items-center gap-1 px-1 py-0.5">
-    {[0, 1, 2].map((i) => (
-      <span
-        key={i}
-        className="h-2 w-2 rounded-full bg-primary animate-bounce"
-        style={{ animationDelay: `${i * 0.18}s` }}
-      />
-    ))}
-  </div>
-);
+const SpeechButton = ({ text }: { text: string }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const handleSpeech = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const cleanText = text
+      .replace(/[*#`_~|]/g, " ")
+      .replace(/\n+/g, ". ")
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleSpeech}
+      title={isSpeaking ? "Stop voice reading" : "Read response out loud"}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all border ${
+        isSpeaking
+          ? "bg-primary text-white border-primary animate-pulse"
+          : "text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-white bg-slate-100 dark:bg-[#1e293b] hover:bg-slate-200 dark:hover:bg-[#334155] border-slate-200 dark:border-[#334155]"
+      }`}
+    >
+      {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+      <span>{isSpeaking ? "Speaking..." : "Listen"}</span>
+    </button>
+  );
+};
 
 // ============================================================
-// EMPTY STATE COMPONENT
+// TYPING INDICATOR WITH PULSE
 // ============================================================
-const EmptyState = ({
-  onSuggestionClick,
-}: {
-  onSuggestionClick: (s: string) => void;
-}) => (
-  <div className="flex min-h-full items-center justify-center">
-    <div className="max-w-lg text-center px-4">
-      {/* Icon */}
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-light text-primary shadow-sm">
-        <Bot size={32} />
+const TypingIndicator = () => (
+  <div className="flex items-start gap-3 my-3 animate-in fade-in-50 duration-300">
+    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-md ring-2 ring-primary/20">
+      <Bot size={18} className="animate-spin" style={{ animationDuration: "8s" }} />
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white dark:ring-[#0f172a]" />
+      </span>
+    </div>
+
+    <div className="flex flex-col gap-1 max-w-[85%]">
+      <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+        <span className="text-[#193A69] dark:text-white font-bold">AutoVyn Copilot</span>
+        <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-mono text-primary font-bold">
+          QUERYING MSSQL
+        </span>
       </div>
 
-      <h2 className="mt-4 text-xl font-bold text-text-primary">
-        How can I help you?
-      </h2>
-
-      <p className="mt-2 text-sm leading-6 text-text-secondary">
-        Ask a question about ERP data, employees, attendance, salary, or
-        service reminders. I can run queries and explain results in plain
-        language.
-      </p>
-
-      {/* Feature pills */}
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        {[
-          { icon: "📊", label: "Reports" },
-          { icon: "👤", label: "Employees" },
-          { icon: "💰", label: "Salary" },
-          { icon: "🔔", label: "Reminders" },
-          { icon: "📅", label: "Attendance" },
-        ].map((f) => (
-          <span
-            key={f.label}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border
-              bg-surface-secondary px-3 py-1 text-[11px] font-semibold text-text-secondary"
-          >
-            <span>{f.icon}</span>
-            {f.label}
-          </span>
-        ))}
-      </div>
-
-      {/* Suggestions */}
-      <div className="mt-5 flex flex-col items-center gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
-          <Sparkles size={12} />
-          Try asking
-        </p>
-        <div className="flex flex-wrap justify-center gap-2">
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onSuggestionClick(s)}
-              className="rounded-full border border-border bg-background px-3.5 py-1.5
-                text-xs text-text-secondary transition-all
-                hover:border-primary hover:bg-primary-light hover:text-primary"
-            >
-              {s}
-            </button>
+      <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-2 w-2 rounded-full bg-primary animate-bounce"
+              style={{ animationDelay: `${i * 0.18}s` }}
+            />
           ))}
         </div>
+        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 animate-pulse">
+          Analyzing database records & schema...
+        </span>
       </div>
     </div>
   </div>
 );
 
 // ============================================================
-// FORMATTED MARKDOWN RENDERER
+// FORMATTED MARKDOWN & INTERACTIVE DATA TABLE
 // ============================================================
 const renderInlineFormatting = (text: string) => {
   if (!text) return null;
@@ -353,21 +456,20 @@ const renderInlineFormatting = (text: string) => {
   return parts.map((part, idx) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={idx} className="font-bold text-text-primary">
+        <strong key={idx} className="font-bold text-[#193A69] dark:text-white">
           {part.slice(2, -2)}
         </strong>
       );
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       const val = part.slice(1, -1);
-      // Clean inline styling: if numeric or status, accent subtle badge; otherwise plain text font
       return (
-        <span
+        <code
           key={idx}
-          className="rounded bg-surface-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-text-primary border border-border/60"
+          className="rounded-md bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] px-1.5 py-0.5 font-mono text-[11px] font-bold text-primary dark:text-[#60A5FA]"
         >
           {val}
-        </span>
+        </code>
       );
     }
     return part;
@@ -375,6 +477,7 @@ const renderInlineFormatting = (text: string) => {
 };
 
 const FormattedMarkdown = ({ content }: { content: string }) => {
+  const [tableFilter, setTableFilter] = useState("");
   if (!content) return null;
 
   const lines = content.split("\n");
@@ -406,10 +509,10 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
   }
 
   return (
-    <div className="space-y-1.5 text-xs sm:text-sm leading-relaxed">
+    <div className="space-y-2 text-xs sm:text-[13px] leading-relaxed text-slate-700 dark:text-slate-200">
       {blocks.map((block, bIdx) => {
         if (block.type === "empty") {
-          return <div key={bIdx} className="h-1" />;
+          return <div key={bIdx} className="h-1.5" />;
         }
 
         if (block.type === "table") {
@@ -425,48 +528,90 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
             .map((c: string) => c.trim());
           const dataRows = cleanRows.slice(1);
 
+          const filteredDataRows = tableFilter
+            ? dataRows.filter((r: string) =>
+                r.toLowerCase().includes(tableFilter.toLowerCase())
+              )
+            : dataRows;
+
+          // Build CSV string
+          const csvContent = [
+            headerCells.join(","),
+            ...dataRows.map((r: string) =>
+              r
+                .split("|")
+                .slice(1, -1)
+                .map((c: string) => `"${c.trim().replace(/"/g, '""')}"`)
+                .join(",")
+            ),
+          ].join("\n");
+
           return (
             <div
               key={bIdx}
-              className="my-3 overflow-x-auto rounded-xl border border-border shadow-xs bg-surface"
+              className="my-3 overflow-hidden rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-sm"
             >
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-surface-secondary text-text-primary border-b border-border font-bold">
-                  <tr>
-                    {headerCells.map((cell: string, cIdx: number) => (
-                      <th
-                        key={cIdx}
-                        className="px-3.5 py-2.5 border-r last:border-r-0 border-border whitespace-nowrap font-bold text-xs uppercase tracking-wider text-text-secondary"
-                      >
-                        {renderInlineFormatting(cell)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {dataRows.map((rStr: string, rIdx: number) => {
-                    const cells = rStr
-                      .split("|")
-                      .slice(1, -1)
-                      .map((c: string) => c.trim());
-                    return (
-                      <tr
-                        key={rIdx}
-                        className="hover:bg-surface-secondary/60 transition-colors"
-                      >
-                        {cells.map((cell: string, cIdx: number) => (
-                          <td
-                            key={cIdx}
-                            className="px-3.5 py-2 border-r last:border-r-0 border-border/60 whitespace-nowrap text-text-secondary font-medium"
-                          >
-                            {renderInlineFormatting(cell)}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {/* Table header bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#1e293b] px-3.5 py-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#193A69] dark:text-white">
+                  <FileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <span>ERP Results ({dataRows.length} records)</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {dataRows.length > 4 && (
+                    <input
+                      type="text"
+                      placeholder="Filter table..."
+                      value={tableFilter}
+                      onChange={(e) => setTableFilter(e.target.value)}
+                      className="h-7 w-28 sm:w-36 rounded-md border border-slate-300 dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-[11px] text-slate-800 dark:text-white placeholder-slate-400 focus:border-primary focus:outline-none"
+                    />
+                  )}
+                  <CopyButton text={csvContent} label="Copy CSV" />
+                </div>
+              </div>
+
+              {/* Table Scroll View */}
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-[#1e293b] text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-[#334155] font-bold shadow-xs">
+                    <tr>
+                      {headerCells.map((cell: string, cIdx: number) => (
+                        <th
+                          key={cIdx}
+                          className="px-3.5 py-2.5 border-r last:border-r-0 border-slate-200 dark:border-[#334155] whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300"
+                        >
+                          {renderInlineFormatting(cell)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-[#334155]">
+                    {filteredDataRows.map((rStr: string, rIdx: number) => {
+                      const cells = rStr
+                        .split("|")
+                        .slice(1, -1)
+                        .map((c: string) => c.trim());
+                      return (
+                        <tr
+                          key={rIdx}
+                          className="hover:bg-slate-50 dark:hover:bg-[#1e293b]/60 transition-colors even:bg-slate-50/50 dark:even:bg-[#1e293b]/30"
+                        >
+                          {cells.map((cell: string, cIdx: number) => (
+                            <td
+                              key={cIdx}
+                              className="px-3.5 py-2 border-r last:border-r-0 border-slate-200/60 dark:border-[#334155]/60 whitespace-nowrap text-slate-700 dark:text-slate-300 font-medium"
+                            >
+                              {renderInlineFormatting(cell)}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         }
@@ -475,14 +620,21 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
 
         if (text.startsWith("### ")) {
           return (
-            <h3 key={bIdx} className="text-sm font-bold text-primary mt-2 mb-1">
+            <h3
+              key={bIdx}
+              className="text-sm font-bold text-primary dark:text-[#60A5FA] mt-3.5 mb-1 flex items-center gap-2"
+            >
+              <span className="h-2 w-2 rounded-full bg-primary" />
               {renderInlineFormatting(text.replace(/^###\s+/, ""))}
             </h3>
           );
         }
         if (text.startsWith("#### ")) {
           return (
-            <h4 key={bIdx} className="text-xs font-bold text-text-primary mt-2 mb-0.5">
+            <h4
+              key={bIdx}
+              className="text-xs font-bold text-[#193A69] dark:text-slate-100 mt-2.5 mb-0.5"
+            >
               {renderInlineFormatting(text.replace(/^####\s+/, ""))}
             </h4>
           );
@@ -491,9 +643,9 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
         if (text.startsWith("- ") || text.startsWith("* ") || text.startsWith("• ")) {
           const cleanText = text.replace(/^([-*•])\s+/, "");
           return (
-            <div key={bIdx} className="flex items-start gap-2 pl-1 py-0.5">
-              <span className="text-primary font-bold shrink-0 text-sm">•</span>
-              <div className="flex-1 leading-normal text-text-secondary">
+            <div key={bIdx} className="flex items-start gap-2.5 pl-1 py-0.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0 mt-2" />
+              <div className="flex-1 leading-normal text-slate-700 dark:text-slate-200">
                 {renderInlineFormatting(cleanText)}
               </div>
             </div>
@@ -503,11 +655,11 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
         if (/^\d+\.\s+/.test(text)) {
           const match = text.match(/^(\d+)\.\s+(.*)/);
           return (
-            <div key={bIdx} className="flex items-start gap-2 pl-1 py-0.5">
-              <span className="text-primary font-bold shrink-0 text-xs">
-                {match?.[1]}.
+            <div key={bIdx} className="flex items-start gap-2.5 pl-1 py-0.5">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary mt-0.5">
+                {match?.[1]}
               </span>
-              <div className="flex-1 leading-normal text-text-secondary">
+              <div className="flex-1 leading-normal text-slate-700 dark:text-slate-200">
                 {renderInlineFormatting(match?.[2] || "")}
               </div>
             </div>
@@ -515,7 +667,10 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
         }
 
         return (
-          <div key={bIdx} className="break-words leading-normal py-0.5">
+          <div
+            key={bIdx}
+            className="break-words leading-relaxed py-0.5 text-slate-700 dark:text-slate-200"
+          >
             {renderInlineFormatting(text)}
           </div>
         );
@@ -527,65 +682,126 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
 // ============================================================
 // MESSAGE BUBBLE COMPONENT
 // ============================================================
-const MessageBubble = ({ msg }: { msg: ChatMessage }) => {
+const MessageBubble = ({
+  msg,
+  onFeedback,
+}: {
+  msg: ChatMessage;
+  onFeedback?: (id: string, liked: boolean) => void;
+}) => {
   const isUser = msg.role === "user";
 
   return (
     <div
-      className={`group flex gap-2.5 sm:gap-3 ${
+      className={`group flex gap-2.5 sm:gap-3.5 transition-all my-1.5 animate-in fade-in-50 duration-300 ${
         isUser ? "justify-end" : "justify-start"
       }`}
     >
-      {/* Bot Avatar */}
+      {/* Assistant Bot Avatar */}
       {!isUser && (
-        <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-primary-light text-primary shadow-sm">
-          <Bot size={17} />
+        <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-sm ring-2 ring-primary/20 mt-0.5">
+          <Bot size={18} />
+          <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#0f172a]" />
         </div>
       )}
 
-      {/* Bubble */}
+      {/* Bubble Container */}
       <div
-        className={`relative max-w-[88%] sm:max-w-[80%] md:max-w-[75%] ${
+        className={`relative max-w-[94%] sm:max-w-[85%] md:max-w-[80%] ${
           isUser ? "items-end" : "items-start"
         } flex flex-col gap-1`}
       >
+        {/* Assistant Header Tag */}
+        {!isUser && (
+          <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+            <span className="text-[#193A69] dark:text-white font-bold">
+              AutoVyn AI
+            </span>
+
+            {msg.mode && (
+              <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-mono text-primary font-bold">
+                {msg.mode === "DATABASE" ? "⚡ DATABASE (LIVE ERP)" : msg.mode}
+              </span>
+            )}
+
+            {msg.responseTimeMs && (
+              <span className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+                <Clock size={11} />
+                {msg.responseTimeMs}ms
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Bubble Card */}
         <div
-          className={`rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-sm ${
+          className={`rounded-2xl px-4 py-3.5 shadow-sm transition-all ${
             isUser
-              ? "rounded-br-md bg-primary text-white"
+              ? "rounded-tr-xs bg-gradient-to-r from-[#193A69] via-primary to-blue-600 text-white shadow-md shadow-primary/10"
               : msg.isError
-              ? "rounded-bl-md border border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
-              : "rounded-bl-md border border-border bg-background text-text-primary"
+              ? "rounded-tl-xs border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+              : "rounded-tl-xs border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] text-slate-800 dark:text-slate-100 shadow-sm"
           }`}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words text-xs sm:text-sm leading-6">
+            <p className="whitespace-pre-wrap break-words text-xs sm:text-[13px] font-medium leading-relaxed">
               {msg.content}
             </p>
           ) : (
             <FormattedMarkdown content={msg.content} />
           )}
 
-          <div className="mt-1 flex items-center justify-end gap-1">
-            {!isUser && !msg.isError && <CopyButton text={msg.content} />}
-            <p
-              className={`text-[10px] ${
-                isUser
-                  ? "text-white/70"
-                  : msg.isError
-                  ? "text-[#EF4444]/60"
-                  : "text-text-muted"
+          {/* Action Toolbar on Bottom */}
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-[#334155]/60 pt-2 text-[11px]">
+            <div className="flex items-center gap-1.5">
+              {!isUser && !msg.isError && (
+                <>
+                  <CopyButton text={msg.content} label="Copy" />
+                  <SpeechButton text={msg.content} />
+
+                  {/* Feedback Buttons */}
+                  <button
+                    type="button"
+                    onClick={() => onFeedback && onFeedback(msg.id, true)}
+                    className={`rounded-lg p-1 transition ${
+                      msg.liked === true
+                        ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40"
+                        : "text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    }`}
+                    title="Helpful response"
+                  >
+                    <ThumbsUp size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onFeedback && onFeedback(msg.id, false)}
+                    className={`rounded-lg p-1 transition ${
+                      msg.liked === false
+                        ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40"
+                        : "text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    }`}
+                    title="Not helpful"
+                  >
+                    <ThumbsDown size={13} />
+                  </button>
+                </>
+              )}
+            </div>
+
+            <span
+              className={`text-[10px] font-medium ${
+                isUser ? "text-white/80" : "text-slate-400"
               }`}
             >
               {formatMessageTime(msg.createdAt)}
-            </p>
+            </span>
           </div>
         </div>
       </div>
 
       {/* User Avatar */}
       {isUser && (
-        <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-white shadow-sm">
+        <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] to-primary text-white shadow-sm mt-0.5">
           <User size={17} />
         </div>
       )}
@@ -594,7 +810,120 @@ const MessageBubble = ({ msg }: { msg: ChatMessage }) => {
 };
 
 // ============================================================
-// MAIN PAGE
+// EMPTY STATE (HERO VIEW)
+// ============================================================
+const EmptyState = ({
+  userName,
+  onPromptClick,
+}: {
+  userName?: string;
+  onPromptClick: (prompt: string) => void;
+}) => (
+  <div className="relative flex min-h-full flex-col items-center justify-center py-6 px-4">
+    <div className="relative z-10 w-full max-w-4xl text-center space-y-6">
+      {/* Bot Icon with Glowing Ring */}
+      <div className="relative mx-auto flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center">
+        <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-xl animate-pulse" />
+        <div className="relative flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-lg ring-4 ring-primary/10">
+          <Bot size={36} className="animate-in zoom-in-50 duration-500" />
+        </div>
+      </div>
+
+      {/* Headline & Personalized Greeting */}
+      <div className="space-y-2">
+        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-xs font-bold text-primary shadow-xs">
+          <Sparkles
+            size={14}
+            className="text-primary animate-spin"
+            style={{ animationDuration: "6s" }}
+          />
+          <span>AutoVyn AI Copilot • Live ERP Intelligence</span>
+        </div>
+
+        <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
+          {userName
+            ? `${getTimeGreeting()}, ${userName}!`
+            : "How can I help you today?"}
+        </h2>
+
+        <p className="mx-auto max-w-2xl text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Ask questions in <span className="text-primary font-bold">Hindi, English, or Hinglish</span>. 
+          I query live MSSQL tables for attendance, employee master, salary registers, vouchers, and service alerts.
+        </p>
+      </div>
+
+      {/* 4 Interactive Category Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-left pt-2">
+        {STARTER_CATEGORIES.map((cat, idx) => {
+          const Icon = cat.icon;
+          return (
+            <div
+              key={idx}
+              className="group relative overflow-hidden rounded-2xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50"
+            >
+              <div className="relative z-10 flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-xl border ${cat.bg} ${cat.color}`}
+                  >
+                    <Icon size={16} />
+                  </div>
+                  <h3 className="text-xs font-bold text-[#193A69] dark:text-white tracking-wide">
+                    {cat.title}
+                  </h3>
+                </div>
+
+                <span className="rounded-full bg-slate-100 dark:bg-[#0f172a] px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-[#334155]">
+                  {cat.badge}
+                </span>
+              </div>
+
+              <div className="relative z-10 space-y-1">
+                {cat.prompts.map((p, pIdx) => (
+                  <button
+                    key={pIdx}
+                    type="button"
+                    onClick={() => onPromptClick(p)}
+                    className="flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 transition-all hover:bg-slate-100 dark:hover:bg-[#334155] hover:text-primary dark:hover:text-white text-left group/item"
+                  >
+                    <span className="truncate">{p}</span>
+                    <ArrowRight
+                      size={12}
+                      className="opacity-0 group-hover/item:opacity-100 transition-opacity text-primary shrink-0 group-hover/item:translate-x-0.5"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Feature Capability Badges */}
+      <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2 text-[11px] text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
+          <Zap size={13} className="text-amber-500" />
+          Sub-second Execution
+        </span>
+        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
+          <ShieldCheck size={13} className="text-emerald-500" />
+          Enterprise SQL Guard
+        </span>
+        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
+          <Database size={13} className="text-blue-500" />
+          Live MSSQL Sync
+        </span>
+        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
+          <BookOpen size={13} className="text-purple-500" />
+          Multi-turn Memory
+        </span>
+      </div>
+    </div>
+  </div>
+);
+
+// ============================================================
+// MAIN PAGE COMPONENT
 // ============================================================
 export default function AIAssistantPage() {
   const user = useCurrentUser() as any;
@@ -603,6 +932,7 @@ export default function AIAssistantPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [searchFilter, setSearchFilter] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
@@ -614,10 +944,12 @@ export default function AIAssistantPage() {
     useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);
+  const [isListening, setIsListening] = useState(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // ── Helpers ──
   const updateActiveConversationId = (id: string | null) => {
@@ -626,7 +958,18 @@ export default function AIAssistantPage() {
   };
 
   const focusInput = () =>
-    window.setTimeout(() => inputRef.current?.focus(), 0);
+    window.setTimeout(() => textareaRef.current?.focus(), 50);
+
+  // ── Auto-adjust Textarea Height ──
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        140
+      )}px`;
+    }
+  }, [message]);
 
   // ── Load conversation list ──
   const loadConversations = useCallback(
@@ -684,6 +1027,8 @@ export default function AIAssistantPage() {
             role: m.role === "user" ? "user" : "assistant",
             content: m.content || "",
             createdAt: m.createdAt ? new Date(m.createdAt) : new Date(),
+            mode: m.routeType || undefined,
+            responseTimeMs: m.responseTimeMs || undefined,
           }));
         setMessages(loaded);
       }
@@ -695,6 +1040,27 @@ export default function AIAssistantPage() {
     }
   };
 
+  // ── Delete conversation ──
+  const handleDeleteConversation = async (
+    conversationId: string,
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    try {
+      await deleteConversationAPI(conversationId, user);
+      setConversations((prev) =>
+        prev.filter((c) => c.conversationId !== conversationId)
+      );
+      if (activeConversationId === conversationId) {
+        handleNewChat();
+      }
+    } catch {
+      setConversations((prev) =>
+        prev.filter((c) => c.conversationId !== conversationId)
+      );
+    }
+  };
+
   // ── New chat ──
   const handleNewChat = () => {
     updateActiveConversationId(null);
@@ -703,29 +1069,79 @@ export default function AIAssistantPage() {
     focusInput();
   };
 
-  // ── Clear messages (current session) ──
+  // ── Clear messages ──
   const handleClearMessages = () => {
     setMessages([]);
     setError(null);
   };
 
-  // ── Suggestion click ──
-  const handleSuggestionClick = (suggestion: string) => {
-    setMessage(suggestion);
+  // ── Suggestion / Prompt click ──
+  const handlePromptClick = (promptText: string) => {
+    setMessage(promptText);
     focusInput();
   };
 
-  // ── Send message ──
-  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // ── Speech to Text (Voice Input) ──
+  const toggleSpeechRecognition = () => {
+    if (typeof window === "undefined") return;
 
-    const normalizedMessage = message.trim();
-    if (!normalizedMessage || isLoading) return;
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "hi-IN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0]?.transcript || "";
+        if (transcript) {
+          setMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
+
+  // ── Feedback Handler ──
+  const handleFeedback = (id: string, liked: boolean) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, liked: m.liked === liked ? null : liked } : m
+      )
+    );
+  };
+
+  // ── Send message ──
+  const executeSend = async (rawMessage?: string) => {
+    const textToSend = (rawMessage !== undefined ? rawMessage : message).trim();
+    if (!textToSend || isLoading) return;
 
     const userMessage: ChatMessage = {
       id: generateMessageId(),
       role: "user",
-      content: normalizedMessage,
+      content: textToSend,
       createdAt: new Date(),
     };
 
@@ -737,7 +1153,7 @@ export default function AIAssistantPage() {
     try {
       const response = await queryAI(
         {
-          message: normalizedMessage,
+          message: textToSend,
           conversationId: activeConversationIdRef.current || undefined,
         },
         user
@@ -746,13 +1162,11 @@ export default function AIAssistantPage() {
       const answer = String(response.data?.answer || "").trim();
       const returnedConvId = response.data?.conversationId;
 
-      // Update conversationId if new
       if (
         returnedConvId &&
         returnedConvId !== activeConversationIdRef.current
       ) {
         updateActiveConversationId(returnedConvId);
-        // Refresh sidebar list silently
         listConversations(user)
           .then((res) => {
             if (res.success && Array.isArray(res.data)) {
@@ -769,6 +1183,9 @@ export default function AIAssistantPage() {
         role: "assistant",
         content: answer,
         createdAt: new Date(),
+        mode: response.data?.mode,
+        responseTimeMs: response.data?.responseTimeMs,
+        confidence: response.data?.confidence?.level,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -779,7 +1196,7 @@ export default function AIAssistantPage() {
       const errorMessage: ChatMessage = {
         id: generateMessageId(),
         role: "assistant",
-        content: `Sorry, I could not process that request. ${errMsg}`,
+        content: `Kshama kijiye, an error occurred while processing your request: ${errMsg}`,
         createdAt: new Date(),
         isError: true,
       };
@@ -791,30 +1208,21 @@ export default function AIAssistantPage() {
     }
   };
 
-  // ── Derived ──
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    executeSend();
+  };
+
+  // Filtered sessions
+  const filteredConversations = conversations.filter((c) =>
+    (c.title || "").toLowerCase().includes(searchFilter.toLowerCase().trim())
+  );
+
   const hasMessages = messages.length > 0;
   const isInputDisabled = isLoading || isLoadingHistory;
 
-  // Auto-close sidebar on mobile after session select
-  const handleSelectConversationMobile = (conversationId: string) => {
-    handleSelectConversation(conversationId);
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setShowHistorySidebar(false);
-    }
-  };
-
-  const handleNewChatMobile = () => {
-    handleNewChat();
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setShowHistorySidebar(false);
-    }
-  };
-
-  // ============================================================
-  // RENDER
-  // ============================================================
   return (
-    <div className="relative flex h-[calc(100vh-80px)] sm:h-[calc(100vh-112px)] w-full overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+    <div className="relative flex h-[calc(100vh-75px)] sm:h-[calc(100vh-90px)] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-md">
 
       {/* ── MOBILE BACKDROP OVERLAY ── */}
       {showHistorySidebar && (
@@ -824,175 +1232,212 @@ export default function AIAssistantPage() {
         />
       )}
 
-      {/* ── HISTORY SIDEBAR (Responsive Mobile Drawer / Desktop Inline) ── */}
+      {/* ── HISTORY SIDEBAR ── */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-white dark:bg-[#0F172A] transition-all duration-300 md:relative md:z-auto ${
+        className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#0f172a] transition-all duration-300 md:relative md:z-auto ${
           showHistorySidebar
-            ? "w-72 max-w-[80vw] md:w-64 shrink-0 translate-x-0"
+            ? "w-72 max-w-[85vw] md:w-64 shrink-0 translate-x-0"
             : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-none"
         }`}
       >
         {/* Sidebar Header */}
-        <div className="flex h-12 sm:h-14 shrink-0 items-center justify-between border-b border-border px-3.5 sm:px-4">
-          <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-text-primary">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 dark:border-[#334155] px-3.5 bg-white dark:bg-[#1e293b]">
+          <div className="flex items-center gap-2 text-xs font-bold text-[#193A69] dark:text-white tracking-wide">
             <History size={16} className="text-primary" />
             <span>Chat Sessions</span>
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Refresh button */}
             <button
               type="button"
               onClick={() => loadConversations(false)}
               disabled={isRefreshingConversations}
               title="Refresh sessions"
-              className="rounded-lg p-1.5 text-text-secondary transition
-                hover:bg-surface hover:text-text-primary disabled:opacity-50"
+              className="rounded-lg p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#334155] transition disabled:opacity-50"
             >
               <RefreshCw
                 size={14}
-                className={isRefreshingConversations ? "animate-spin" : ""}
+                className={isRefreshingConversations ? "animate-spin text-primary" : ""}
               />
             </button>
 
-            {/* New chat button */}
             <button
               type="button"
-              onClick={handleNewChatMobile}
-              title="Start New Chat"
-              className="rounded-lg p-1.5 text-primary transition hover:bg-primary-light"
+              onClick={handleNewChat}
+              title="New Chat"
+              className="rounded-lg p-1.5 text-primary hover:bg-primary/10 transition font-bold"
             >
-              <Plus size={17} />
+              <Plus size={16} />
             </button>
           </div>
         </div>
 
-        {/* Sessions List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-
-          {/* New Conversation button */}
+        {/* New Chat Button & Search */}
+        <div className="p-2.5 space-y-2 border-b border-slate-200 dark:border-[#334155]">
           <button
             type="button"
-            onClick={handleNewChatMobile}
-            className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition ${
+            onClick={handleNewChat}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all shadow-xs ${
               !activeConversationId
                 ? "bg-primary text-white shadow-sm"
-                : "text-text-secondary hover:bg-surface hover:text-text-primary"
+                : "bg-white dark:bg-[#1e293b] hover:bg-slate-100 dark:hover:bg-[#334155] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-[#334155]"
             }`}
           >
             <Plus size={15} />
-            <span>New Conversation</span>
+            <span>New Chat</span>
           </button>
 
-          <div className="my-2 border-t border-border/60" />
-
-          {/* Conversation list */}
-          {isRefreshingConversations ? (
-            <div className="flex items-center justify-center py-6 gap-2 text-xs text-text-muted">
-              <Loader2 size={14} className="animate-spin text-primary" />
-              <span>Loading...</span>
+          {conversations.length > 3 && (
+            <div className="relative">
+              <Search
+                size={13}
+                className="absolute left-2.5 top-2.5 text-slate-400 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Search chats..."
+                className="w-full rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] pl-8 pr-2.5 py-1.5 text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:border-primary focus:outline-none"
+              />
             </div>
-          ) : conversations.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
-              <MessageSquare size={28} className="text-text-muted opacity-40" />
-              <p className="text-xs text-text-muted">No past sessions found.</p>
-              <p className="text-[11px] text-text-muted opacity-70">
-                Start a new conversation!
+          )}
+        </div>
+
+        {/* Sessions List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {isRefreshingConversations ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-xs text-slate-500">
+              <Loader2 size={15} className="animate-spin text-primary" />
+              <span>Loading sessions...</span>
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-3 py-10 text-center">
+              <MessageSquare size={24} className="text-slate-400 opacity-40" />
+              <p className="text-xs font-medium text-slate-500">
+                {searchFilter ? "No matching chats" : "No past sessions yet"}
               </p>
             </div>
           ) : (
-            conversations.map((conv) => {
+            filteredConversations.map((conv) => {
               const cid = conv.conversationId;
               const active = cid === activeConversationId;
               return (
-                <button
+                <div
                   key={cid}
-                  type="button"
-                  onClick={() => handleSelectConversationMobile(cid)}
-                  className={`flex w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left transition ${
+                  onClick={() => {
+                    handleSelectConversation(cid);
+                    if (typeof window !== "undefined" && window.innerWidth < 768) {
+                      setShowHistorySidebar(false);
+                    }
+                  }}
+                  className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer border ${
                     active
-                      ? "bg-primary-light text-primary font-semibold shadow-sm border border-primary/20"
-                      : "text-text-secondary hover:bg-surface hover:text-text-primary"
+                      ? "bg-primary/10 dark:bg-primary/20 text-primary font-bold border-primary/30 shadow-xs"
+                      : "border-transparent text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0 pr-1">
                     <MessageSquare
                       size={13}
-                      className={`shrink-0 ${active ? "text-primary" : "text-text-muted"}`}
+                      className={`shrink-0 ${
+                        active ? "text-primary" : "text-slate-400 group-hover:text-slate-600"
+                      }`}
                     />
-                    <span className="truncate text-xs">
-                      {conv.title || "Untitled Session"}
+                    <span className="truncate text-xs font-medium">
+                      {conv.title || "ERP Query Session"}
                     </span>
                   </div>
-                  <span className="pl-5 text-[10px] text-text-muted">
-                    {formatSessionDate(conv.lastMessageAt)}
-                  </span>
-                </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteConversation(cid, e)}
+                    title="Delete session"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-200 dark:hover:bg-[#334155]"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               );
             })
           )}
         </div>
 
         {/* Sidebar Footer */}
-        <div className="shrink-0 border-t border-border px-4 py-2.5">
-          <p className="text-[10px] text-text-muted text-center">
-            {conversations.length} session
-            {conversations.length !== 1 ? "s" : ""}
-          </p>
+        <div className="shrink-0 border-t border-slate-200 dark:border-[#334155] p-2.5 bg-white dark:bg-[#1e293b] space-y-1.5">
+          <Link
+            href="/autovyn/ai/knowledge"
+            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#334155] hover:text-primary transition"
+          >
+            <div className="flex items-center gap-2">
+              <Database size={13} className="text-primary" />
+              <span>Knowledge Base</span>
+            </div>
+            <ChevronRight size={13} className="text-slate-400" />
+          </Link>
+
+          <div className="flex items-center justify-between px-2.5 text-[10px] text-slate-500">
+            <span>{conversations.length} sessions</span>
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Live ERP
+            </span>
+          </div>
         </div>
       </div>
 
       {/* ── MAIN CHAT AREA ── */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0 bg-[#f8fafc] dark:bg-[#0f172a]">
 
-        {/* ── Top Header ── */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-3 sm:px-4 py-2.5 sm:py-3 bg-surface">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-
+        {/* ── Top Header Bar ── */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-[#334155] px-4 sm:px-6 py-3 bg-white dark:bg-[#1e293b]">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Sidebar toggle */}
             <button
               type="button"
               onClick={() => setShowHistorySidebar(!showHistorySidebar)}
-              className="rounded-lg border border-border p-1.5 text-text-secondary transition
-                hover:bg-surface-secondary hover:text-text-primary shrink-0"
-              title={showHistorySidebar ? "Hide Sessions" : "Show Sessions"}
+              className="rounded-xl border border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#0f172a] p-2 text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-[#334155] shrink-0 shadow-xs"
+              title={showHistorySidebar ? "Collapse Sidebar" : "Expand Sidebar"}
             >
               {showHistorySidebar ? (
-                <ChevronLeft size={17} />
+                <ChevronLeft size={16} />
               ) : (
-                <ChevronRight size={17} />
+                <ChevronRight size={16} />
               )}
             </button>
 
-            {/* Bot icon + title */}
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary shadow-sm">
-              <Bot size={18} className="sm:hidden" />
-              <Bot size={20} className="hidden sm:block" />
+            {/* AI Status Avatar */}
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-sm ring-2 ring-primary/20">
+              <Bot size={18} />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1e293b] animate-pulse" />
             </div>
 
             <div className="min-w-0">
-              <h1 className="font-bold text-text-primary text-xs sm:text-base leading-tight truncate">
-                ERP AI Assistant
-              </h1>
-              <p className="text-[10px] sm:text-[11px] text-text-muted leading-tight truncate">
+              <div className="flex items-center gap-2">
+                <h1 className="font-extrabold text-[#193A69] dark:text-white text-xs sm:text-sm leading-tight truncate tracking-wide">
+                  AutoVyn Copilot Pro
+                </h1>
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ERP DB Connected
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 leading-tight truncate">
                 {activeConversationId
-                  ? `Session: ${activeConversationId.slice(0, 12)}...`
-                  : "Ask questions about ERP data & reports."}
+                  ? `Active Session • ID: ${activeConversationId.slice(0, 14)}...`
+                  : "Attendance, Salary Slip, Employee Bio, and Vouchers"}
               </p>
             </div>
           </div>
 
-          {/* Header actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Header Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
             {hasMessages && (
               <button
                 type="button"
                 onClick={handleClearMessages}
                 title="Clear current messages"
-                className="flex items-center gap-1.5 rounded-lg border border-border px-2 sm:px-2.5 py-1.5
-                  text-[11px] font-semibold text-text-secondary transition
-                  hover:border-[#FECACA] hover:bg-[#FEF2F2] hover:text-[#B91C1C]
-                  dark:hover:border-red-900/40 dark:hover:bg-red-950/20 dark:hover:text-red-400"
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 shadow-xs"
               >
                 <Trash2 size={13} />
                 <span className="hidden sm:inline">Clear</span>
@@ -1004,55 +1449,52 @@ export default function AIAssistantPage() {
               variant="outline"
               size="sm"
               onClick={handleNewChat}
-             
+              className="rounded-xl border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#193A69] dark:text-white hover:bg-slate-50 dark:hover:bg-[#334155] font-bold shadow-xs"
             >
-              <Plus size={14} className="sm:mr-1" />
+              <Plus size={14} className="sm:mr-1 text-primary" />
               <span className="hidden sm:inline">New Chat</span>
             </Button>
           </div>
         </div>
 
-        {/* ── Messages Feed ── */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+        {/* ── Chat Messages Feed ── */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {isLoadingHistory ? (
-            <div className="flex h-full items-center justify-center gap-3 text-xs sm:text-sm text-text-muted">
-              <Loader2 size={20} className="animate-spin text-primary" />
+            <div className="flex h-full items-center justify-center gap-3 text-xs sm:text-sm text-slate-500">
+              <Loader2 size={22} className="animate-spin text-primary" />
               <span>Loading conversation history...</span>
             </div>
           ) : !hasMessages ? (
-            <EmptyState onSuggestionClick={handleSuggestionClick} />
+            <EmptyState
+              userName={user?.name || user?.userName}
+              onPromptClick={handlePromptClick}
+            />
           ) : (
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:gap-4">
-
-              {/* Date separator for first message */}
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+              {/* Date Separator */}
               <div className="flex items-center gap-3 my-1">
-                <div className="flex-1 border-t border-border" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted px-2">
+                <div className="flex-1 border-t border-slate-200 dark:border-[#334155]" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-0.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155]">
                   {messages[0]?.createdAt.toLocaleDateString([], {
                     weekday: "short",
                     day: "numeric",
                     month: "short",
                   })}
                 </span>
-                <div className="flex-1 border-t border-border" />
+                <div className="flex-1 border-t border-slate-200 dark:border-[#334155]" />
               </div>
 
-              {/* Messages */}
+              {/* Message List */}
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} msg={msg} />
+                <MessageBubble
+                  key={msg.id}
+                  msg={msg}
+                  onFeedback={handleFeedback}
+                />
               ))}
 
-              {/* Typing indicator */}
-              {isLoading && (
-                <div className="flex justify-start gap-2.5 sm:gap-3">
-                  <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-primary-light text-primary shadow-sm">
-                    <Bot size={16} />
-                  </div>
-                  <div className="flex items-center rounded-2xl rounded-bl-md border border-border bg-background px-3.5 py-2.5 sm:px-4 sm:py-3">
-                    <TypingDots />
-                  </div>
-                </div>
-              )}
+              {/* Typing Shimmer Indicator */}
+              {isLoading && <TypingIndicator />}
 
               <div ref={messagesEndRef} />
             </div>
@@ -1061,87 +1503,112 @@ export default function AIAssistantPage() {
 
         {/* ── Error Banner ── */}
         {error && (
-          <div className="shrink-0 flex items-center justify-between gap-3
-            border-t border-[#FECACA] bg-[#FEF2F2] px-3 sm:px-4 py-2
-            dark:border-red-900/50 dark:bg-red-950/20">
-            <p className="text-[11px] sm:text-xs text-[#B91C1C] dark:text-red-400 flex-1 min-w-0 truncate">
-              ⚠️ {error}
-            </p>
+          <div className="shrink-0 flex items-center justify-between gap-3 border-t border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 px-4 py-2 text-xs text-rose-700 dark:text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={15} className="shrink-0 text-rose-600" />
+              <span className="font-semibold">{error}</span>
+            </div>
             <button
               type="button"
               onClick={() => setError(null)}
-              className="shrink-0 text-[#B91C1C] dark:text-red-400 hover:opacity-70 text-sm font-bold"
+              className="text-rose-700 hover:text-rose-900 font-bold text-sm"
             >
               ×
             </button>
           </div>
         )}
 
-        {/* ── Input Form ── */}
+        {/* ── Suggestion Chips Bar ── */}
+        {hasMessages && (
+          <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none border-t border-slate-200 dark:border-[#334155] bg-white/70 dark:bg-[#1e293b]/70 backdrop-blur-xs">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase shrink-0">
+              Suggestions:
+            </span>
+            {QUICK_SUGGESTION_CHIPS.map((chip, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handlePromptClick(chip)}
+                className="shrink-0 rounded-full bg-slate-100 dark:bg-[#0f172a] hover:bg-primary/10 dark:hover:bg-primary/20 border border-slate-200 dark:border-[#334155] hover:border-primary/40 px-3 py-1 text-[11px] text-slate-700 dark:text-slate-300 hover:text-primary transition font-medium shadow-xs"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Chat Input Dock ── */}
         <form
-          onSubmit={sendMessage}
-          className="shrink-0 border-t border-border bg-surface p-2.5 sm:p-4"
+          onSubmit={handleFormSubmit}
+          className="shrink-0 border-t border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] p-3 sm:p-4 shadow-md"
         >
           <div className="mx-auto flex w-full max-w-4xl items-end gap-2 sm:gap-3">
-
-            {/* Input wrapper */}
-            <div className="relative flex-1">
-              <Input
-                ref={inputRef}
+            {/* Input Capsule */}
+            <div className="relative flex-1 rounded-2xl border border-slate-300 dark:border-[#334155] bg-slate-50 dark:bg-[#0f172a] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs">
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={message}
                 onChange={(e) => {
                   setMessage(e.target.value);
                   if (error) setError(null);
                 }}
                 onKeyDown={(e) => {
-                  // Ctrl+Enter or Cmd+Enter to send
-                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    const form = e.currentTarget.closest("form");
-                    if (form)
-                      form.dispatchEvent(
-                        new Event("submit", {
-                          cancelable: true,
-                          bubbles: true,
-                        })
-                      );
+                    executeSend();
                   }
                 }}
-                placeholder="Ask your ERP question..."
+                placeholder="Ask about attendance, salaries, employee biodata or service reminders..."
                 disabled={isInputDisabled}
-                autoComplete="off"
-                className="pr-10 text-xs sm:text-sm"
+                className="w-full resize-none bg-transparent px-4 py-3 text-xs sm:text-[13px] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none scrollbar-none max-h-36 min-h-[44px]"
               />
-              {/* Character count hint */}
-              {message.length > 200 && (
-                <span className="absolute right-3 bottom-2 text-[10px] text-text-muted pointer-events-none">
+
+              {/* Character count */}
+              {message.length > 150 && (
+                <span className="absolute right-3.5 bottom-2 text-[10px] text-slate-400 pointer-events-none font-mono">
                   {message.length}
                 </span>
               )}
             </div>
 
-            {/* Send button */}
-            <Button
+            {/* Voice Input Button */}
+            <button
+              type="button"
+              onClick={toggleSpeechRecognition}
+              title={isListening ? "Stop voice input" : "Speak voice query (Hindi/English)"}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-all shadow-xs ${
+                isListening
+                  ? "bg-rose-600 text-white border-rose-500 animate-pulse ring-4 ring-rose-500/20"
+                  : "bg-slate-100 dark:bg-[#0f172a] hover:bg-slate-200 dark:hover:bg-[#334155] text-slate-600 dark:text-slate-300 hover:text-[#193A69] dark:hover:text-white border-slate-200 dark:border-[#334155]"
+              }`}
+            >
+              {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+
+            {/* Send Button */}
+            <button
               type="submit"
-              size="icon"
-              variant="save"
-              aria-label="Send message"
               disabled={isInputDisabled || !message.trim()}
-              className="shrink-0 h-9 w-9 sm:h-10 sm:w-10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-[#193A69] via-primary to-blue-600 text-white shadow-md shadow-primary/20 transition-all hover:shadow-lg active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
             >
               {isLoading ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={18} className="animate-spin" />
               ) : (
-                <Send size={16} />
+                <Send size={18} />
               )}
-            </Button>
+            </button>
           </div>
 
-          {/* Footer hint */}
-          <p className="mx-auto mt-1.5 sm:mt-2 w-full max-w-4xl text-center text-[10px] sm:text-[11px] text-text-muted">
-            AI can make mistakes. Verify important ERP and financial info.{" "}
-           
-          </p>
+          {/* Footer Shortcuts & Attribution */}
+          <div className="mx-auto mt-2 flex w-full max-w-4xl items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1">
+            <span>
+              Press <kbd className="rounded border border-slate-200 dark:border-[#334155] bg-slate-100 dark:bg-[#0f172a] px-1 py-0.5 font-mono text-slate-600 dark:text-slate-300">Enter ↵</kbd> to send • <kbd className="rounded border border-slate-200 dark:border-[#334155] bg-slate-100 dark:bg-[#0f172a] px-1 py-0.5 font-mono text-slate-600 dark:text-slate-300">Shift + Enter</kbd> for new line
+            </span>
+            <span className="hidden sm:inline font-semibold">
+              AutoVyn AI Copilot • Enterprise Live Data
+            </span>
+          </div>
         </form>
       </div>
     </div>

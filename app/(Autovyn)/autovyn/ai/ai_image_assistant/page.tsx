@@ -1,0 +1,766 @@
+"use client";
+
+import { useState, useRef, ChangeEvent, DragEvent, useEffect } from "react";
+import {
+  Camera,
+  Upload,
+  Sparkles,
+  Gauge,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  HelpCircle,
+  RefreshCw,
+  Clock,
+  Thermometer,
+  Compass,
+  ArrowRight,
+  Info,
+  ShieldCheck,
+  FileImage,
+  Loader2,
+  Eye,
+  SlidersHorizontal,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useCurrentUser } from "@/app/hooks/use-current-user";
+import axios, { AxiosError } from "axios";
+
+// =============================================================================
+// TYPES & INTERFACES
+// =============================================================================
+
+const BASE_URL = process.env.NEXT_PUBLIC_URL;
+
+interface SourceReading {
+  value: number | null;
+  unit: "KM" | "MILES" | "UNKNOWN";
+  rawText?: string | null;
+  unitEvidence?: string | null;
+}
+
+interface NormalizedReading {
+  value: number | null;
+  unit: "KM";
+  conversionApplied: boolean;
+  conversionFactor?: number | null;
+}
+
+interface OdometerReading {
+  value: number | null;
+  unit: "KM" | "MILES" | "UNKNOWN";
+  formattedValue: string | null;
+  rawText?: string | null;
+  normalizedKMValue?: number | null;
+  unitEvidence?: string | null;
+}
+
+interface OtherReading {
+  type: "SPEED" | "TRIP" | "TIME" | "TEMPERATURE" | "RANGE" | "OTHER";
+  value: string | number;
+  unit: string | null;
+  unitEvidence?: string | null;
+}
+
+interface QualityInfo {
+  imageClarity?: "GOOD" | "ACCEPTABLE" | "POOR";
+  overall?: "GOOD" | "ACCEPTABLE" | "POOR";
+  blur: "LOW" | "MEDIUM" | "HIGH";
+  dashboardVisible?: boolean;
+  glare?: "LOW" | "MEDIUM" | "HIGH";
+  readingVisible?: boolean;
+}
+
+interface OdometerEvidence {
+  readingVisible: boolean;
+  cumulativeReadingIdentified: boolean;
+  associatedUnitVisible: boolean;
+  regionDescription?: string | null;
+}
+
+interface OdometerReadability {
+  digitsVisible: boolean;
+  digitsReadable: boolean;
+  unitReadable: boolean;
+}
+
+interface ERPValidation {
+  previousReading: number;
+  currentReading: number;
+  difference: number;
+  status: "PASS" | "SUSPICIOUS_READING" | "REVIEW_RECOMMENDED";
+  message: string;
+}
+
+interface OdometerApiResponse {
+  success: boolean;
+  type?: string;
+  status?: string;
+  source?: SourceReading | null;
+  normalized?: NormalizedReading | null;
+  odometer?: OdometerReading | null;
+  displayType?: string;
+  confidence?: {
+    reading: number | null;
+    unit: number | null;
+    classification: number;
+  };
+  requiresManualReview?: boolean;
+  reviewReason?: string | null;
+  message?: string;
+  quality?: QualityInfo;
+  odometerEvidence?: OdometerEvidence;
+  odometerReadability?: OdometerReadability;
+  otherReadings?: OtherReading[];
+  erpValidation?: ERPValidation | null;
+  latencyMs?: number;
+  modelUsed?: string;
+  debug?: Record<string, unknown>;
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
+export default function AIImageAssistantPage() {
+  const user = useCurrentUser();
+
+  // State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previousKm, setPreviousKm] = useState<string>("");
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingStage, setLoadingStage] = useState<string>("");
+  const [result, setResult] = useState<OdometerApiResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Clean up object URLs to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  // Dynamic loading stage text transitions
+  useEffect(() => {
+    if (!loading) return;
+    const stages = [
+      "Uploading image...",
+      "Analyzing dashboard cluster...",
+      "Detecting mechanical/digital digits...",
+      "Filtering out trip meters & speed...",
+      "Validating reading & unit...",
+    ];
+    let idx = 0;
+    setLoadingStage(stages[0]);
+
+    const interval = setInterval(() => {
+      idx = (idx + 1) % stages.length;
+      setLoadingStage(stages[idx]);
+    }, 1200);
+
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  // File selection & preview
+  const handleFileChange = (file: File) => {
+    setErrorMessage(null);
+    setResult(null);
+
+    // Validate type
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      setErrorMessage("Please upload a valid JPEG, PNG, or WebP image.");
+      return;
+    }
+
+    // Validate size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage("Image file size is too large. Maximum allowed size is 10MB.");
+      return;
+    }
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+
+    // Auto-analyze once file is selected
+    executeAnalysis(file, previousKm);
+  };
+
+  const onFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileChange(e.target.files[0]);
+    }
+  };
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileChange(e.dataTransfer.files[0]);
+    }
+  };
+
+  // Trigger analysis API
+  const executeAnalysis = async (fileToAnalyze?: File, prevReading?: string) => {
+    const file = fileToAnalyze || selectedFile;
+    if (!file) {
+      setErrorMessage("Please select an image first.");
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const prevVal = prevReading !== undefined ? prevReading : previousKm;
+      if (prevVal && prevVal.trim()) {
+        formData.append("previousOdometer", prevVal.trim());
+      }
+
+      const compcode =
+        user?.Comp_Code ||
+        user?.compcode ||
+        user?.CompCode ||
+        user?.branch ||
+        "";
+      const token = user?.token || user?.email || "";
+      const authHeader = token
+        ? String(token).startsWith("Bearer ")
+          ? String(token)
+          : `Bearer ${token}`
+        : "";
+
+      const response = await axios.post<OdometerApiResponse>(
+        `${BASE_URL}/ai/image/odometer`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            compcode: String(compcode || ""),
+            authorization: authHeader,
+          },
+        }
+      );
+
+      setResult(response.data);
+    } catch (err: unknown) {
+      console.error("Analysis error:", err);
+      if (axios.isAxiosError(err)) {
+        const axiosErr = err as AxiosError<{ message?: string; status?: string }>;
+        setErrorMessage(
+          axiosErr.response?.data?.message ||
+            axiosErr.message ||
+            "Unable to analyze image. Please check your network connection."
+        );
+      } else if (err instanceof Error) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    setResult(null);
+    setErrorMessage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Display badge helpers
+  const getStatusBadge = (res?: OdometerApiResponse | null) => {
+    if (!res) return null;
+    const isVerified = (
+      res.status === "VERIFIED" &&
+      res.requiresManualReview !== true &&
+      res.normalized?.value != null
+    );
+
+    if (isVerified) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          Verified Reading
+        </span>
+      );
+    }
+
+    if (res.status === "INVALID_UNIT_MILES") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+          <AlertCircle className="w-3.5 h-3.5" />
+          Miles Not Supported
+        </span>
+      );
+    }
+
+    if (res.status === "UNIT_NOT_CONFIRMED") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+          <HelpCircle className="w-3.5 h-3.5" />
+          Unit Not Confirmed
+        </span>
+      );
+    }
+
+    if (res.status === "NO_ODOMETER_DETECTED") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20">
+          <AlertCircle className="w-3.5 h-3.5" />
+          No Odometer Detected
+        </span>
+      );
+    }
+
+    if (res.status === "MULTIPLE_ODOMETERS_DETECTED") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+          <AlertCircle className="w-3.5 h-3.5" />
+          Multiple Dashboards
+        </span>
+      );
+    }
+
+    if (res.status === "SUSPICIOUS_READING") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+          <AlertCircle className="w-3.5 h-3.5" />
+          Suspicious Reading
+        </span>
+      );
+    }
+
+    if (res.status === "REVIEW_RECOMMENDED") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Review Recommended
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+        <AlertTriangle className="w-3.5 h-3.5" />
+        Review Required
+      </span>
+    );
+  };
+
+  const formatDisplayType = (dt?: string) => {
+    switch (dt) {
+      case "MECHANICAL_ROLLER":
+        return "Mechanical Roller Odometer";
+      case "DIGITAL_LCD":
+        return "Digital LCD Display";
+      case "DIGITAL_CLUSTER":
+        return "Digital Instrument Cluster";
+      case "ANALOG_DIGITAL_MIXED":
+        return "Analog-Digital Mixed Cluster";
+      default:
+        return dt || "Vehicle Dashboard";
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/60 dark:from-slate-950 dark:to-slate-900 text-slate-900 dark:text-slate-100 p-4 md:p-8">
+      {/* HEADER */}
+      <div className="max-w-6xl mx-auto mb-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="p-2 bg-blue-600/10 dark:bg-blue-500/20 rounded-xl text-blue-600 dark:text-blue-400">
+                <Gauge className="w-6 h-6" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
+                AI Image Assistant
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Vision AI
+              </span>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Upload a vehicle dashboard photo to automatically detect and extract the odometer reading.
+            </p>
+          </div>
+
+          {selectedFile && (
+            <Button
+              onClick={handleReset}
+              variant="outline"
+              size="sm"
+              className="border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Upload Another Image
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* MAIN CONTAINER */}
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT COLUMN: UPLOAD & PREVIEW */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* UPLOAD BOX */}
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => !loading && fileInputRef.current?.click()}
+            className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-6 md:p-8 transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] text-center overflow-hidden bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm ${
+              isDragging
+                ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 scale-[1.01]"
+                : "border-slate-300 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/5"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/jpg"
+              className="hidden"
+              onChange={onFileInputChange}
+              disabled={loading}
+            />
+
+            {previewUrl ? (
+              <div className="relative w-full flex flex-col items-center">
+                <div className="relative rounded-xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-800 max-h-[340px] w-full bg-slate-950 flex items-center justify-center">
+                  <img
+                    src={previewUrl}
+                    alt="Dashboard Preview"
+                    className="max-h-[340px] w-auto object-contain rounded-xl"
+                  />
+                  {loading && (
+                    <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4">
+                      <Loader2 className="w-8 h-8 animate-spin text-blue-400 mb-3" />
+                      <p className="text-sm font-medium tracking-wide animate-pulse">{loadingStage}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between w-full px-1 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="truncate max-w-[200px]">{selectedFile?.name}</span>
+                  <span>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` : ""}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center space-y-4 py-6">
+                <div className="p-4 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-2xl shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <Camera className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-semibold text-base text-slate-800 dark:text-slate-200">
+                    Click to upload or drag & drop image
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Supports JPEG, PNG, and WebP (up to 10MB)
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                  Auto-detects mechanical & digital odometers
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* OPTIONAL PREVIOUS READING CARD */}
+          <div className="p-4 bg-white/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl backdrop-blur-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-blue-500" />
+                Previous ERP Odometer (Optional)
+              </label>
+              <span className="text-[11px] text-slate-400">Validates for suspicious values</span>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                placeholder="e.g. 198420"
+                value={previousKm}
+                onChange={(e) => setPreviousKm(e.target.value)}
+                disabled={loading}
+                className="bg-slate-50/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-sm"
+              />
+              {selectedFile && !loading && (
+                <Button
+                  onClick={() => executeAnalysis(selectedFile, previousKm)}
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                >
+                  Re-Analyze
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: ANALYSIS RESULTS */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* ERROR STATE */}
+          {errorMessage && (
+            <div className="p-5 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-start gap-3.5 text-rose-800 dark:text-rose-200">
+              <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm">Extraction Notice</h4>
+                <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">{errorMessage}</p>
+              </div>
+            </div>
+          )}
+
+          {/* MAIN RESULT CARD */}
+          {result && (
+            <div className="space-y-6">
+              {/* PRIMARY DISPLAY CARD */}
+              <div className="p-6 md:p-8 bg-gradient-to-br from-white via-white to-blue-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/20 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm space-y-6 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <Gauge className="w-4 h-4" />
+                    Odometer Extraction Result
+                  </span>
+                  {getStatusBadge(result)}
+                </div>
+
+                {/* DYNAMIC VALUE RENDERING - NEVER SHOW FALSE 0 KM */}
+                <div className="py-2">
+                  {result.status === "VERIFIED" && result.normalized?.value != null ? (
+                    <div>
+                      <div className="text-4xl md:text-5xl font-extrabold tracking-tight font-mono text-slate-900 dark:text-white">
+                        {result.normalized.value.toLocaleString("en-IN")} KM
+                      </div>
+                    </div>
+                  ) : result.status === "INVALID_UNIT_MILES" ? (
+                    <div className="space-y-3">
+                      <div className="text-2xl md:text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                        MILES READING NOT ALLOWED
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        {result.message || result.reviewReason || "Odometer reading is in Miles. AutoVyn ERP accepts only KM (Kilometers). Please upload a valid vehicle dashboard image with a KM reading."}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Detected: <strong className="text-slate-800 dark:text-slate-200">{result.source?.rawText || result.source?.value || "N/A"} MILES</strong> (Auto-conversion to KM is disabled).
+                      </p>
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-800 dark:text-rose-300"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                        Upload KM Meter Image
+                      </Button>
+                    </div>
+                  ) : result.status === "UNIT_NOT_CONFIRMED" ? (
+                    <div className="space-y-2">
+                      <div className="text-xl md:text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
+                        Reading detected but unit could not be confirmed.
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Detected reading: <strong className="text-slate-800 dark:text-slate-200">{result.source?.rawText || result.source?.value || "N/A"}</strong> (Unit Unknown). Not assumed to be KM.
+                      </p>
+                    </div>
+                  ) : result.status === "NO_ODOMETER_DETECTED" ? (
+                    <div className="space-y-2">
+                      <div className="text-2xl md:text-3xl font-bold tracking-tight text-slate-700 dark:text-slate-300">
+                        NO ODOMETER DETECTED
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        No vehicle odometer was detected in this image. Please upload a clear photo of the dashboard.
+                      </p>
+                    </div>
+                  ) : result.status === "MULTIPLE_ODOMETERS_DETECTED" ? (
+                    <div className="space-y-2">
+                      <div className="text-2xl md:text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                        MULTIPLE DASHBOARDS DETECTED
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Multiple conflicting odometer displays were detected. Please upload an image of a single vehicle dashboard.
+                      </p>
+                    </div>
+                  ) : result.status === "REVIEW_RECOMMENDED" && result.normalized?.value != null ? (
+                    <div>
+                      <div className="text-4xl md:text-5xl font-extrabold tracking-tight font-mono text-amber-600 dark:text-amber-400">
+                        {result.normalized.value.toLocaleString("en-IN")} KM
+                      </div>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                        {result.reviewReason || "Moderate clarity. Please verify digits before saving."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-2xl md:text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
+                        IMAGE UNCLEAR / RE-UPLOAD REQUIRED
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        {result.message || result.reviewReason || "The odometer reading is not clearly readable or the photo was taken from too far. Please upload a clear, closeup photo of the odometer display."}
+                      </p>
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                        Upload Clear / Closer Photo
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* METADATA PILLS */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+                  <div className="p-3 bg-slate-50/80 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Display Type</p>
+                    <p className="font-medium text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+                      {formatDisplayType(result.displayType)}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50/80 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Confidence</p>
+                    <p className={`font-medium mt-0.5 ${
+                      result.status === "VERIFIED" && (result.confidence?.reading ?? 0) >= 0.85
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : result.status === "REVIEW_RECOMMENDED" && (result.confidence?.reading ?? 0) >= 0.6
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      {result.status === "VERIFIED" && typeof result.confidence?.reading === "number" && result.confidence.reading > 0
+                        ? `${Math.round(result.confidence.reading * 100)}%`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50/80 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 col-span-2 md:col-span-1">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Latency</p>
+                    <p className="font-medium text-slate-800 dark:text-slate-200 mt-0.5">
+                      {result.latencyMs ? `${(result.latencyMs / 1000).toFixed(2)}s` : "< 2s"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ERP COMPARISON VALIDATION (IF PREVIOUS KM WAS GIVEN) */}
+              {result.erpValidation && (
+                <div className={`p-5 rounded-2xl border backdrop-blur-sm ${
+                  result.erpValidation.status === "PASS"
+                    ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50"
+                    : "bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className={`w-5 h-5 shrink-0 mt-0.5 ${
+                      result.erpValidation.status === "PASS" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                    }`} />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                          ERP History Validation
+                        </h4>
+                        <span className={`text-xs font-semibold ${
+                          result.erpValidation.status === "PASS" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                        }`}>
+                          {result.erpValidation.status === "PASS" ? "Consistent (+)" : "Discrepancy"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        {result.erpValidation.message}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 pt-2 text-[11px]">
+                        <div>
+                          <span className="text-slate-400">Previous: </span>
+                          <strong className="text-slate-700 dark:text-slate-300">
+                            {result.erpValidation.previousReading.toLocaleString("en-IN")}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Current: </span>
+                          <strong className="text-slate-700 dark:text-slate-300">
+                            {result.erpValidation.currentReading.toLocaleString("en-IN")}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Difference: </span>
+                          <strong className="text-blue-600 dark:text-blue-400">
+                            +{result.erpValidation.difference.toLocaleString("en-IN")}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* EMPTY / INITIAL STATE GUIDE */}
+          {!result && !loading && !errorMessage && (
+            <div className="p-6 md:p-8 bg-white/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/60 rounded-3xl space-y-6">
+              <h3 className="font-semibold text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-blue-500" />
+                Supported Vision Capabilities
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-slate-600 dark:text-slate-400">
+                <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">Mechanical Rollers</p>
+                  <p className="text-[11px] text-slate-500">
+                    Extracts rolling numerical digits and detects colored decimal/tenth units.
+                  </p>
+                </div>
+                <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">Digital LCD & Clusters</p>
+                  <p className="text-[11px] text-slate-500">
+                    Parses 7-segment and TFT digital screens, isolating cumulative distance.
+                  </p>
+                </div>
+                <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">Trip & Speed Rejection</p>
+                  <p className="text-[11px] text-slate-500">
+                    Strictly isolates Trip A/B, km/h speeds, and clocks from the main mileage.
+                  </p>
+                </div>
+                <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">Multi-Meter & Quality Check</p>
+                  <p className="text-[11px] text-slate-500">
+                    Flags multiple dashboards or blurred photos to prevent data inaccuracy.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
