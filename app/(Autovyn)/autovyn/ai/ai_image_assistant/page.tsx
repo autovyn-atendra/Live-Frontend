@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, ChangeEvent, DragEvent, useEffect } from "react";
+import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from "react";
 import {
   Camera,
   Upload,
@@ -21,6 +21,13 @@ import {
   Loader2,
   Eye,
   SlidersHorizontal,
+  SwitchCamera,
+  Zap,
+  ZapOff,
+  X,
+  Scan,
+  Maximize2,
+  Crop,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,7 +143,22 @@ export default function AIImageAssistantPage() {
   const [result, setResult] = useState<OdometerApiResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Camera States
+  const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
+  const [isCameraLoading, setIsCameraLoading] = useState<boolean>(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
+  const [hasTorch, setHasTorch] = useState<boolean>(false);
+  const [torchOn, setTorchOn] = useState<boolean>(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(2.0);
+  const [hasHardwareZoom, setHasHardwareZoom] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const reticleRef = useRef<HTMLDivElement | null>(null);
 
   // Clean up object URLs to avoid memory leaks
   useEffect(() => {
@@ -146,6 +168,31 @@ export default function AIImageAssistantPage() {
       }
     };
   }, [previewUrl]);
+
+  // Clean stop all camera tracks
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+    setIsCameraLoading(false);
+    setTorchOn(false);
+    setHasTorch(false);
+    setCameraError(null);
+  }, []);
+
+  // Clean up camera stream on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
 
   // Dynamic loading stage text transitions
   useEffect(() => {
@@ -167,6 +214,326 @@ export default function AIImageAssistantPage() {
 
     return () => clearInterval(interval);
   }, [loading]);
+
+  // Start Camera Stream
+  const startCamera = async (facing: "environment" | "user" = cameraFacingMode) => {
+    setErrorMessage(null);
+    setCameraError(null);
+    setIsCameraLoading(true);
+    setIsCameraOpen(true);
+
+    // Stop previous stream if open
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera API is not supported in this browser. Please use HTTPS or upload a file.");
+      }
+
+      let stream: MediaStream;
+      try {
+        // Request maximum possible clarity & resolution on mobile devices
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 3840, min: 1280 },
+            height: { ideal: 2160, min: 720 },
+            // @ts-ignore
+            advanced: [{ focusMode: "continuous" }],
+          },
+          audio: false,
+        });
+      } catch (err) {
+        // Fallback for devices where high-res constraint fails
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+          },
+          audio: false,
+        });
+      }
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      // Check for torch & zoom capabilities
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        const capabilities = videoTrack.getCapabilities ? (videoTrack.getCapabilities() as Record<string, unknown>) : null;
+        if (capabilities && "torch" in capabilities) {
+          setHasTorch(true);
+        } else {
+          setHasTorch(false);
+        }
+
+        if (capabilities && "zoom" in capabilities) {
+          setHasHardwareZoom(true);
+          try {
+            await videoTrack.applyConstraints({
+              advanced: [{ zoom: 2.0 } as unknown as MediaTrackConstraintSet],
+            });
+          } catch (_) {}
+        } else {
+          setHasHardwareZoom(false);
+        }
+      }
+
+      setZoomLevel(2.0);
+      setIsCameraLoading(false);
+    } catch (err: unknown) {
+      console.error("Camera access error:", err);
+      setIsCameraLoading(false);
+      let msg = "Could not access device camera.";
+      if (err instanceof Error) {
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          msg = "Camera permission denied. Please enable camera access in your browser settings.";
+        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+          msg = "No camera device found on this system.";
+        } else {
+          msg = err.message || "Failed to initialize camera.";
+        }
+      }
+      setCameraError(msg);
+    }
+  };
+
+  // Apply Camera Zoom (Hardware or Digital)
+  const applyZoom = async (level: number) => {
+    setZoomLevel(level);
+    if (!streamRef.current) return;
+    const videoTrack = streamRef.current.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    try {
+      if (hasHardwareZoom) {
+        await videoTrack.applyConstraints({
+          advanced: [{ zoom: level } as unknown as MediaTrackConstraintSet],
+        });
+      }
+    } catch (_) {}
+  };
+
+  // Toggle Torch/Flashlight
+  const toggleTorch = async () => {
+    if (!streamRef.current) return;
+    const videoTrack = streamRef.current.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    try {
+      const newTorchState = !torchOn;
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: newTorchState } as unknown as MediaTrackConstraintSet],
+      });
+      setTorchOn(newTorchState);
+    } catch (err) {
+      console.error("Torch error:", err);
+    }
+  };
+
+  // Switch Camera Facing Mode (Front <-> Rear)
+  const switchCameraFacing = async () => {
+    const nextFacing = cameraFacingMode === "environment" ? "user" : "environment";
+    setCameraFacingMode(nextFacing);
+    await startCamera(nextFacing);
+  };
+
+  // Trigger analysis API
+  const executeAnalysis = async (fileToAnalyze?: File, prevReading?: string) => {
+    const file = fileToAnalyze || selectedFile;
+    if (!file) {
+      setErrorMessage("Please select or capture an image first.");
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const prevVal = prevReading !== undefined ? prevReading : previousKm;
+      if (prevVal && prevVal.trim()) {
+        formData.append("previousOdometer", prevVal.trim());
+      }
+
+      const compcode =
+        user?.Comp_Code ||
+        "";
+      const token = user?.token || user?.email || "";
+      const authHeader = token
+        ? String(token).startsWith("Bearer ")
+          ? String(token)
+          : `Bearer ${token}`
+        : "";
+
+      const response = await axios.post<OdometerApiResponse>(
+        `${BASE_URL}/ai/image/odometer`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            compcode: String(compcode || ""),
+            authorization: authHeader,
+          },
+        }
+      );
+
+      setResult(response.data);
+    } catch (err: unknown) {
+      console.error("Analysis error:", err);
+      if (axios.isAxiosError(err)) {
+        const axiosErr = err as AxiosError<{ message?: string; status?: string }>;
+        setErrorMessage(
+          axiosErr.response?.data?.message ||
+            axiosErr.message ||
+            "Unable to analyze image. Please check your network connection."
+        );
+      } else if (err instanceof Error) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Capture Live Focused Snapshot from Video Stream (Crops EXACTLY the Reticle Box Area)
+  const captureSnapshot = async () => {
+    if (!videoRef.current || !streamRef.current) return;
+    const video = videoRef.current;
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError("Camera stream is not ready yet. Please wait a moment.");
+      return;
+    }
+
+    const canvas = canvasRef.current || document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      setCameraError("Could not process camera image.");
+      return;
+    }
+
+    // Center-invariant Reticle Box Cropping (100% Mobile & Desktop Reliable)
+    // The target box is positioned at the center of the viewfinder.
+    // We crop the centered 82% width x 55% height region of the video frame, ensuring all digits and color drums are captured cleanly.
+    let cropRatioW = 0.82;
+    let cropRatioH = 0.55;
+
+    // Apply digital zoom if active without cutting off side drums
+    if (zoomLevel > 1.0 && !hasHardwareZoom) {
+      cropRatioW = cropRatioW / zoomLevel;
+      cropRatioH = cropRatioH / zoomLevel;
+    }
+
+    const sourceWidth = Math.min(video.videoWidth, video.videoWidth * cropRatioW);
+    const sourceHeight = Math.min(video.videoHeight, video.videoHeight * cropRatioH);
+    const sourceX = Math.max(0, (video.videoWidth - sourceWidth) / 2);
+    const sourceY = Math.max(0, (video.videoHeight - sourceHeight) / 2);
+
+    canvas.width = Math.round(sourceWidth);
+    canvas.height = Math.round(sourceHeight);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(
+      video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    // Convert to Blob & File with optimal quality
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setCameraError("Failed to capture snapshot from camera.");
+          return;
+        }
+
+        const fileName = `odometer_box_crop_${Date.now()}.jpg`;
+        const capturedFile = new File([blob], fileName, { type: "image/jpeg" });
+
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+
+        setSelectedFile(capturedFile);
+        const objectUrl = URL.createObjectURL(capturedFile);
+        setPreviewUrl(objectUrl);
+
+        // Stop camera
+        stopCamera();
+
+        // Immediately trigger AI analysis on cropped box only
+        executeAnalysis(capturedFile, previousKm);
+      },
+      "image/jpeg",
+      0.95
+    );
+  };
+
+  // Crop Uploaded Image to Center Focus Box (for Gallery / Uploaded Images)
+  const handleCropUploadedImage = async () => {
+    if (!selectedFile) return;
+
+    try {
+      const img = new Image();
+      const tempUrl = URL.createObjectURL(selectedFile);
+      
+      img.onload = () => {
+        URL.revokeObjectURL(tempUrl);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        // Focus and crop the center 70% width and 45% height (odometer cluster region)
+        const cropW = Math.round(img.width * 0.70);
+        const cropH = Math.round(img.height * 0.45);
+        const cropX = Math.round((img.width - cropW) / 2);
+        const cropY = Math.round((img.height - cropH) / 2);
+
+        canvas.width = cropW;
+        canvas.height = cropH;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const fileName = `odometer_cropped_${Date.now()}.jpg`;
+          const croppedFile = new File([blob], fileName, { type: "image/jpeg" });
+
+          if (previewUrl) URL.revokeObjectURL(previewUrl);
+          setSelectedFile(croppedFile);
+          const newUrl = URL.createObjectURL(croppedFile);
+          setPreviewUrl(newUrl);
+
+          // Re-analyze cropped image
+          executeAnalysis(croppedFile, previousKm);
+        }, "image/jpeg", 0.95);
+      };
+
+      img.src = tempUrl;
+    } catch (err) {
+      console.error("Crop error:", err);
+    }
+  };
 
   // File selection & preview
   const handleFileChange = (file: File) => {
@@ -222,73 +589,10 @@ export default function AIImageAssistantPage() {
     }
   };
 
-  // Trigger analysis API
-  const executeAnalysis = async (fileToAnalyze?: File, prevReading?: string) => {
-    const file = fileToAnalyze || selectedFile;
-    if (!file) {
-      setErrorMessage("Please select an image first.");
-      return;
-    }
-
-    setLoading(true);
-    setErrorMessage(null);
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const prevVal = prevReading !== undefined ? prevReading : previousKm;
-      if (prevVal && prevVal.trim()) {
-        formData.append("previousOdometer", prevVal.trim());
-      }
-
-      const compcode =
-        user?.Comp_Code ||
-        user?.compcode ||
-        user?.CompCode ||
-        user?.branch ||
-        "";
-      const token = user?.token || user?.email || "";
-      const authHeader = token
-        ? String(token).startsWith("Bearer ")
-          ? String(token)
-          : `Bearer ${token}`
-        : "";
-
-      const response = await axios.post<OdometerApiResponse>(
-        `${BASE_URL}/ai/image/odometer`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            compcode: String(compcode || ""),
-            authorization: authHeader,
-          },
-        }
-      );
-
-      setResult(response.data);
-    } catch (err: unknown) {
-      console.error("Analysis error:", err);
-      if (axios.isAxiosError(err)) {
-        const axiosErr = err as AxiosError<{ message?: string; status?: string }>;
-        setErrorMessage(
-          axiosErr.response?.data?.message ||
-            axiosErr.message ||
-            "Unable to analyze image. Please check your network connection."
-        );
-      } else if (err instanceof Error) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage("An unexpected error occurred.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleReset = () => {
+    stopCamera();
     setSelectedFile(null);
+    setZoomLevel(2.0);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -303,11 +607,10 @@ export default function AIImageAssistantPage() {
   // Display badge helpers
   const getStatusBadge = (res?: OdometerApiResponse | null) => {
     if (!res) return null;
-    const isVerified = (
+    const isVerified =
       res.status === "VERIFIED" &&
       res.requiresManualReview !== true &&
-      res.normalized?.value != null
-    );
+      res.normalized?.value != null;
 
     if (isVerified) {
       return (
@@ -397,6 +700,9 @@ export default function AIImageAssistantPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/60 dark:from-slate-950 dark:to-slate-900 text-slate-900 dark:text-slate-100 p-4 md:p-8">
+      {/* HIDDEN OFFSCREEN CANVAS FOR SNAPSHOT */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* HEADER */}
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
@@ -409,93 +715,366 @@ export default function AIImageAssistantPage() {
                 AI Image Assistant
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                Vision AI
+                Vision AI Scanner
               </span>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Upload a vehicle dashboard photo to automatically detect and extract the odometer reading.
+              Live scan or upload a vehicle dashboard photo to automatically detect and extract the odometer reading.
             </p>
           </div>
 
-          {selectedFile && (
-            <Button
-              onClick={handleReset}
-              variant="outline"
-              size="sm"
-              className="border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Upload Another Image
-            </Button>
-          )}
+          <div className="flex items-center gap-2.5">
+            {!isCameraOpen && (
+              <Button
+                onClick={() => startCamera()}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-medium"
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                Live Camera Scan
+              </Button>
+            )}
+
+            {selectedFile && (
+              <Button
+                onClick={handleReset}
+                variant="outline"
+                size="sm"
+                className="border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reset / New Image
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* MAIN CONTAINER */}
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: UPLOAD & PREVIEW */}
+        {/* LEFT COLUMN: CAMERA / UPLOAD & PREVIEW */}
         <div className="lg:col-span-6 space-y-6">
-          {/* UPLOAD BOX */}
-          <div
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            onClick={() => !loading && fileInputRef.current?.click()}
-            className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-6 md:p-8 transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] text-center overflow-hidden bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm ${
-              isDragging
-                ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 scale-[1.01]"
-                : "border-slate-300 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/5"
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/jpg"
-              className="hidden"
-              onChange={onFileInputChange}
-              disabled={loading}
-            />
+          {/* CAMERA VIEWFINDER (WHEN ACTIVE) */}
+          {isCameraOpen ? (
+            <div className="relative rounded-3xl overflow-hidden border-2 border-blue-500 shadow-2xl bg-black min-h-[420px] flex flex-col justify-between">
+              {/* LIVE VIDEO FEED */}
+              <div className="relative w-full h-full flex items-center justify-center bg-black min-h-[380px]">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    transform: hasHardwareZoom ? "none" : `scale(${zoomLevel})`,
+                    transformOrigin: "center center",
+                    transition: "transform 0.2s ease-out",
+                  }}
+                  className="w-full h-full object-cover max-h-[460px]"
+                />
 
-            {previewUrl ? (
-              <div className="relative w-full flex flex-col items-center">
-                <div className="relative rounded-xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-800 max-h-[340px] w-full bg-slate-950 flex items-center justify-center">
-                  <img
-                    src={previewUrl}
-                    alt="Dashboard Preview"
-                    className="max-h-[340px] w-auto object-contain rounded-xl"
-                  />
-                  {loading && (
-                    <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4">
-                      <Loader2 className="w-8 h-8 animate-spin text-blue-400 mb-3" />
-                      <p className="text-sm font-medium tracking-wide animate-pulse">{loadingStage}</p>
+                {/* CAMERA LOADING SPINNER */}
+                {isCameraLoading && (
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4 z-20">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-400 mb-3" />
+                    <p className="text-sm font-medium tracking-wide">Starting Camera Stream...</p>
+                  </div>
+                )}
+
+                {/* CAMERA ERROR OVERLAY */}
+                {cameraError && (
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center z-20 space-y-3">
+                    <AlertCircle className="w-10 h-10 text-rose-500" />
+                    <p className="text-sm text-rose-200">{cameraError}</p>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => startCamera()}
+                        size="sm"
+                        variant="input"
+                        className="text-xs"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Retry
+                      </Button>
+                      <Button
+                        onClick={stopCamera}
+                        size="sm"
+                        variant="outline"
+                        className="text-xs border-slate-700 text-slate-300"
+                      >
+                        Close
+                      </Button>
                     </div>
+                  </div>
+                )}
+
+                {/* HUD TARGET RETICLE OVERLAY */}
+                {!isCameraLoading && !cameraError && (
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4 z-10">
+                    {/* TOP STATUS PILL */}
+                    <div className="absolute top-4 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Live Meter Target
+                    </div>
+
+                    {/* RETICLE FRAME (COMPACT ODOMETER FOCUS BOX) */}
+                    <div
+                      ref={reticleRef}
+                      className="relative w-[78%] max-w-[270px] h-[95px] md:h-[105px] rounded-xl border-2 border-cyan-400/90 shadow-[0_0_25px_rgba(6,182,212,0.45)] bg-cyan-500/10 flex items-center justify-center overflow-hidden"
+                    >
+                      {/* CORNER BRACKETS */}
+                      <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-white" />
+                      <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-white" />
+                      <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-white" />
+                      <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-white" />
+
+                      {/* SCANLINE ANIMATION */}
+                      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-300 to-transparent animate-[bounce_2s_infinite] opacity-90" />
+
+                      <p className="text-[11px] font-semibold text-white/95 drop-shadow text-center px-2">
+                        Fit KM digits inside this box
+                      </p>
+                    </div>
+
+                    {/* HINT SUBTITLE & QUICK ZOOM BUTTONS (1x to 4x) */}
+                    <div className="flex flex-col items-center gap-1.5 mt-2.5 pointer-events-auto">
+                      <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-white/20">
+                        <span className="text-[10px] font-semibold text-white/80 mr-0.5">Zoom:</span>
+                        {[1.0, 1.5, 2.0, 2.5, 3.0, 4.0].map((level) => (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => applyZoom(level)}
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition-all ${
+                              zoomLevel === level
+                                ? "bg-cyan-400 text-black shadow-[0_0_12px_rgba(6,182,212,0.7)] scale-105"
+                                : "bg-white/10 text-white/90 hover:bg-white/25"
+                            }`}
+                          >
+                            {level === 1.0 ? "1x" : `${level}x`}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-white/75 drop-shadow">
+                        Tip: Agar photo dur se le rahe hain toh 2x / 3x zoom karein
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* CAMERA TOOLBAR BOTTOM */}
+              <div className="relative z-20 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-4 flex items-center justify-between gap-4 border-t border-white/10">
+                {/* CLOSE CAMERA */}
+                <Button
+                  onClick={stopCamera}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/80 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 p-0"
+                  title="Close Camera"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+
+                {/* SHUTTER CAPTURE BUTTON */}
+                <button
+                  type="button"
+                  onClick={captureSnapshot}
+                  disabled={isCameraLoading || !!cameraError}
+                  className="group relative flex items-center justify-center w-16 h-16 rounded-full bg-white text-blue-600 shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+                  title="Capture & Scan"
+                >
+                  <div className="w-13 h-13 rounded-full border-2 border-blue-600 flex items-center justify-center">
+                    <Camera className="w-6 h-6 text-blue-600 group-hover:scale-110 transition-transform" />
+                  </div>
+                </button>
+
+                {/* CAMERA CONTROLS (SWITCH & TORCH) */}
+                <div className="flex items-center gap-2">
+                  {hasTorch && (
+                    <Button
+                      onClick={toggleTorch}
+                      variant="ghost"
+                      size="sm"
+                      className={`rounded-full h-10 w-10 p-0 ${
+                        torchOn
+                          ? "bg-amber-400 text-black hover:bg-amber-300"
+                          : "text-white/80 hover:text-white hover:bg-white/10"
+                      }`}
+                      title={torchOn ? "Turn Torch Off" : "Turn Torch On"}
+                    >
+                      {torchOn ? <Zap className="w-5 h-5" /> : <ZapOff className="w-5 h-5" />}
+                    </Button>
                   )}
-                </div>
-                <div className="mt-3 flex items-center justify-between w-full px-1 text-xs text-slate-500 dark:text-slate-400">
-                  <span className="truncate max-w-[200px]">{selectedFile?.name}</span>
-                  <span>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` : ""}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center space-y-4 py-6">
-                <div className="p-4 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-2xl shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300">
-                  <Camera className="w-8 h-8" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-semibold text-base text-slate-800 dark:text-slate-200">
-                    Click to upload or drag & drop image
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Supports JPEG, PNG, and WebP (up to 10MB)
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                  Auto-detects mechanical & digital odometers
+
+                  <Button
+                    onClick={switchCameraFacing}
+                    variant="ghost"
+                    size="sm"
+                    className="text-white/80 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 p-0"
+                    title="Switch Front/Rear Camera"
+                  >
+                    <SwitchCamera className="w-5 h-5" />
+                  </Button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* UPLOAD & PREVIEW CARD */
+            <div className="space-y-4">
+              {/* ACTION QUICK SELECTOR (3 OPTIONS: NATIVE HD CAMERA, LIVE SCANNER, UPLOAD) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* 1. NATIVE PHONE CAMERA (HD CLARITY WITH AUTOFOCUS & FLASH) */}
+                <Button
+                  type="button"
+                  onClick={() => !loading && nativeCameraInputRef.current?.click()}
+                  variant="outline"
+                  className="h-12 border-emerald-500/50 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm"
+                  title="Take HD photo using phone's native camera"
+                >
+                  <Camera className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Phone Camera (HD)</span>
+                </Button>
+
+                {/* 2. LIVE ON-SCREEN SCANNER */}
+                <Button
+                  type="button"
+                  onClick={() => startCamera()}
+                  variant="outline"
+                  className="h-12 border-blue-500/40 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  <RefreshCw className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>Live Viewfinder</span>
+                </Button>
+
+                {/* 3. GALLERY / FILE PICKER */}
+                <Button
+                  type="button"
+                  onClick={() => !loading && fileInputRef.current?.click()}
+                  variant="outline"
+                  className="h-12 border-slate-300 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  <Upload className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                  <span>Upload / Gallery</span>
+                </Button>
+              </div>
+
+              {/* UPLOAD / PREVIEW BOX */}
+              <div
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                onClick={() => !previewUrl && !loading && nativeCameraInputRef.current?.click()}
+                className={`relative group cursor-pointer border-2 border-dashed rounded-3xl p-6 md:p-8 transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] text-center overflow-hidden bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm ${
+                  isDragging
+                    ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 scale-[1.01]"
+                    : "border-slate-300 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/5"
+                }`}
+              >
+                {/* NATIVE PHONE CAMERA INPUT */}
+                <input
+                  ref={nativeCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={onFileInputChange}
+                  disabled={loading}
+                />
+
+                {/* GALLERY / FILE PICKER INPUT */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/jpg"
+                  className="hidden"
+                  onChange={onFileInputChange}
+                  disabled={loading}
+                />
+
+                {previewUrl ? (
+                  <div className="relative w-full flex flex-col items-center">
+                    <div className="relative rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-800 max-h-[340px] w-full bg-slate-950 flex items-center justify-center">
+                      <img
+                        src={previewUrl}
+                        alt="Dashboard Preview"
+                        className="max-h-[340px] w-auto object-contain rounded-2xl"
+                      />
+                      {loading && (
+                        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4">
+                          <Loader2 className="w-8 h-8 animate-spin text-blue-400 mb-3" />
+                          <p className="text-sm font-medium tracking-wide animate-pulse">{loadingStage}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between w-full px-1 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="truncate max-w-[200px]">{selectedFile?.name}</span>
+                      <span>
+                        {selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` : ""}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCropUploadedImage();
+                        }}
+                        disabled={loading}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-cyan-500/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30"
+                        title="Crop to meter center box and re-scan"
+                      >
+                        <Crop className="w-3.5 h-3.5 mr-1.5" /> Crop / Focus Box
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startCamera();
+                        }}
+                        variant="input"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        <Camera className="w-3.5 h-3.5 mr-1.5" /> Retake with Live Camera
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fileInputRef.current?.click();
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Change Image
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center space-y-4 py-6">
+                    <div className="p-4 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-2xl shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300">
+                      <Camera className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-base text-slate-800 dark:text-slate-200">
+                        Click to upload or drag & drop image
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Supports JPEG, PNG, and WebP (up to 10MB)
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                      Auto-detects mechanical & digital odometers
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* OPTIONAL PREVIOUS READING CARD */}
           <div className="p-4 bg-white/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl backdrop-blur-sm space-y-3">
@@ -518,7 +1097,7 @@ export default function AIImageAssistantPage() {
               {selectedFile && !loading && (
                 <Button
                   onClick={() => executeAnalysis(selectedFile, previousKm)}
-                  variant="secondary"
+                  variant="input"
                   size="sm"
                   className="shrink-0"
                 >
@@ -569,19 +1148,25 @@ export default function AIImageAssistantPage() {
                         MILES READING NOT ALLOWED
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        {result.message || result.reviewReason || "Odometer reading is in Miles. AutoVyn ERP accepts only KM (Kilometers). Please upload a valid vehicle dashboard image with a KM reading."}
+                        {result.message ||
+                          result.reviewReason ||
+                          "Odometer reading is in Miles. AutoVyn ERP accepts only KM (Kilometers). Please scan a valid vehicle dashboard image with a KM reading."}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Detected: <strong className="text-slate-800 dark:text-slate-200">{result.source?.rawText || result.source?.value || "N/A"} MILES</strong> (Auto-conversion to KM is disabled).
+                        Detected:{" "}
+                        <strong className="text-slate-800 dark:text-slate-200">
+                          {result.source?.rawText || result.source?.value || "N/A"} MILES
+                        </strong>{" "}
+                        (Auto-conversion to KM is disabled).
                       </p>
                       <Button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => startCamera()}
                         variant="outline"
                         size="sm"
                         className="mt-2 border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-800 dark:text-rose-300"
                       >
-                        <RefreshCw className="w-3.5 h-3.5 mr-2" />
-                        Upload KM Meter Image
+                        <Camera className="w-3.5 h-3.5 mr-2" />
+                        Live Scan KM Meter
                       </Button>
                     </div>
                   ) : result.status === "UNIT_NOT_CONFIRMED" ? (
@@ -590,7 +1175,11 @@ export default function AIImageAssistantPage() {
                         Reading detected but unit could not be confirmed.
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400">
-                        Detected reading: <strong className="text-slate-800 dark:text-slate-200">{result.source?.rawText || result.source?.value || "N/A"}</strong> (Unit Unknown). Not assumed to be KM.
+                        Detected reading:{" "}
+                        <strong className="text-slate-800 dark:text-slate-200">
+                          {result.source?.rawText || result.source?.value || "N/A"}
+                        </strong>{" "}
+                        (Unit Unknown). Not assumed to be KM.
                       </p>
                     </div>
                   ) : result.status === "NO_ODOMETER_DETECTED" ? (
@@ -599,7 +1188,7 @@ export default function AIImageAssistantPage() {
                         NO ODOMETER DETECTED
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        No vehicle odometer was detected in this image. Please upload a clear photo of the dashboard.
+                        No vehicle odometer was detected in this image. Please capture a clear photo of the dashboard cluster.
                       </p>
                     </div>
                   ) : result.status === "MULTIPLE_ODOMETERS_DETECTED" ? (
@@ -608,7 +1197,7 @@ export default function AIImageAssistantPage() {
                         MULTIPLE DASHBOARDS DETECTED
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Multiple conflicting odometer displays were detected. Please upload an image of a single vehicle dashboard.
+                        Multiple conflicting odometer displays were detected. Please capture an image of a single vehicle dashboard.
                       </p>
                     </div>
                   ) : result.status === "REVIEW_RECOMMENDED" && result.normalized?.value != null ? (
@@ -623,19 +1212,21 @@ export default function AIImageAssistantPage() {
                   ) : (
                     <div className="space-y-3">
                       <div className="text-2xl md:text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-                        IMAGE UNCLEAR / RE-UPLOAD REQUIRED
+                        IMAGE UNCLEAR / RETAKE REQUIRED
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        {result.message || result.reviewReason || "The odometer reading is not clearly readable or the photo was taken from too far. Please upload a clear, closeup photo of the odometer display."}
+                        {result.message ||
+                          result.reviewReason ||
+                          "The odometer reading is not clearly readable or the photo was taken from too far. Please capture a clear, closeup photo of the odometer display."}
                       </p>
                       <Button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => startCamera()}
                         variant="outline"
                         size="sm"
                         className="mt-2 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300"
                       >
-                        <RefreshCw className="w-3.5 h-3.5 mr-2" />
-                        Upload Clear / Closer Photo
+                        <Camera className="w-3.5 h-3.5 mr-2" />
+                        Retake with Live Camera
                       </Button>
                     </div>
                   )}
@@ -651,14 +1242,18 @@ export default function AIImageAssistantPage() {
                   </div>
                   <div className="p-3 bg-slate-50/80 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60">
                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Confidence</p>
-                    <p className={`font-medium mt-0.5 ${
-                      result.status === "VERIFIED" && (result.confidence?.reading ?? 0) >= 0.85
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : result.status === "REVIEW_RECOMMENDED" && (result.confidence?.reading ?? 0) >= 0.6
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-slate-400 dark:text-slate-500"
-                    }`}>
-                      {result.status === "VERIFIED" && typeof result.confidence?.reading === "number" && result.confidence.reading > 0
+                    <p
+                      className={`font-medium mt-0.5 ${
+                        result.status === "VERIFIED" && (result.confidence?.reading ?? 0) >= 0.85
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : result.status === "REVIEW_RECOMMENDED" && (result.confidence?.reading ?? 0) >= 0.6
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-slate-400 dark:text-slate-500"
+                      }`}
+                    >
+                      {result.status === "VERIFIED" &&
+                      typeof result.confidence?.reading === "number" &&
+                      result.confidence.reading > 0
                         ? `${Math.round(result.confidence.reading * 100)}%`
                         : "—"}
                     </p>
@@ -674,23 +1269,33 @@ export default function AIImageAssistantPage() {
 
               {/* ERP COMPARISON VALIDATION (IF PREVIOUS KM WAS GIVEN) */}
               {result.erpValidation && (
-                <div className={`p-5 rounded-2xl border backdrop-blur-sm ${
-                  result.erpValidation.status === "PASS"
-                    ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50"
-                    : "bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
-                }`}>
+                <div
+                  className={`p-5 rounded-2xl border backdrop-blur-sm ${
+                    result.erpValidation.status === "PASS"
+                      ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50"
+                      : "bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
+                  }`}
+                >
                   <div className="flex items-start gap-3">
-                    <ShieldCheck className={`w-5 h-5 shrink-0 mt-0.5 ${
-                      result.erpValidation.status === "PASS" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-                    }`} />
+                    <ShieldCheck
+                      className={`w-5 h-5 shrink-0 mt-0.5 ${
+                        result.erpValidation.status === "PASS"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-amber-600 dark:text-amber-400"
+                      }`}
+                    />
                     <div className="space-y-1.5 flex-1">
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-900 dark:text-slate-100">
                           ERP History Validation
                         </h4>
-                        <span className={`text-xs font-semibold ${
-                          result.erpValidation.status === "PASS" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-                        }`}>
+                        <span
+                          className={`text-xs font-semibold ${
+                            result.erpValidation.status === "PASS"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
                           {result.erpValidation.status === "PASS" ? "Consistent (+)" : "Discrepancy"}
                         </span>
                       </div>
@@ -729,9 +1334,15 @@ export default function AIImageAssistantPage() {
             <div className="p-6 md:p-8 bg-white/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/60 rounded-3xl space-y-6">
               <h3 className="font-semibold text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-blue-500" />
-                Supported Vision Capabilities
+                Live Vision Scanner Features
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-slate-600 dark:text-slate-400">
+                <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">Instant Live Capture</p>
+                  <p className="text-[11px] text-slate-500">
+                    Use device camera with instant reticle alignment & 1-tap capture analysis.
+                  </p>
+                </div>
                 <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
                   <p className="font-semibold text-slate-800 dark:text-slate-200">Mechanical Rollers</p>
                   <p className="text-[11px] text-slate-500">
@@ -750,12 +1361,6 @@ export default function AIImageAssistantPage() {
                     Strictly isolates Trip A/B, km/h speeds, and clocks from the main mileage.
                   </p>
                 </div>
-                <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
-                  <p className="font-semibold text-slate-800 dark:text-slate-200">Multi-Meter & Quality Check</p>
-                  <p className="text-[11px] text-slate-500">
-                    Flags multiple dashboards or blurred photos to prevent data inaccuracy.
-                  </p>
-                </div>
               </div>
             </div>
           )}
@@ -764,3 +1369,4 @@ export default function AIImageAssistantPage() {
     </div>
   );
 }
+

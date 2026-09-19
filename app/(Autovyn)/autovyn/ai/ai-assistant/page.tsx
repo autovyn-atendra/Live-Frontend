@@ -46,6 +46,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Sparkle,
+  X,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -78,6 +80,8 @@ interface AIQueryResponse {
       score?: number;
     };
     query?: {
+      sql?: string;
+      tablesUsed?: string[];
       intent?: string;
       sensitivity?: string;
       generated?: boolean;
@@ -146,6 +150,12 @@ interface ChatMessage {
   responseTimeMs?: number;
   confidence?: string;
   liked?: boolean | null;
+  feedbackSubmitted?: boolean;
+  feedbackType?: string;
+  feedbackComment?: string;
+  sql?: string;
+  intent?: string;
+  userQuery?: string;
 }
 
 // ============================================================
@@ -184,6 +194,26 @@ const queryAI = async (
       headers: buildAIHeaders(user),
       timeout: 60000,
     }
+  );
+  return response.data;
+};
+
+const submitFeedbackAPI = async (
+  payload: {
+    conversationId?: string;
+    feedbackType: string;
+    userComment?: string;
+    targetTable?: string;
+    correctSQL?: string;
+    userQuery?: string;
+    intent?: string;
+  },
+  user?: any
+): Promise<{ success: boolean; message?: string }> => {
+  const response = await axios.post(
+    `${BASE_URL}/ai/feedback`,
+    payload,
+    { headers: buildAIHeaders(user) }
   );
   return response.data;
 };
@@ -262,8 +292,8 @@ const STARTER_CATEGORIES = [
     icon: Users,
     title: "HR & Attendance",
     badge: "Attendance Master",
-    color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50",
+    color: "text-[#2563eb] dark:text-[#60a5fa]",
+    bg: "bg-[#eff6ff] dark:bg-[#172554]/40 border-[#bfdbfe] dark:border-[#1e3a8a]/50",
     prompts: [
       "21/10/2025 ko kitne log absent the?",
       "19001162 ki attendance details dikhao",
@@ -274,8 +304,8 @@ const STARTER_CATEGORIES = [
     icon: DollarSign,
     title: "Salary & Payroll",
     badge: "Salary Register",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50",
+    color: "text-[#059669] dark:text-[#34d399]",
+    bg: "bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#a7f3d0] dark:border-[#064e3b]/50",
     prompts: [
       "19001162 ki April 2026 ki salary nikalo",
       "Pramod Arun Palve ki designation aur CTC",
@@ -286,8 +316,8 @@ const STARTER_CATEGORIES = [
     icon: Calendar,
     title: "Employee Master & Bio",
     badge: "Master DB",
-    color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50",
+    color: "text-[#d97706] dark:text-[#fbbf24]",
+    bg: "bg-[#fffbeb] dark:bg-[#451a03]/40 border-[#fde68a] dark:border-[#78350f]/50",
     prompts: [
       "19001162 ka birthday kab aata hai?",
       "Iska permanent address kya hai?",
@@ -298,8 +328,8 @@ const STARTER_CATEGORIES = [
     icon: Car,
     title: "Vehicles & Reminders",
     badge: "Operations",
-    color: "text-purple-600 dark:text-purple-400",
-    bg: "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900/50",
+    color: "text-[#9333ea] dark:text-[#c084fc]",
+    bg: "bg-[#faf5ff] dark:bg-[#3b0764]/40 border-[#e9d5ff] dark:border-[#581c87]/50",
     prompts: [
       "Today's service reminders due list",
       "Pending vehicle delivery status",
@@ -339,13 +369,13 @@ const CopyButton = ({ text, label }: { text: string; label?: string }) => {
       type="button"
       onClick={handleCopy}
       title={label || "Copy to clipboard"}
-      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all
-        text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-white bg-slate-100 dark:bg-[#1e293b] hover:bg-slate-200 dark:hover:bg-[#334155] border border-slate-200 dark:border-[#334155]"
+      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[16px] font-semibold transition-all
+        text-[#475569] dark:text-[#cbd5e1] hover:text-primary dark:hover:text-white bg-[#f1f5f9] dark:bg-[#1e293b] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] border border-[#e2e8f0] dark:border-[#334155]"
     >
       {copied ? (
         <>
-          <Check size={13} className="text-emerald-600 dark:text-emerald-400" />
-          <span className="text-emerald-600 dark:text-emerald-400 font-bold">Copied!</span>
+          <Check size={13} className="text-[#059669] dark:text-[#34d399]" />
+          <span className="text-[#059669] dark:text-[#34d399] font-bold">Copied!</span>
         </>
       ) : (
         <>
@@ -395,10 +425,10 @@ const SpeechButton = ({ text }: { text: string }) => {
       type="button"
       onClick={handleSpeech}
       title={isSpeaking ? "Stop voice reading" : "Read response out loud"}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all border ${
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[16px] font-semibold transition-all border ${
         isSpeaking
           ? "bg-primary text-white border-primary animate-pulse"
-          : "text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-white bg-slate-100 dark:bg-[#1e293b] hover:bg-slate-200 dark:hover:bg-[#334155] border-slate-200 dark:border-[#334155]"
+          : "text-[#475569] dark:text-[#cbd5e1] hover:text-primary dark:hover:text-white bg-[#f1f5f9] dark:bg-[#1e293b] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] border-[#e2e8f0] dark:border-[#334155]"
       }`}
     >
       {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
@@ -412,23 +442,23 @@ const SpeechButton = ({ text }: { text: string }) => {
 // ============================================================
 const TypingIndicator = () => (
   <div className="flex items-start gap-3 my-3 animate-in fade-in-50 duration-300">
-    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-md ring-2 ring-primary/20">
+    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-[#3b82f6] text-white shadow-md ring-2 ring-primary/20">
       <Bot size={18} className="animate-spin" style={{ animationDuration: "8s" }} />
       <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white dark:ring-[#0f172a]" />
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34d399] opacity-75" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#10b981] ring-2 ring-white dark:ring-[#0f172a]" />
       </span>
     </div>
 
     <div className="flex flex-col gap-1 max-w-[85%]">
-      <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+      <div className="flex items-center gap-2 px-1 text-[16px] font-semibold text-[#64748b] dark:text-[#94a3b8]">
         <span className="text-[#193A69] dark:text-white font-bold">AutoVyn Copilot</span>
-        <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-mono text-primary font-bold">
+        <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[15px] font-mono text-primary font-bold">
           QUERYING MSSQL
         </span>
       </div>
 
-      <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] px-4 py-3 shadow-sm">
         <div className="flex items-center gap-1.5">
           {[0, 1, 2].map((i) => (
             <span
@@ -438,7 +468,7 @@ const TypingIndicator = () => (
             />
           ))}
         </div>
-        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 animate-pulse">
+        <span className="text-lg font-semibold text-[#475569] dark:text-[#cbd5e1] animate-pulse">
           Analyzing database records & schema...
         </span>
       </div>
@@ -466,7 +496,7 @@ const renderInlineFormatting = (text: string) => {
       return (
         <code
           key={idx}
-          className="rounded-md bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] px-1.5 py-0.5 font-mono text-[11px] font-bold text-primary dark:text-[#60A5FA]"
+          className="rounded-md bg-[#f1f5f9] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155] px-1.5 py-0.5 font-mono text-[16px] font-bold text-primary dark:text-[#60A5FA]"
         >
           {val}
         </code>
@@ -509,7 +539,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
   }
 
   return (
-    <div className="space-y-2 text-xs sm:text-[13px] leading-relaxed text-slate-700 dark:text-slate-200">
+    <div className="space-y-2 text-lg sm:text-[17px] leading-relaxed text-[#334155] dark:text-[#e2e8f0]">
       {blocks.map((block, bIdx) => {
         if (block.type === "empty") {
           return <div key={bIdx} className="h-1.5" />;
@@ -549,12 +579,12 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           return (
             <div
               key={bIdx}
-              className="my-3 overflow-hidden rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-sm"
+              className="my-3 overflow-hidden rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-sm"
             >
               {/* Table header bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#1e293b] px-3.5 py-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#193A69] dark:text-white">
-                  <FileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400" />
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#1e293b] px-3.5 py-2">
+                <div className="flex items-center gap-2 text-lg font-bold text-[#193A69] dark:text-white">
+                  <FileSpreadsheet size={15} className="text-[#059669] dark:text-[#34d399]" />
                   <span>ERP Results ({dataRows.length} records)</span>
                 </div>
 
@@ -565,7 +595,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                       placeholder="Filter table..."
                       value={tableFilter}
                       onChange={(e) => setTableFilter(e.target.value)}
-                      className="h-7 w-28 sm:w-36 rounded-md border border-slate-300 dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-[11px] text-slate-800 dark:text-white placeholder-slate-400 focus:border-primary focus:outline-none"
+                      className="h-7 w-28 sm:w-36 rounded-md border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-[16px] text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
                     />
                   )}
                   <CopyButton text={csvContent} label="Copy CSV" />
@@ -574,20 +604,20 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
 
               {/* Table Scroll View */}
               <div className="max-h-80 overflow-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-[#1e293b] text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-[#334155] font-bold shadow-xs">
+                <table className="w-full text-left text-lg border-collapse">
+                  <thead className="sticky top-0 z-10 bg-[#f1f5f9] dark:bg-[#1e293b] text-[#334155] dark:text-[#e2e8f0] border-b border-[#e2e8f0] dark:border-[#334155] font-bold shadow-xs">
                     <tr>
                       {headerCells.map((cell: string, cIdx: number) => (
                         <th
                           key={cIdx}
-                          className="px-3.5 py-2.5 border-r last:border-r-0 border-slate-200 dark:border-[#334155] whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300"
+                          className="px-3.5 py-2.5 border-r last:border-r-0 border-[#e2e8f0] dark:border-[#334155] whitespace-nowrap text-[16px] font-bold uppercase tracking-wider text-[#475569] dark:text-[#cbd5e1]"
                         >
                           {renderInlineFormatting(cell)}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-[#334155]">
+                  <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155]">
                     {filteredDataRows.map((rStr: string, rIdx: number) => {
                       const cells = rStr
                         .split("|")
@@ -596,12 +626,12 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                       return (
                         <tr
                           key={rIdx}
-                          className="hover:bg-slate-50 dark:hover:bg-[#1e293b]/60 transition-colors even:bg-slate-50/50 dark:even:bg-[#1e293b]/30"
+                          className="hover:bg-[#f8fafc] dark:hover:bg-[#1e293b]/60 transition-colors even:bg-[#f8fafc]/50 dark:even:bg-[#1e293b]/30"
                         >
                           {cells.map((cell: string, cIdx: number) => (
                             <td
                               key={cIdx}
-                              className="px-3.5 py-2 border-r last:border-r-0 border-slate-200/60 dark:border-[#334155]/60 whitespace-nowrap text-slate-700 dark:text-slate-300 font-medium"
+                              className="px-3.5 py-2 border-r last:border-r-0 border-[#e2e8f0]/60 dark:border-[#334155]/60 whitespace-nowrap text-[#334155] dark:text-[#cbd5e1] font-medium"
                             >
                               {renderInlineFormatting(cell)}
                             </td>
@@ -622,7 +652,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           return (
             <h3
               key={bIdx}
-              className="text-sm font-bold text-primary dark:text-[#60A5FA] mt-3.5 mb-1 flex items-center gap-2"
+              className="text-lg font-bold text-primary dark:text-[#60A5FA] mt-3.5 mb-1 flex items-center gap-2"
             >
               <span className="h-2 w-2 rounded-full bg-primary" />
               {renderInlineFormatting(text.replace(/^###\s+/, ""))}
@@ -633,7 +663,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           return (
             <h4
               key={bIdx}
-              className="text-xs font-bold text-[#193A69] dark:text-slate-100 mt-2.5 mb-0.5"
+              className="text-lg font-bold text-[#193A69] dark:text-[#f1f5f9] mt-2.5 mb-0.5"
             >
               {renderInlineFormatting(text.replace(/^####\s+/, ""))}
             </h4>
@@ -645,7 +675,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           return (
             <div key={bIdx} className="flex items-start gap-2.5 pl-1 py-0.5">
               <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0 mt-2" />
-              <div className="flex-1 leading-normal text-slate-700 dark:text-slate-200">
+              <div className="flex-1 leading-normal text-[#334155] dark:text-[#e2e8f0]">
                 {renderInlineFormatting(cleanText)}
               </div>
             </div>
@@ -656,10 +686,10 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           const match = text.match(/^(\d+)\.\s+(.*)/);
           return (
             <div key={bIdx} className="flex items-start gap-2.5 pl-1 py-0.5">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary mt-0.5">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-[15px] font-bold text-primary mt-0.5">
                 {match?.[1]}
               </span>
-              <div className="flex-1 leading-normal text-slate-700 dark:text-slate-200">
+              <div className="flex-1 leading-normal text-[#334155] dark:text-[#e2e8f0]">
                 {renderInlineFormatting(match?.[2] || "")}
               </div>
             </div>
@@ -669,7 +699,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
         return (
           <div
             key={bIdx}
-            className="break-words leading-relaxed py-0.5 text-slate-700 dark:text-slate-200"
+            className="break-words leading-relaxed py-0.5 text-[#334155] dark:text-[#e2e8f0]"
           >
             {renderInlineFormatting(text)}
           </div>
@@ -684,12 +714,67 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
 // ============================================================
 const MessageBubble = ({
   msg,
+  conversationId,
   onFeedback,
 }: {
   msg: ChatMessage;
-  onFeedback?: (id: string, liked: boolean) => void;
+  conversationId?: string | null;
+  onFeedback?: (
+    id: string,
+    feedbackType: string,
+    userComment?: string,
+    targetTable?: string
+  ) => Promise<void>;
 }) => {
   const isUser = msg.role === "user";
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [selectedReason, setSelectedReason] = useState("INCORRECT_DATA");
+  const [commentText, setCommentText] = useState("");
+  const [targetTable, setTargetTable] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackSaved, setFeedbackSaved] = useState(msg.feedbackSubmitted || false);
+
+  const feedbackOptions = [
+    { id: "INCORRECT_DATA", label: "Galat Data (Wrong Info)", icon: "❌" },
+    { id: "WRONG_CALCULATION", label: "Calculation Error (Count/Amount)", icon: "📊" },
+    { id: "INCOMPLETE_DATA", label: "Adhoori Jankari (Incomplete)", icon: "⚠️" },
+    { id: "WRONG_TABLE", label: "Wrong Table / Schema", icon: "🔍" },
+    { id: "CUSTOM_RULE", label: "Custom Rule / Suggestion", icon: "✏️" },
+  ];
+
+  const tableSuggestions = [
+    "EMP_MST (Employee)",
+    "MISC_ATTEND_VW (Attendance)",
+    "Salary_Register_VW (Salary)",
+    "General / Other",
+  ];
+
+  const handleThumbsUp = async () => {
+    if (onFeedback) {
+      await onFeedback(msg.id, "HELPFUL");
+      setFeedbackSaved(true);
+      setShowFeedbackModal(false);
+    }
+  };
+
+  const handleThumbsDownClick = () => {
+    setShowFeedbackModal((prev) => !prev);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onFeedback) return;
+    setIsSubmitting(true);
+    try {
+      await onFeedback(msg.id, selectedReason, commentText, targetTable);
+      setFeedbackSaved(true);
+      setShowFeedbackModal(false);
+    } catch {
+      // ignore
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -699,9 +784,9 @@ const MessageBubble = ({
     >
       {/* Assistant Bot Avatar */}
       {!isUser && (
-        <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-sm ring-2 ring-primary/20 mt-0.5">
+        <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-[#3b82f6] text-white shadow-sm ring-2 ring-primary/20 mt-0.5">
           <Bot size={18} />
-          <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#0f172a]" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#10b981] ring-2 ring-white dark:ring-[#0f172a]" />
         </div>
       )}
 
@@ -713,19 +798,19 @@ const MessageBubble = ({
       >
         {/* Assistant Header Tag */}
         {!isUser && (
-          <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 px-1 text-[16px] font-semibold text-[#64748b] dark:text-[#94a3b8]">
             <span className="text-[#193A69] dark:text-white font-bold">
               AutoVyn AI
             </span>
 
             {msg.mode && (
-              <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-mono text-primary font-bold">
+              <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[15px] font-mono text-primary font-bold">
                 {msg.mode === "DATABASE" ? "⚡ DATABASE (LIVE ERP)" : msg.mode}
               </span>
             )}
 
             {msg.responseTimeMs && (
-              <span className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+              <span className="flex items-center gap-1 text-[15px] text-[#94a3b8] font-mono">
                 <Clock size={11} />
                 {msg.responseTimeMs}ms
               </span>
@@ -737,14 +822,14 @@ const MessageBubble = ({
         <div
           className={`rounded-2xl px-4 py-3.5 shadow-sm transition-all ${
             isUser
-              ? "rounded-tr-xs bg-gradient-to-r from-[#193A69] via-primary to-blue-600 text-white shadow-md shadow-primary/10"
+              ? "rounded-tr-xs bg-gradient-to-r from-[#193A69] via-primary to-[#2563eb] text-white shadow-md shadow-primary/10"
               : msg.isError
-              ? "rounded-tl-xs border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
-              : "rounded-tl-xs border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] text-slate-800 dark:text-slate-100 shadow-sm"
+              ? "rounded-tl-xs border border-[#fecaca] dark:border-[#7f1d1d]/50 bg-[#fef2f2] dark:bg-[#450a0a]/30 text-[#b91c1c] dark:text-[#fca5a5]"
+              : "rounded-tl-xs border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#1e293b] dark:text-[#f1f5f9] shadow-sm"
           }`}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words text-xs sm:text-[13px] font-medium leading-relaxed">
+            <p className="whitespace-pre-wrap break-words text-lg sm:text-[17px] font-medium leading-relaxed">
               {msg.content}
             </p>
           ) : (
@@ -752,49 +837,175 @@ const MessageBubble = ({
           )}
 
           {/* Action Toolbar on Bottom */}
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-[#334155]/60 pt-2 text-[11px]">
-            <div className="flex items-center gap-1.5">
-              {!isUser && !msg.isError && (
-                <>
-                  <CopyButton text={msg.content} label="Copy" />
-                  <SpeechButton text={msg.content} />
+          <div className="mt-3 flex flex-col gap-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 pt-2 text-[16px]">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {!isUser && !msg.isError && (
+                  <>
+                    <CopyButton text={msg.content} label="Copy" />
+                    <SpeechButton text={msg.content} />
 
-                  {/* Feedback Buttons */}
-                  <button
-                    type="button"
-                    onClick={() => onFeedback && onFeedback(msg.id, true)}
-                    className={`rounded-lg p-1 transition ${
-                      msg.liked === true
-                        ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40"
-                        : "text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                    }`}
-                    title="Helpful response"
-                  >
-                    <ThumbsUp size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onFeedback && onFeedback(msg.id, false)}
-                    className={`rounded-lg p-1 transition ${
-                      msg.liked === false
-                        ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40"
-                        : "text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                    }`}
-                    title="Not helpful"
-                  >
-                    <ThumbsDown size={13} />
-                  </button>
-                </>
-              )}
+                    {/* Feedback Buttons */}
+                    <button
+                      type="button"
+                      onClick={handleThumbsUp}
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition ${
+                        msg.liked === true
+                          ? "text-[#059669] dark:text-[#34d399] bg-[#ecfdf5] dark:bg-[#022c22]/40 border border-[#a7f3d0] dark:border-[#065f46]"
+                          : "text-[#94a3b8] hover:text-[#475569] dark:hover:text-white bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
+                      }`}
+                      title="Helpful response"
+                    >
+                      <ThumbsUp size={13} />
+                      <span>Like</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleThumbsDownClick}
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition ${
+                        msg.liked === false || showFeedbackModal
+                          ? "text-[#e11d48] dark:text-[#fb7185] bg-[#fff1f2] dark:bg-[#4c0519]/40 border border-[#fecdd3] dark:border-[#881337]"
+                          : "text-[#94a3b8] hover:text-[#475569] dark:hover:text-white bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
+                      }`}
+                      title="Report issue / Give feedback"
+                    >
+                      <ThumbsDown size={13} />
+                      <span>Unlike / Feedback</span>
+                    </button>
+
+                    {feedbackSaved && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-[11px] font-bold">
+                        <CheckCircle2 size={11} />
+                        Feedback Saved
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <span
+                className={`text-[15px] font-medium shrink-0 ${
+                  isUser ? "text-white/80" : "text-[#94a3b8]"
+                }`}
+              >
+                {formatMessageTime(msg.createdAt)}
+              </span>
             </div>
 
-            <span
-              className={`text-[10px] font-medium ${
-                isUser ? "text-white/80" : "text-slate-400"
-              }`}
-            >
-              {formatMessageTime(msg.createdAt)}
-            </span>
+            {/* Inline Feedback Popover / Panel */}
+            {!isUser && showFeedbackModal && (
+              <div className="mt-2 rounded-xl border border-primary/20 bg-[#f8fafc] dark:bg-[#0f172a] p-3 text-left shadow-sm animate-in fade-in-50 zoom-in-95 duration-200">
+                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-[#e2e8f0] dark:border-[#334155]">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#193A69] dark:text-white">
+                    <Sparkle size={13} className="text-primary" />
+                    <span>Feedback & Correction (AutoVyn AI Model)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFeedbackModal(false)}
+                    className="text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleFormSubmit} className="space-y-2.5">
+                  {/* Reason tags */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">
+                      Kaisa Issue Hai? (Select Issue Type)
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {feedbackOptions.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setSelectedReason(opt.id)}
+                          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition ${
+                            selectedReason === opt.id
+                              ? "bg-primary text-white font-bold shadow-xs"
+                              : "bg-white dark:bg-[#1e293b] text-[#475569] dark:text-[#cbd5e1] border border-[#e2e8f0] dark:border-[#334155] hover:border-primary/40"
+                          }`}
+                        >
+                          <span>{opt.icon}</span>
+                          <span>{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* User Comment / Correction Input */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">
+                      Sahi Jawab / Rule Batayein (Aapke hisaab se sahi kya hona chahiye?)
+                    </label>
+                    <textarea
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Iska birthday ya salary slip galat aayi, sahi format ye hona chahiye ya rule ye lagao..."
+                      className="w-full rounded-lg border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#1e293b] p-2 text-xs text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Target Module selection */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">
+                      Target Module / Table (Optional)
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                      {tableSuggestions.map((tbl, tIdx) => {
+                        const code = tbl.split(" ")[0];
+                        return (
+                          <button
+                            key={tIdx}
+                            type="button"
+                            onClick={() => setTargetTable(code)}
+                            className={`rounded-md px-1.5 py-0.5 text-[11px] font-mono transition ${
+                              targetTable === code
+                                ? "bg-primary/20 text-primary font-bold border border-primary/40"
+                                : "bg-white dark:bg-[#1e293b] text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155] hover:bg-[#f1f5f9]"
+                            }`}
+                          >
+                            {tbl}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Submit & Cancel */}
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowFeedbackModal(false)}
+                      className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#64748b] dark:text-[#94a3b8] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] transition"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-white px-3 py-1 text-xs font-bold shadow-xs transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={12} />
+                          <span>Submit Feedback & Train AI</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -824,14 +1035,14 @@ const EmptyState = ({
       {/* Bot Icon with Glowing Ring */}
       <div className="relative mx-auto flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center">
         <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-xl animate-pulse" />
-        <div className="relative flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-lg ring-4 ring-primary/10">
+        <div className="relative flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-[#193A69] via-primary to-[#3b82f6] text-white shadow-lg ring-4 ring-primary/10">
           <Bot size={36} className="animate-in zoom-in-50 duration-500" />
         </div>
       </div>
 
       {/* Headline & Personalized Greeting */}
       <div className="space-y-2">
-        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-xs font-bold text-primary shadow-xs">
+        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-lg font-bold text-primary shadow-xs">
           <Sparkles
             size={14}
             className="text-primary animate-spin"
@@ -846,7 +1057,7 @@ const EmptyState = ({
             : "How can I help you today?"}
         </h2>
 
-        <p className="mx-auto max-w-2xl text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        <p className="mx-auto max-w-2xl text-lg sm:text-lg text-[#475569] dark:text-[#cbd5e1] leading-relaxed">
           Ask questions in <span className="text-primary font-bold">Hindi, English, or Hinglish</span>. 
           I query live MSSQL tables for attendance, employee master, salary registers, vouchers, and service alerts.
         </p>
@@ -859,7 +1070,7 @@ const EmptyState = ({
           return (
             <div
               key={idx}
-              className="group relative overflow-hidden rounded-2xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50"
+              className="group relative overflow-hidden rounded-2xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50"
             >
               <div className="relative z-10 flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2.5">
@@ -868,12 +1079,12 @@ const EmptyState = ({
                   >
                     <Icon size={16} />
                   </div>
-                  <h3 className="text-xs font-bold text-[#193A69] dark:text-white tracking-wide">
+                  <h3 className="text-lg font-bold text-[#193A69] dark:text-white tracking-wide">
                     {cat.title}
                   </h3>
                 </div>
 
-                <span className="rounded-full bg-slate-100 dark:bg-[#0f172a] px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-[#334155]">
+                <span className="rounded-full bg-[#f1f5f9] dark:bg-[#0f172a] px-2 py-0.5 text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155]">
                   {cat.badge}
                 </span>
               </div>
@@ -884,7 +1095,7 @@ const EmptyState = ({
                     key={pIdx}
                     type="button"
                     onClick={() => onPromptClick(p)}
-                    className="flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 transition-all hover:bg-slate-100 dark:hover:bg-[#334155] hover:text-primary dark:hover:text-white text-left group/item"
+                    className="flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-lg text-[#475569] dark:text-[#cbd5e1] transition-all hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary dark:hover:text-white text-left group/item"
                   >
                     <span className="truncate">{p}</span>
                     <ArrowRight
@@ -900,21 +1111,21 @@ const EmptyState = ({
       </div>
 
       {/* Feature Capability Badges */}
-      <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2 text-[11px] text-slate-500 dark:text-slate-400">
-        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
-          <Zap size={13} className="text-amber-500" />
+      <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2 text-[16px] text-[#64748b] dark:text-[#94a3b8]">
+        <span className="flex items-center gap-1.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] px-3 py-1 font-medium">
+          <Zap size={13} className="text-[#f59e0b]" />
           Sub-second Execution
         </span>
-        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
-          <ShieldCheck size={13} className="text-emerald-500" />
+        <span className="flex items-center gap-1.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] px-3 py-1 font-medium">
+          <ShieldCheck size={13} className="text-[#10b981]" />
           Enterprise SQL Guard
         </span>
-        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
-          <Database size={13} className="text-blue-500" />
+        <span className="flex items-center gap-1.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] px-3 py-1 font-medium">
+          <Database size={13} className="text-[#3b82f6]" />
           Live MSSQL Sync
         </span>
-        <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155] px-3 py-1 font-medium">
-          <BookOpen size={13} className="text-purple-500" />
+        <span className="flex items-center gap-1.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] px-3 py-1 font-medium">
+          <BookOpen size={13} className="text-[#a855f7]" />
           Multi-turn Memory
         </span>
       </div>
@@ -1125,12 +1336,45 @@ export default function AIAssistantPage() {
   };
 
   // ── Feedback Handler ──
-  const handleFeedback = (id: string, liked: boolean) => {
+  const handleFeedback = async (
+    id: string,
+    feedbackType: string,
+    userComment?: string,
+    targetTable?: string
+  ) => {
+    const isHelpful = feedbackType === "HELPFUL";
+    const targetMsg = messages.find((m) => m.id === id);
+
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === id ? { ...m, liked: m.liked === liked ? null : liked } : m
+        m.id === id
+          ? {
+              ...m,
+              liked: isHelpful ? true : false,
+              feedbackSubmitted: true,
+              feedbackType,
+              feedbackComment: userComment,
+            }
+          : m
       )
     );
+
+    try {
+      await submitFeedbackAPI(
+        {
+          conversationId: activeConversationIdRef.current || undefined,
+          feedbackType,
+          userComment,
+          targetTable,
+          userQuery: targetMsg?.userQuery,
+          correctSQL: targetMsg?.sql,
+          intent: targetMsg?.intent,
+        },
+        user
+      );
+    } catch {
+      // silent
+    }
   };
 
   // ── Send message ──
@@ -1186,6 +1430,9 @@ export default function AIAssistantPage() {
         mode: response.data?.mode,
         responseTimeMs: response.data?.responseTimeMs,
         confidence: response.data?.confidence?.level,
+        sql: response.data?.query?.sql,
+        intent: response.data?.intent,
+        userQuery: textToSend,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -1222,7 +1469,7 @@ export default function AIAssistantPage() {
   const isInputDisabled = isLoading || isLoadingHistory;
 
   return (
-    <div className="relative flex h-[calc(100vh-75px)] sm:h-[calc(100vh-90px)] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-md">
+    <div className="relative flex h-[calc(100vh-75px)] sm:h-[calc(100vh-90px)] w-full overflow-hidden rounded-2xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-md">
 
       {/* ── MOBILE BACKDROP OVERLAY ── */}
       {showHistorySidebar && (
@@ -1234,15 +1481,15 @@ export default function AIAssistantPage() {
 
       {/* ── HISTORY SIDEBAR ── */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#0f172a] transition-all duration-300 md:relative md:z-auto ${
+        className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] transition-all duration-300 md:relative md:z-auto ${
           showHistorySidebar
             ? "w-72 max-w-[85vw] md:w-64 shrink-0 translate-x-0"
             : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-none"
         }`}
       >
         {/* Sidebar Header */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 dark:border-[#334155] px-3.5 bg-white dark:bg-[#1e293b]">
-          <div className="flex items-center gap-2 text-xs font-bold text-[#193A69] dark:text-white tracking-wide">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-[#334155] px-3.5 bg-white dark:bg-[#1e293b]">
+          <div className="flex items-center gap-2 text-lg font-bold text-[#193A69] dark:text-white tracking-wide">
             <History size={16} className="text-primary" />
             <span>Chat Sessions</span>
           </div>
@@ -1253,7 +1500,7 @@ export default function AIAssistantPage() {
               onClick={() => loadConversations(false)}
               disabled={isRefreshingConversations}
               title="Refresh sessions"
-              className="rounded-lg p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#334155] transition disabled:opacity-50"
+              className="rounded-lg p-1.5 text-[#64748b] hover:text-[#1e293b] dark:text-[#94a3b8] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155] transition disabled:opacity-50"
             >
               <RefreshCw
                 size={14}
@@ -1273,14 +1520,14 @@ export default function AIAssistantPage() {
         </div>
 
         {/* New Chat Button & Search */}
-        <div className="p-2.5 space-y-2 border-b border-slate-200 dark:border-[#334155]">
+        <div className="p-2.5 space-y-2 border-b border-[#e2e8f0] dark:border-[#334155]">
           <button
             type="button"
             onClick={handleNewChat}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all shadow-xs ${
+            className={`flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-lg font-bold transition-all shadow-xs ${
               !activeConversationId
                 ? "bg-primary text-white shadow-sm"
-                : "bg-white dark:bg-[#1e293b] hover:bg-slate-100 dark:hover:bg-[#334155] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-[#334155]"
+                : "bg-white dark:bg-[#1e293b] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] text-[#334155] dark:text-[#e2e8f0] border border-[#e2e8f0] dark:border-[#334155]"
             }`}
           >
             <Plus size={15} />
@@ -1291,14 +1538,14 @@ export default function AIAssistantPage() {
             <div className="relative">
               <Search
                 size={13}
-                className="absolute left-2.5 top-2.5 text-slate-400 pointer-events-none"
+                className="absolute left-2.5 top-2.5 text-[#94a3b8] pointer-events-none"
               />
               <input
                 type="text"
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
                 placeholder="Search chats..."
-                className="w-full rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] pl-8 pr-2.5 py-1.5 text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:border-primary focus:outline-none"
+                className="w-full rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] pl-8 pr-2.5 py-1.5 text-lg text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
               />
             </div>
           )}
@@ -1307,14 +1554,14 @@ export default function AIAssistantPage() {
         {/* Sessions List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {isRefreshingConversations ? (
-            <div className="flex items-center justify-center py-8 gap-2 text-xs text-slate-500">
+            <div className="flex items-center justify-center py-8 gap-2 text-lg text-[#64748b]">
               <Loader2 size={15} className="animate-spin text-primary" />
               <span>Loading sessions...</span>
             </div>
           ) : filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-3 py-10 text-center">
-              <MessageSquare size={24} className="text-slate-400 opacity-40" />
-              <p className="text-xs font-medium text-slate-500">
+              <MessageSquare size={24} className="text-[#94a3b8] opacity-40" />
+              <p className="text-lg font-medium text-[#64748b]">
                 {searchFilter ? "No matching chats" : "No past sessions yet"}
               </p>
             </div>
@@ -1334,17 +1581,17 @@ export default function AIAssistantPage() {
                   className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer border ${
                     active
                       ? "bg-primary/10 dark:bg-primary/20 text-primary font-bold border-primary/30 shadow-xs"
-                      : "border-transparent text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
+                      : "border-transparent text-[#475569] dark:text-[#cbd5e1] hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 pr-1">
                     <MessageSquare
                       size={13}
                       className={`shrink-0 ${
-                        active ? "text-primary" : "text-slate-400 group-hover:text-slate-600"
+                        active ? "text-primary" : "text-[#94a3b8] group-hover:text-[#475569]"
                       }`}
                     />
-                    <span className="truncate text-xs font-medium">
+                    <span className="truncate text-lg font-medium">
                       {conv.title || "ERP Query Session"}
                     </span>
                   </div>
@@ -1353,7 +1600,7 @@ export default function AIAssistantPage() {
                     type="button"
                     onClick={(e) => handleDeleteConversation(cid, e)}
                     title="Delete session"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-200 dark:hover:bg-[#334155]"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#94a3b8] hover:text-[#e11d48] rounded-lg hover:bg-[#e2e8f0] dark:hover:bg-[#334155]"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -1364,22 +1611,22 @@ export default function AIAssistantPage() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="shrink-0 border-t border-slate-200 dark:border-[#334155] p-2.5 bg-white dark:bg-[#1e293b] space-y-1.5">
+        <div className="shrink-0 border-t border-[#e2e8f0] dark:border-[#334155] p-2.5 bg-white dark:bg-[#1e293b] space-y-1.5">
           <Link
             href="/autovyn/ai/knowledge"
-            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#334155] hover:text-primary transition"
+            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[16px] font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
           >
             <div className="flex items-center gap-2">
               <Database size={13} className="text-primary" />
               <span>Knowledge Base</span>
             </div>
-            <ChevronRight size={13} className="text-slate-400" />
+            <ChevronRight size={13} className="text-[#94a3b8]" />
           </Link>
 
-          <div className="flex items-center justify-between px-2.5 text-[10px] text-slate-500">
+          <div className="flex items-center justify-between px-2.5 text-[15px] text-[#64748b]">
             <span>{conversations.length} sessions</span>
             <span className="flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#10b981]" />
               Live ERP
             </span>
           </div>
@@ -1390,13 +1637,13 @@ export default function AIAssistantPage() {
       <div className="flex flex-1 flex-col overflow-hidden min-w-0 bg-[#f8fafc] dark:bg-[#0f172a]">
 
         {/* ── Top Header Bar ── */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-[#334155] px-4 sm:px-6 py-3 bg-white dark:bg-[#1e293b]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-[#334155] px-4 sm:px-6 py-3 bg-white dark:bg-[#1e293b]">
           <div className="flex items-center gap-3 min-w-0">
             {/* Sidebar toggle */}
             <button
               type="button"
               onClick={() => setShowHistorySidebar(!showHistorySidebar)}
-              className="rounded-xl border border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#0f172a] p-2 text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-[#334155] shrink-0 shadow-xs"
+              className="rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] p-2 text-[#475569] dark:text-[#cbd5e1] transition hover:bg-[#f1f5f9] dark:hover:bg-[#334155] shrink-0 shadow-xs"
               title={showHistorySidebar ? "Collapse Sidebar" : "Expand Sidebar"}
             >
               {showHistorySidebar ? (
@@ -1407,22 +1654,22 @@ export default function AIAssistantPage() {
             </button>
 
             {/* AI Status Avatar */}
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-blue-500 text-white shadow-sm ring-2 ring-primary/20">
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-[#3b82f6] text-white shadow-sm ring-2 ring-primary/20">
               <Bot size={18} />
-              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1e293b] animate-pulse" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#10b981] ring-2 ring-white dark:ring-[#1e293b] animate-pulse" />
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="font-extrabold text-[#193A69] dark:text-white text-xs sm:text-sm leading-tight truncate tracking-wide">
+                <h1 className="font-extrabold text-[#193A69] dark:text-white text-lg sm:text-lg leading-tight truncate tracking-wide">
                   AutoVyn Copilot Pro
                 </h1>
-                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-[15px] font-bold text-[#047857] dark:text-[#34d399]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#10b981] animate-pulse" />
                   ERP DB Connected
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 leading-tight truncate">
+              <p className="text-[15px] sm:text-[16px] text-[#64748b] dark:text-[#94a3b8] leading-tight truncate">
                 {activeConversationId
                   ? `Active Session • ID: ${activeConversationId.slice(0, 14)}...`
                   : "Attendance, Salary Slip, Employee Bio, and Vouchers"}
@@ -1437,7 +1684,7 @@ export default function AIAssistantPage() {
                 type="button"
                 onClick={handleClearMessages}
                 title="Clear current messages"
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 shadow-xs"
+                className="flex items-center gap-1.5 rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-3 py-1.5 text-lg font-bold text-[#475569] dark:text-[#cbd5e1] transition hover:border-[#fda4af] hover:bg-[#fff1f2] hover:text-[#e11d48] shadow-xs"
               >
                 <Trash2 size={13} />
                 <span className="hidden sm:inline">Clear</span>
@@ -1449,7 +1696,7 @@ export default function AIAssistantPage() {
               variant="outline"
               size="sm"
               onClick={handleNewChat}
-              className="rounded-xl border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#193A69] dark:text-white hover:bg-slate-50 dark:hover:bg-[#334155] font-bold shadow-xs"
+              className="rounded-xl border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#193A69] dark:text-white hover:bg-[#f8fafc] dark:hover:bg-[#334155] font-bold shadow-xs"
             >
               <Plus size={14} className="sm:mr-1 text-primary" />
               <span className="hidden sm:inline">New Chat</span>
@@ -1460,7 +1707,7 @@ export default function AIAssistantPage() {
         {/* ── Chat Messages Feed ── */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {isLoadingHistory ? (
-            <div className="flex h-full items-center justify-center gap-3 text-xs sm:text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center gap-3 text-lg sm:text-lg text-[#64748b]">
               <Loader2 size={22} className="animate-spin text-primary" />
               <span>Loading conversation history...</span>
             </div>
@@ -1473,15 +1720,15 @@ export default function AIAssistantPage() {
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
               {/* Date Separator */}
               <div className="flex items-center gap-3 my-1">
-                <div className="flex-1 border-t border-slate-200 dark:border-[#334155]" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-0.5 rounded-full bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-[#334155]">
+                <div className="flex-1 border-t border-[#e2e8f0] dark:border-[#334155]" />
+                <span className="text-[15px] font-bold uppercase tracking-wider text-[#64748b] px-3 py-0.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155]">
                   {messages[0]?.createdAt.toLocaleDateString([], {
                     weekday: "short",
                     day: "numeric",
                     month: "short",
                   })}
                 </span>
-                <div className="flex-1 border-t border-slate-200 dark:border-[#334155]" />
+                <div className="flex-1 border-t border-[#e2e8f0] dark:border-[#334155]" />
               </div>
 
               {/* Message List */}
@@ -1489,6 +1736,7 @@ export default function AIAssistantPage() {
                 <MessageBubble
                   key={msg.id}
                   msg={msg}
+                  conversationId={activeConversationId}
                   onFeedback={handleFeedback}
                 />
               ))}
@@ -1503,15 +1751,15 @@ export default function AIAssistantPage() {
 
         {/* ── Error Banner ── */}
         {error && (
-          <div className="shrink-0 flex items-center justify-between gap-3 border-t border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 px-4 py-2 text-xs text-rose-700 dark:text-rose-300">
+          <div className="shrink-0 flex items-center justify-between gap-3 border-t border-[#fecdd3] dark:border-[#881337]/50 bg-[#fff1f2] dark:bg-[#4c0519]/30 px-4 py-2 text-lg text-[#be123c] dark:text-[#fda4af]">
             <div className="flex items-center gap-2">
-              <AlertCircle size={15} className="shrink-0 text-rose-600" />
+              <AlertCircle size={15} className="shrink-0 text-[#e11d48]" />
               <span className="font-semibold">{error}</span>
             </div>
             <button
               type="button"
               onClick={() => setError(null)}
-              className="text-rose-700 hover:text-rose-900 font-bold text-sm"
+              className="text-[#be123c] hover:text-[#881337] font-bold text-lg"
             >
               ×
             </button>
@@ -1520,8 +1768,8 @@ export default function AIAssistantPage() {
 
         {/* ── Suggestion Chips Bar ── */}
         {hasMessages && (
-          <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none border-t border-slate-200 dark:border-[#334155] bg-white/70 dark:bg-[#1e293b]/70 backdrop-blur-xs">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase shrink-0">
+          <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none border-t border-[#e2e8f0] dark:border-[#334155] bg-white/70 dark:bg-[#1e293b]/70 backdrop-blur-xs">
+            <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8] uppercase shrink-0">
               Suggestions:
             </span>
             {QUICK_SUGGESTION_CHIPS.map((chip, idx) => (
@@ -1529,7 +1777,7 @@ export default function AIAssistantPage() {
                 key={idx}
                 type="button"
                 onClick={() => handlePromptClick(chip)}
-                className="shrink-0 rounded-full bg-slate-100 dark:bg-[#0f172a] hover:bg-primary/10 dark:hover:bg-primary/20 border border-slate-200 dark:border-[#334155] hover:border-primary/40 px-3 py-1 text-[11px] text-slate-700 dark:text-slate-300 hover:text-primary transition font-medium shadow-xs"
+                className="shrink-0 rounded-full bg-[#f1f5f9] dark:bg-[#0f172a] hover:bg-primary/10 dark:hover:bg-primary/20 border border-[#e2e8f0] dark:border-[#334155] hover:border-primary/40 px-3 py-1 text-[16px] text-[#334155] dark:text-[#cbd5e1] hover:text-primary transition font-medium shadow-xs"
               >
                 {chip}
               </button>
@@ -1540,11 +1788,11 @@ export default function AIAssistantPage() {
         {/* ── Chat Input Dock ── */}
         <form
           onSubmit={handleFormSubmit}
-          className="shrink-0 border-t border-slate-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] p-3 sm:p-4 shadow-md"
+          className="shrink-0 border-t border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] p-3 sm:p-4 shadow-md"
         >
           <div className="mx-auto flex w-full max-w-4xl items-end gap-2 sm:gap-3">
             {/* Input Capsule */}
-            <div className="relative flex-1 rounded-2xl border border-slate-300 dark:border-[#334155] bg-slate-50 dark:bg-[#0f172a] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs">
+            <div className="relative flex-1 rounded-2xl border border-[#cbd5e1] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs">
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -1561,12 +1809,12 @@ export default function AIAssistantPage() {
                 }}
                 placeholder="Ask about attendance, salaries, employee biodata or service reminders..."
                 disabled={isInputDisabled}
-                className="w-full resize-none bg-transparent px-4 py-3 text-xs sm:text-[13px] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none scrollbar-none max-h-36 min-h-[44px]"
+                className="w-full resize-none bg-transparent px-4 py-3 text-lg sm:text-[17px] text-[#0f172a] dark:text-white placeholder-[#94a3b8] focus:outline-none scrollbar-none max-h-36 min-h-[44px]"
               />
 
               {/* Character count */}
               {message.length > 150 && (
-                <span className="absolute right-3.5 bottom-2 text-[10px] text-slate-400 pointer-events-none font-mono">
+                <span className="absolute right-3.5 bottom-2 text-[15px] text-[#94a3b8] pointer-events-none font-mono">
                   {message.length}
                 </span>
               )}
@@ -1579,8 +1827,8 @@ export default function AIAssistantPage() {
               title={isListening ? "Stop voice input" : "Speak voice query (Hindi/English)"}
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-all shadow-xs ${
                 isListening
-                  ? "bg-rose-600 text-white border-rose-500 animate-pulse ring-4 ring-rose-500/20"
-                  : "bg-slate-100 dark:bg-[#0f172a] hover:bg-slate-200 dark:hover:bg-[#334155] text-slate-600 dark:text-slate-300 hover:text-[#193A69] dark:hover:text-white border-slate-200 dark:border-[#334155]"
+                  ? "bg-[#e11d48] text-white border-[#f43f5e] animate-pulse ring-4 ring-[#f43f5e]/20"
+                  : "bg-[#f1f5f9] dark:bg-[#0f172a] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] text-[#475569] dark:text-[#cbd5e1] hover:text-[#193A69] dark:hover:text-white border-[#e2e8f0] dark:border-[#334155]"
               }`}
             >
               {isListening ? <MicOff size={18} /> : <Mic size={18} />}
@@ -1590,7 +1838,7 @@ export default function AIAssistantPage() {
             <button
               type="submit"
               disabled={isInputDisabled || !message.trim()}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-[#193A69] via-primary to-blue-600 text-white shadow-md shadow-primary/20 transition-all hover:shadow-lg active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-[#193A69] via-primary to-[#2563eb] text-white shadow-md shadow-primary/20 transition-all hover:shadow-lg active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
             >
               {isLoading ? (
                 <Loader2 size={18} className="animate-spin" />
@@ -1601,9 +1849,9 @@ export default function AIAssistantPage() {
           </div>
 
           {/* Footer Shortcuts & Attribution */}
-          <div className="mx-auto mt-2 flex w-full max-w-4xl items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1">
+          <div className="mx-auto mt-2 flex w-full max-w-4xl items-center justify-between text-[15px] text-[#94a3b8] dark:text-[#64748b] px-1">
             <span>
-              Press <kbd className="rounded border border-slate-200 dark:border-[#334155] bg-slate-100 dark:bg-[#0f172a] px-1 py-0.5 font-mono text-slate-600 dark:text-slate-300">Enter ↵</kbd> to send • <kbd className="rounded border border-slate-200 dark:border-[#334155] bg-slate-100 dark:bg-[#0f172a] px-1 py-0.5 font-mono text-slate-600 dark:text-slate-300">Shift + Enter</kbd> for new line
+              Press <kbd className="rounded border border-[#e2e8f0] dark:border-[#334155] bg-[#f1f5f9] dark:bg-[#0f172a] px-1 py-0.5 font-mono text-[#475569] dark:text-[#cbd5e1]">Enter ↵</kbd> to send • <kbd className="rounded border border-[#e2e8f0] dark:border-[#334155] bg-[#f1f5f9] dark:bg-[#0f172a] px-1 py-0.5 font-mono text-[#475569] dark:text-[#cbd5e1]">Shift + Enter</kbd> for new line
             </span>
             <span className="hidden sm:inline font-semibold">
               AutoVyn AI Copilot • Enterprise Live Data
