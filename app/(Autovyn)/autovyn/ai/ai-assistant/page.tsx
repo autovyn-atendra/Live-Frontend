@@ -48,6 +48,7 @@ import {
   Sparkle,
   X,
   CheckCircle2,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -219,10 +220,12 @@ const submitFeedbackAPI = async (
 };
 
 const listConversations = async (
-  user?: any
+  user?: any,
+  page: number = 1,
+  limit: number = 20
 ): Promise<ConversationListResponse> => {
   const response = await axios.get<ConversationListResponse>(
-    `${BASE_URL}/ai/conversations`,
+    `${BASE_URL}/ai/conversations?page=${page}&limit=${limit}`,
     { headers: buildAIHeaders(user) }
   );
   return response.data;
@@ -539,7 +542,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
   }
 
   return (
-    <div className="space-y-2 text-lg sm:text-[17px] leading-relaxed text-[#334155] dark:text-[#e2e8f0]">
+    <div className="space-y-2 text-base sm:text-[16px] leading-relaxed text-[#334155] dark:text-[#e2e8f0] w-full min-w-0 max-w-full overflow-hidden">
       {blocks.map((block, bIdx) => {
         if (block.type === "empty") {
           return <div key={bIdx} className="h-1.5" />;
@@ -579,11 +582,12 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           return (
             <div
               key={bIdx}
-              className="my-3 overflow-hidden rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-sm"
+              className="my-3 w-full max-w-full min-w-0 rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-sm overflow-hidden"
+              style={{ maxWidth: "100%" }}
             >
               {/* Table header bar */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#1e293b] px-3.5 py-2">
-                <div className="flex items-center gap-2 text-lg font-bold text-[#193A69] dark:text-white">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#193A69] dark:text-white">
                   <FileSpreadsheet size={15} className="text-[#059669] dark:text-[#34d399]" />
                   <span>ERP Results ({dataRows.length} records)</span>
                 </div>
@@ -595,22 +599,28 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                       placeholder="Filter table..."
                       value={tableFilter}
                       onChange={(e) => setTableFilter(e.target.value)}
-                      className="h-7 w-28 sm:w-36 rounded-md border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-[16px] text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
+                      className="h-7 w-28 sm:w-36 rounded-md border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-xs text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
                     />
                   )}
                   <CopyButton text={csvContent} label="Copy CSV" />
                 </div>
               </div>
 
-              {/* Table Scroll View */}
-              <div className="max-h-80 overflow-auto">
-                <table className="w-full text-left text-lg border-collapse">
+              {/* Table Horizontal Scroll View - ONLY THIS TABLE SCROLLS */}
+              <div
+                className="w-full max-w-full overflow-x-auto overflow-y-auto max-h-96 scrollbar-thin scrollbar-thumb-[#cbd5e1] dark:scrollbar-thumb-[#334155]"
+                style={{ width: "100%", maxWidth: "100%" }}
+              >
+                <table
+                  className="text-left text-xs sm:text-sm border-collapse table-auto"
+                  style={{ minWidth: "100%", width: "max-content" }}
+                >
                   <thead className="sticky top-0 z-10 bg-[#f1f5f9] dark:bg-[#1e293b] text-[#334155] dark:text-[#e2e8f0] border-b border-[#e2e8f0] dark:border-[#334155] font-bold shadow-xs">
                     <tr>
                       {headerCells.map((cell: string, cIdx: number) => (
                         <th
                           key={cIdx}
-                          className="px-3.5 py-2.5 border-r last:border-r-0 border-[#e2e8f0] dark:border-[#334155] whitespace-nowrap text-[16px] font-bold uppercase tracking-wider text-[#475569] dark:text-[#cbd5e1]"
+                          className="px-3 py-2 border-r last:border-r-0 border-[#e2e8f0] dark:border-[#334155] whitespace-nowrap text-xs font-bold uppercase tracking-wider text-[#475569] dark:text-[#cbd5e1]"
                         >
                           {renderInlineFormatting(cell)}
                         </th>
@@ -631,7 +641,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                           {cells.map((cell: string, cIdx: number) => (
                             <td
                               key={cIdx}
-                              className="px-3.5 py-2 border-r last:border-r-0 border-[#e2e8f0]/60 dark:border-[#334155]/60 whitespace-nowrap text-[#334155] dark:text-[#cbd5e1] font-medium"
+                              className="px-3 py-1.5 border-r last:border-r-0 border-[#e2e8f0]/60 dark:border-[#334155]/60 whitespace-nowrap text-[#334155] dark:text-[#cbd5e1] font-medium"
                             >
                               {renderInlineFormatting(cell)}
                             </td>
@@ -778,7 +788,7 @@ const MessageBubble = ({
 
   return (
     <div
-      className={`group flex gap-2.5 sm:gap-3.5 transition-all my-1.5 animate-in fade-in-50 duration-300 ${
+      className={`group flex gap-2.5 sm:gap-3.5 transition-all my-1.5 animate-in fade-in-50 duration-300 w-full min-w-0 ${
         isUser ? "justify-end" : "justify-start"
       }`}
     >
@@ -790,11 +800,13 @@ const MessageBubble = ({
         </div>
       )}
 
-      {/* Bubble Container */}
+      {/* Bubble Container - Robust containment */}
       <div
-        className={`relative max-w-[94%] sm:max-w-[85%] md:max-w-[80%] ${
-          isUser ? "items-end" : "items-start"
-        } flex flex-col gap-1`}
+        className={`relative ${
+          isUser
+            ? "max-w-[88%] sm:max-w-[80%] md:max-w-[75%] items-end"
+            : "w-full max-w-full sm:max-w-[95%] md:max-w-[92%] items-start"
+        } min-w-0 flex flex-col gap-1`}
       >
         {/* Assistant Header Tag */}
         {!isUser && (
@@ -818,9 +830,9 @@ const MessageBubble = ({
           </div>
         )}
 
-        {/* Bubble Card */}
+        {/* Bubble Card - Self-contained with min-w-0 and overflow-hidden */}
         <div
-          className={`rounded-2xl px-4 py-3.5 shadow-sm transition-all ${
+          className={`rounded-2xl px-4 py-3.5 shadow-sm transition-all w-full min-w-0 max-w-full overflow-hidden ${
             isUser
               ? "rounded-tr-xs bg-gradient-to-r from-[#193A69] via-primary to-[#2563eb] text-white shadow-md shadow-primary/10"
               : msg.isError
@@ -1143,6 +1155,9 @@ export default function AIAssistantPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [convPage, setConvPage] = useState(1);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
@@ -1182,29 +1197,79 @@ export default function AIAssistantPage() {
     }
   }, [message]);
 
-  // ── Load conversation list ──
+  const PAGE_SIZE = 20;
+
+  // ── Load conversation list (supports reset & infinite lazy loading) ──
   const loadConversations = useCallback(
-    async (quiet = false) => {
+    async (isReset = false, quiet = false) => {
       if (!user?.Comp_Code && !user?.compcode) return;
-      if (!quiet) setIsRefreshingConversations(true);
-      try {
-        const res = await listConversations(user);
-        if (res.success && Array.isArray(res.data)) {
-          setConversations(res.data);
+
+      if (isReset) {
+        if (!quiet) setIsRefreshingConversations(true);
+        try {
+          const res = await listConversations(user, 1, PAGE_SIZE);
+          if (res.success && Array.isArray(res.data)) {
+            setConversations(res.data);
+            setConvPage(1);
+            setHasMoreConversations(res.data.length >= PAGE_SIZE);
+          }
+        } catch {
+          // silent
+        } finally {
+          if (!quiet) setIsRefreshingConversations(false);
         }
-      } catch {
-        // silent
-      } finally {
-        if (!quiet) setIsRefreshingConversations(false);
+      } else {
+        if (isLoadingMoreConversations || !hasMoreConversations) return;
+        setIsLoadingMoreConversations(true);
+        try {
+          const nextPage = convPage + 1;
+          const res = await listConversations(user, nextPage, PAGE_SIZE);
+          if (res.success && Array.isArray(res.data)) {
+            if (res.data.length === 0) {
+              setHasMoreConversations(false);
+            } else {
+              setConversations((prev) => {
+                const existingIds = new Set(prev.map((c) => c.conversationId));
+                const newItems = res.data.filter(
+                  (c) => !existingIds.has(c.conversationId)
+                );
+                return [...prev, ...newItems];
+              });
+              setConvPage(nextPage);
+              if (res.data.length < PAGE_SIZE) {
+                setHasMoreConversations(false);
+              }
+            }
+          }
+        } catch {
+          // silent
+        } finally {
+          setIsLoadingMoreConversations(false);
+        }
       }
     },
-    [user]
+    [user, convPage, hasMoreConversations, isLoadingMoreConversations]
   );
 
   // Initial load
   useEffect(() => {
-    loadConversations(true);
-  }, [loadConversations]);
+    loadConversations(true, true);
+  }, [user?.Comp_Code, user?.compcode]);
+
+  // ── Infinite scroll handler for sessions list ──
+  const handleSessionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 60) {
+      if (
+        !isLoadingMoreConversations &&
+        hasMoreConversations &&
+        !isRefreshingConversations &&
+        !searchFilter
+      ) {
+        loadConversations(false, true);
+      }
+    }
+  };
 
   // Auto-scroll
   useEffect(() => {
@@ -1406,18 +1471,35 @@ export default function AIAssistantPage() {
       const answer = String(response.data?.answer || "").trim();
       const returnedConvId = response.data?.conversationId;
 
-      if (
-        returnedConvId &&
-        returnedConvId !== activeConversationIdRef.current
-      ) {
-        updateActiveConversationId(returnedConvId);
-        listConversations(user)
-          .then((res) => {
-            if (res.success && Array.isArray(res.data)) {
-              setConversations(res.data);
-            }
-          })
-          .catch(() => {});
+      const targetConvId = returnedConvId || activeConversationIdRef.current;
+      if (targetConvId) {
+        if (returnedConvId && returnedConvId !== activeConversationIdRef.current) {
+          updateActiveConversationId(returnedConvId);
+        }
+
+        // Dynamically bring the active session to the very TOP of the list
+        setConversations((prev) => {
+          const existing = prev.find((c) => c.conversationId === targetConvId);
+          const updatedItem: ConversationSummary = existing
+            ? {
+                ...existing,
+                lastMessageAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              }
+            : {
+                conversationId: targetConvId,
+                title:
+                  textToSend.slice(0, 50) +
+                  (textToSend.length > 50 ? "..." : ""),
+                conversationType: "GENERAL",
+                status: "ACTIVE",
+                lastMessageAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+          const rest = prev.filter((c) => c.conversationId !== targetConvId);
+          return [updatedItem, ...rest];
+        });
       }
 
       if (!answer) throw new Error("AI returned an empty response.");
@@ -1497,7 +1579,7 @@ export default function AIAssistantPage() {
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => loadConversations(false)}
+              onClick={() => loadConversations(true, false)}
               disabled={isRefreshingConversations}
               title="Refresh sessions"
               className="rounded-lg p-1.5 text-[#64748b] hover:text-[#1e293b] dark:text-[#94a3b8] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155] transition disabled:opacity-50"
@@ -1552,8 +1634,11 @@ export default function AIAssistantPage() {
         </div>
 
         {/* Sessions List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {isRefreshingConversations ? (
+        <div
+          className="flex-1 overflow-y-auto p-2 space-y-1"
+          onScroll={handleSessionsScroll}
+        >
+          {isRefreshingConversations && conversations.length === 0 ? (
             <div className="flex items-center justify-center py-8 gap-2 text-lg text-[#64748b]">
               <Loader2 size={15} className="animate-spin text-primary" />
               <span>Loading sessions...</span>
@@ -1566,55 +1651,78 @@ export default function AIAssistantPage() {
               </p>
             </div>
           ) : (
-            filteredConversations.map((conv) => {
-              const cid = conv.conversationId;
-              const active = cid === activeConversationId;
-              return (
-                <div
-                  key={cid}
-                  onClick={() => {
-                    handleSelectConversation(cid);
-                    if (typeof window !== "undefined" && window.innerWidth < 768) {
-                      setShowHistorySidebar(false);
-                    }
-                  }}
-                  className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer border ${
-                    active
-                      ? "bg-primary/10 dark:bg-primary/20 text-primary font-bold border-primary/30 shadow-xs"
-                      : "border-transparent text-[#475569] dark:text-[#cbd5e1] hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0 pr-1">
-                    <MessageSquare
-                      size={13}
-                      className={`shrink-0 ${
-                        active ? "text-primary" : "text-[#94a3b8] group-hover:text-[#475569]"
-                      }`}
-                    />
-                    <span className="truncate text-lg font-medium">
-                      {conv.title || "ERP Query Session"}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => handleDeleteConversation(cid, e)}
-                    title="Delete session"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#94a3b8] hover:text-[#e11d48] rounded-lg hover:bg-[#e2e8f0] dark:hover:bg-[#334155]"
+            <>
+              {filteredConversations.map((conv) => {
+                const cid = conv.conversationId;
+                const active = cid === activeConversationId;
+                return (
+                  <div
+                    key={cid}
+                    onClick={() => {
+                      handleSelectConversation(cid);
+                      if (typeof window !== "undefined" && window.innerWidth < 768) {
+                        setShowHistorySidebar(false);
+                      }
+                    }}
+                    className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer border ${
+                      active
+                        ? "bg-primary/10 dark:bg-primary/20 text-primary font-bold border-primary/30 shadow-xs"
+                        : "border-transparent text-[#475569] dark:text-[#cbd5e1] hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
+                    }`}
                   >
-                    <Trash2 size={12} />
-                  </button>
+                    <div className="flex items-center gap-2 min-w-0 pr-1">
+                      <MessageSquare
+                        size={13}
+                        className={`shrink-0 ${
+                          active
+                            ? "text-primary"
+                            : "text-[#94a3b8] group-hover:text-[#475569]"
+                        }`}
+                      />
+                      <span className="truncate text-lg font-medium">
+                        {conv.title || "ERP Query Session"}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteConversation(cid, e)}
+                      title="Delete session"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#94a3b8] hover:text-[#e11d48] rounded-lg hover:bg-[#e2e8f0] dark:hover:bg-[#334155]"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Lazy Loading Indicator */}
+              {isLoadingMoreConversations && (
+                <div className="flex items-center justify-center py-2.5 gap-2 text-xs text-[#64748b] dark:text-[#94a3b8]">
+                  <Loader2 size={13} className="animate-spin text-primary" />
+                  <span>Loading older chats...</span>
                 </div>
-              );
-            })
+              )}
+            </>
           )}
         </div>
 
         {/* Sidebar Footer */}
-        <div className="shrink-0 border-t border-[#e2e8f0] dark:border-[#334155] p-2.5 bg-white dark:bg-[#1e293b] space-y-1.5">
+        <div className="shrink-0 border-t border-[#e2e8f0] dark:border-[#334155] p-2.5 bg-white dark:bg-[#1e293b] space-y-1">
+          <Link
+            href="/autovyn/ai/history"
+            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[15px] font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
+          >
+            <div className="flex items-center gap-2">
+              <Activity size={13} className="text-emerald-500" />
+              <span>Query Logs & Audit</span>
+            </div>
+            <ChevronRight size={13} className="text-[#94a3b8]" />
+          </Link>
+
           <Link
             href="/autovyn/ai/knowledge"
-            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[16px] font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
+            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[15px] font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
           >
             <div className="flex items-center gap-2">
               <Database size={13} className="text-primary" />
@@ -1623,7 +1731,7 @@ export default function AIAssistantPage() {
             <ChevronRight size={13} className="text-[#94a3b8]" />
           </Link>
 
-          <div className="flex items-center justify-between px-2.5 text-[15px] text-[#64748b]">
+          <div className="flex items-center justify-between px-2.5 pt-1 text-[13px] text-[#64748b]">
             <span>{conversations.length} sessions</span>
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-[#10b981]" />
@@ -1634,7 +1742,7 @@ export default function AIAssistantPage() {
       </div>
 
       {/* ── MAIN CHAT AREA ── */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0 bg-[#f8fafc] dark:bg-[#0f172a]">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0 max-w-full bg-[#f8fafc] dark:bg-[#0f172a]">
 
         {/* ── Top Header Bar ── */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-[#334155] px-4 sm:px-6 py-3 bg-white dark:bg-[#1e293b]">
@@ -1679,6 +1787,19 @@ export default function AIAssistantPage() {
 
           {/* Header Action Buttons */}
           <div className="flex items-center gap-2 shrink-0">
+            <Link href="/autovyn/ai/history">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f8fafc] dark:hover:bg-[#334155] font-semibold text-xs gap-1.5 shadow-xs"
+                title="View all user queries, responses & SQL logs"
+              >
+                <Activity size={14} className="text-emerald-500" />
+                <span className="hidden sm:inline">Query Logs</span>
+              </Button>
+            </Link>
+
             {hasMessages && (
               <button
                 type="button"
@@ -1705,7 +1826,7 @@ export default function AIAssistantPage() {
         </div>
 
         {/* ── Chat Messages Feed ── */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 min-w-0">
           {isLoadingHistory ? (
             <div className="flex h-full items-center justify-center gap-3 text-lg sm:text-lg text-[#64748b]">
               <Loader2 size={22} className="animate-spin text-primary" />
@@ -1717,7 +1838,7 @@ export default function AIAssistantPage() {
               onPromptClick={handlePromptClick}
             />
           ) : (
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 min-w-0">
               {/* Date Separator */}
               <div className="flex items-center gap-3 my-1">
                 <div className="flex-1 border-t border-[#e2e8f0] dark:border-[#334155]" />

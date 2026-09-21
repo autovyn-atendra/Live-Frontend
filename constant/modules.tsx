@@ -358,28 +358,34 @@ export const treeData = [
         <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
       </div>
     ),
-    key: "13`",
+    key: "8",
     children: [
       {
         title: "AI Assistant|",
-        key: "13.1",
+        key: "8.2",
         url: "/autovyn/ai-assistant",
         children: [
           {
             title: "AI Assistant |",
-            key: "13.1.1",
+            key: "8.2.9",
             url: "/autovyn/ai/ai-assistant",
           },
           {
             title: "AI Knowledge Management |",
-            key: "13.1.2",
+            key: "8.2.10",
             url: "/autovyn/ai/knowledge",
           },
+          // {
+          //   title: "AI Image Assistant |",
+          //   key: "13.1.3",
+          //   url: "/autovyn/ai/ai_image_assistant",
+          // },
           {
-            title: "AI Image Assistant |",
-            key: "13.1.3",
-            url: "/autovyn/ai/ai_image_assistant",
+            title: "Query Logs & Audit |",
+            key: "8.2.11",
+            url: "/autovyn/ai/history",
           }
+
         ],
       },
     ]
