@@ -49,6 +49,11 @@ import {
   X,
   CheckCircle2,
   Activity,
+  Wand2,
+  FlaskConical,
+  GraduationCap,
+  Table2,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -208,6 +213,7 @@ const submitFeedbackAPI = async (
     correctSQL?: string;
     userQuery?: string;
     intent?: string;
+    synonyms?: string;
   },
   user?: any
 ): Promise<{ success: boolean; message?: string }> => {
@@ -217,6 +223,55 @@ const submitFeedbackAPI = async (
     { headers: buildAIHeaders(user) }
   );
   return response.data;
+};
+
+// Direct rule save → /ai/rules/save (trains AI immediately)
+const saveTrainedRuleAPI = async (
+  payload: {
+    question: string;
+    sql: string;
+    intent?: string;
+    targetTable?: string;
+    synonyms?: string;
+  },
+  user?: any
+): Promise<{ success: boolean; message?: string }> => {
+  const response = await axios.post(
+    `${BASE_URL}/ai/rules/save`,
+    payload,
+    { headers: buildAIHeaders(user) }
+  );
+  return response.data;
+};
+
+// Test SQL before saving
+const testSQLQueryAPI = async (
+  payload: { sql: string },
+  user?: any
+): Promise<{ success: boolean; rowCount?: number; columns?: string[]; rows?: any[]; error?: string; latencyMs?: number }> => {
+  const response = await axios.post(
+    `${BASE_URL}/ai/test-sql`,
+    payload,
+    { headers: buildAIHeaders(user) }
+  );
+  return response.data;
+};
+
+// Fetch available ERP table names for dropdown
+const fetchERPTablesAPI = async (user?: any): Promise<string[]> => {
+  try {
+    const response = await axios.get(`${BASE_URL}/ai/schema/tables`, {
+      headers: buildAIHeaders(user),
+      params: { limit: 500 },
+    });
+    const data = response.data?.data || response.data?.tables || [];
+    if (Array.isArray(data)) {
+      return data.map((t: any) => (typeof t === "string" ? t : t.Table_Name || t.tableName || t.TABLE_NAME || t.name || "")).filter(Boolean).sort();
+    }
+    return [];
+  } catch {
+    return [];
+  }
 };
 
 const listConversations = async (
@@ -354,7 +409,7 @@ const QUICK_SUGGESTION_CHIPS = [
 // ============================================================
 // COPY BUTTON WITH TOAST FEEDBACK
 // ============================================================
-const CopyButton = ({ text, label }: { text: string; label?: string }) => {
+const CopyButton = ({ text, label, className }: { text: string; label?: string; className?: string }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -372,8 +427,10 @@ const CopyButton = ({ text, label }: { text: string; label?: string }) => {
       type="button"
       onClick={handleCopy}
       title={label || "Copy to clipboard"}
-      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[16px] font-semibold transition-all
-        text-[#475569] dark:text-[#cbd5e1] hover:text-primary dark:hover:text-white bg-[#f1f5f9] dark:bg-[#1e293b] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] border border-[#e2e8f0] dark:border-[#334155]"
+      className={
+        className ||
+        "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[16px] font-semibold transition-all text-[#475569] dark:text-[#cbd5e1] hover:text-primary dark:hover:text-white bg-[#f1f5f9] dark:bg-[#1e293b] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] border border-[#e2e8f0] dark:border-[#334155]"
+      }
     >
       {copied ? (
         <>
@@ -456,7 +513,7 @@ const TypingIndicator = () => (
     <div className="flex flex-col gap-1 max-w-[85%]">
       <div className="flex items-center gap-2 px-1 text-[16px] font-semibold text-[#64748b] dark:text-[#94a3b8]">
         <span className="text-[#193A69] dark:text-white font-bold">AutoVyn Copilot</span>
-        <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[15px] font-mono text-primary font-bold">
+        <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-lg font-mono text-primary font-bold">
           QUERYING MSSQL
         </span>
       </div>
@@ -587,7 +644,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
             >
               {/* Table header bar */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#1e293b] px-3.5 py-2">
-                <div className="flex items-center gap-2 text-sm font-bold text-[#193A69] dark:text-white">
+                <div className="flex items-center gap-2 text-lg font-bold text-[#193A69] dark:text-white">
                   <FileSpreadsheet size={15} className="text-[#059669] dark:text-[#34d399]" />
                   <span>ERP Results ({dataRows.length} records)</span>
                 </div>
@@ -599,7 +656,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                       placeholder="Filter table..."
                       value={tableFilter}
                       onChange={(e) => setTableFilter(e.target.value)}
-                      className="h-7 w-28 sm:w-36 rounded-md border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-xs text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
+                      className="h-7 w-28 sm:w-36 rounded-md border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2 text-lg text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
                     />
                   )}
                   <CopyButton text={csvContent} label="Copy CSV" />
@@ -612,7 +669,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                 style={{ width: "100%", maxWidth: "100%" }}
               >
                 <table
-                  className="text-left text-xs sm:text-sm border-collapse table-auto"
+                  className="text-left text-lg sm:text-lg border-collapse table-auto"
                   style={{ minWidth: "100%", width: "max-content" }}
                 >
                   <thead className="sticky top-0 z-10 bg-[#f1f5f9] dark:bg-[#1e293b] text-[#334155] dark:text-[#e2e8f0] border-b border-[#e2e8f0] dark:border-[#334155] font-bold shadow-xs">
@@ -620,7 +677,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
                       {headerCells.map((cell: string, cIdx: number) => (
                         <th
                           key={cIdx}
-                          className="px-3 py-2 border-r last:border-r-0 border-[#e2e8f0] dark:border-[#334155] whitespace-nowrap text-xs font-bold uppercase tracking-wider text-[#475569] dark:text-[#cbd5e1]"
+                          className="px-3 py-2 border-r last:border-r-0 border-[#e2e8f0] dark:border-[#334155] whitespace-nowrap text-lg font-bold uppercase tracking-wider text-[#475569] dark:text-[#cbd5e1]"
                         >
                           {renderInlineFormatting(cell)}
                         </th>
@@ -696,7 +753,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
           const match = text.match(/^(\d+)\.\s+(.*)/);
           return (
             <div key={bIdx} className="flex items-start gap-2.5 pl-1 py-0.5">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-[15px] font-bold text-primary mt-0.5">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-lg font-bold text-primary mt-0.5">
                 {match?.[1]}
               </span>
               <div className="flex-1 leading-normal text-[#334155] dark:text-[#e2e8f0]">
@@ -720,12 +777,13 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
 };
 
 // ============================================================
-// MESSAGE BUBBLE COMPONENT
+// MESSAGE BUBBLE COMPONENT — UPGRADED WITH SELF-TRAINING
 // ============================================================
 const MessageBubble = ({
   msg,
   conversationId,
   onFeedback,
+  user,
 }: {
   msg: ChatMessage;
   conversationId?: string | null;
@@ -733,31 +791,54 @@ const MessageBubble = ({
     id: string,
     feedbackType: string,
     userComment?: string,
-    targetTable?: string
+    targetTable?: string,
+    correctSQL?: string
   ) => Promise<void>;
+  user?: any;
 }) => {
   const isUser = msg.role === "user";
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState("INCORRECT_DATA");
   const [commentText, setCommentText] = useState("");
   const [targetTable, setTargetTable] = useState("");
+  const [tableSearch, setTableSearch] = useState("");
+  const [correctSQL, setCorrectSQL] = useState("");
+  const [synonyms, setSynonyms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingRule, setIsSavingRule] = useState(false);
+  const [isTestingSQL, setIsTestingSQL] = useState(false);
+  const [sqlTestResult, setSqlTestResult] = useState<{ success: boolean; rowCount?: number; error?: string; latencyMs?: number } | null>(null);
   const [feedbackSaved, setFeedbackSaved] = useState(msg.feedbackSubmitted || false);
+  const [ruleSaved, setRuleSaved] = useState(false);
+  const [erpTables, setErpTables] = useState<string[]>([]);
+  const [tablesLoaded, setTablesLoaded] = useState(false);
+
+  const COMMON_ERP_TABLES = [
+    "EMPLOYEEMASTER", "SALARYFILE", "attendancetable", "Misc_Mst",
+    "Srv_Reminder_Tbl", "Account_No_Api", "emp_varify", "Asset_Issue",
+    "Approval_Matrix", "AI_SQL_Learning_Tbl",
+  ];
+
+  const displayTables = erpTables.length > 0 ? erpTables : COMMON_ERP_TABLES;
+  const filteredTables = tableSearch
+    ? displayTables.filter((t) => t.toLowerCase().includes(tableSearch.toLowerCase()))
+    : displayTables.slice(0, 20);
 
   const feedbackOptions = [
     { id: "INCORRECT_DATA", label: "Galat Data (Wrong Info)", icon: "❌" },
-    { id: "WRONG_CALCULATION", label: "Calculation Error (Count/Amount)", icon: "📊" },
-    { id: "INCOMPLETE_DATA", label: "Adhoori Jankari (Incomplete)", icon: "⚠️" },
-    { id: "WRONG_TABLE", label: "Wrong Table / Schema", icon: "🔍" },
-    { id: "CUSTOM_RULE", label: "Custom Rule / Suggestion", icon: "✏️" },
+    { id: "WRONG_CALCULATION", label: "Calculation Error", icon: "📊" },
+    { id: "INCOMPLETE_DATA", label: "Incomplete Data", icon: "⚠️" },
+    { id: "WRONG_TABLE", label: "Wrong Table/Schema", icon: "🔍" },
+    { id: "CUSTOM_RULE", label: "Custom Rule", icon: "✏️" },
   ];
 
-  const tableSuggestions = [
-    "EMP_MST (Employee)",
-    "MISC_ATTEND_VW (Attendance)",
-    "Salary_Register_VW (Salary)",
-    "General / Other",
-  ];
+  // Load ERP tables when panel opens
+  const loadTables = async () => {
+    if (tablesLoaded || !user) return;
+    setTablesLoaded(true);
+    const tables = await fetchERPTablesAPI(user);
+    if (tables.length > 0) setErpTables(tables);
+  };
 
   const handleThumbsUp = async () => {
     if (onFeedback) {
@@ -767,8 +848,63 @@ const MessageBubble = ({
     }
   };
 
-  const handleThumbsDownClick = () => {
-    setShowFeedbackModal((prev) => !prev);
+  const handleThumbsDown = async () => {
+    if (onFeedback) {
+      await onFeedback(msg.id, "UNHELPFUL", "Marked as FAILED by user via Dislike");
+      setFeedbackSaved(true);
+    }
+    // Also open training panel so user can fix and train SQL if desired
+    setShowFeedbackModal(true);
+    loadTables();
+  };
+
+  const handleTestSQL = async () => {
+    if (!correctSQL.trim()) return;
+    setIsTestingSQL(true);
+    setSqlTestResult(null);
+    try {
+      const result = await testSQLQueryAPI({ sql: correctSQL.trim() }, user);
+      setSqlTestResult(result);
+    } catch (err: any) {
+      setSqlTestResult({ success: false, error: err?.response?.data?.message || err?.message || "Test failed" });
+    } finally {
+      setIsTestingSQL(false);
+    }
+  };
+
+  // Save directly as trained rule (strongest action — AI learns immediately)
+  const handleSaveAndTrain = async () => {
+    if (!correctSQL.trim()) {
+      alert("Pehle sahi SQL likhiye jo AI ko sikhana hai.");
+      return;
+    }
+    const question = msg.userQuery || commentText || "";
+    if (!question.trim()) {
+      alert("Question required — original query batayein.");
+      return;
+    }
+    setIsSavingRule(true);
+    try {
+      const result = await saveTrainedRuleAPI({
+        question,
+        sql: correctSQL.trim(),
+        intent: msg.intent || "DYNAMIC_CUSTOM",
+        targetTable: targetTable || undefined,
+        synonyms: synonyms || undefined,
+      }, user);
+      if (result.success) {
+        setRuleSaved(true);
+        setShowFeedbackModal(false);
+        // Also log golden feedback
+        if (onFeedback) {
+          await onFeedback(msg.id, "GOLDEN", commentText || "Trained golden rule", targetTable, correctSQL.trim()).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      alert("Save failed: " + (err?.response?.data?.message || err?.message));
+    } finally {
+      setIsSavingRule(false);
+    }
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -776,7 +912,7 @@ const MessageBubble = ({
     if (!onFeedback) return;
     setIsSubmitting(true);
     try {
-      await onFeedback(msg.id, selectedReason, commentText, targetTable);
+      await onFeedback(msg.id, selectedReason, commentText, targetTable, correctSQL || undefined);
       setFeedbackSaved(true);
       setShowFeedbackModal(false);
     } catch {
@@ -800,7 +936,7 @@ const MessageBubble = ({
         </div>
       )}
 
-      {/* Bubble Container - Robust containment */}
+      {/* Bubble Container */}
       <div
         className={`relative ${
           isUser
@@ -811,26 +947,21 @@ const MessageBubble = ({
         {/* Assistant Header Tag */}
         {!isUser && (
           <div className="flex items-center gap-2 px-1 text-[16px] font-semibold text-[#64748b] dark:text-[#94a3b8]">
-            <span className="text-[#193A69] dark:text-white font-bold">
-              AutoVyn AI
-            </span>
-
+            <span className="text-[#193A69] dark:text-white font-bold">AutoVyn AI</span>
             {msg.mode && (
-              <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[15px] font-mono text-primary font-bold">
+              <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-lg font-mono text-primary font-bold">
                 {msg.mode === "DATABASE" ? "⚡ DATABASE (LIVE ERP)" : msg.mode}
               </span>
             )}
-
             {msg.responseTimeMs && (
-              <span className="flex items-center gap-1 text-[15px] text-[#94a3b8] font-mono">
-                <Clock size={11} />
-                {msg.responseTimeMs}ms
+              <span className="flex items-center gap-1 text-lg text-[#94a3b8] font-mono">
+                <Clock size={11} />{msg.responseTimeMs}ms
               </span>
             )}
           </div>
         )}
 
-        {/* Bubble Card - Self-contained with min-w-0 and overflow-hidden */}
+        {/* Bubble Card */}
         <div
           className={`rounded-2xl px-4 py-3.5 shadow-sm transition-all w-full min-w-0 max-w-full overflow-hidden ${
             isUser
@@ -841,185 +972,304 @@ const MessageBubble = ({
           }`}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words text-lg sm:text-[17px] font-medium leading-relaxed">
-              {msg.content}
-            </p>
+            <p className="whitespace-pre-wrap break-words text-lg sm:text-[17px] font-medium leading-relaxed">{msg.content}</p>
           ) : (
             <FormattedMarkdown content={msg.content} />
           )}
+        </div>
 
-          {/* Action Toolbar on Bottom */}
-          <div className="mt-3 flex flex-col gap-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 pt-2 text-[16px]">
-            <div className="flex items-center justify-between gap-2">
+        {/* Footer actions for user prompt */}
+        {isUser && (
+          <div className="flex items-center justify-end gap-2 px-1 mt-0.5">
+            <CopyButton
+              text={msg.content}
+              label="Copy"
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-lg font-semibold text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white bg-[#f8fafc] dark:bg-[#0f172a] hover:bg-[#e2e8f0] dark:hover:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] transition shadow-xs cursor-pointer"
+            />
+            {msg.createdAt && (
+              <span className="text-lg text-[#94a3b8] font-mono">
+                {formatMessageTime(msg.createdAt)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Footer actions for assistant */}
+        {!isUser && !msg.isError && (
+          <div className="flex flex-col gap-1 w-full mt-1">
+            <div className="flex items-center justify-between gap-2 px-1">
               <div className="flex items-center gap-1.5 flex-wrap">
-                {!isUser && !msg.isError && (
-                  <>
-                    <CopyButton text={msg.content} label="Copy" />
-                    <SpeechButton text={msg.content} />
+                <CopyButton text={msg.content} label="Copy" />
+                <SpeechButton text={msg.content} />
 
-                    {/* Feedback Buttons */}
-                    <button
-                      type="button"
-                      onClick={handleThumbsUp}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition ${
-                        msg.liked === true
-                          ? "text-[#059669] dark:text-[#34d399] bg-[#ecfdf5] dark:bg-[#022c22]/40 border border-[#a7f3d0] dark:border-[#065f46]"
-                          : "text-[#94a3b8] hover:text-[#475569] dark:hover:text-white bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
-                      }`}
-                      title="Helpful response"
-                    >
-                      <ThumbsUp size={13} />
-                      <span>Like</span>
-                    </button>
+                <button
+                  type="button"
+                  onClick={handleThumbsUp}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-lg font-semibold transition ${
+                    msg.liked === true
+                      ? "text-[#059669] dark:text-[#34d399] bg-[#ecfdf5] dark:bg-[#022c22]/40 border border-[#a7f3d0] dark:border-[#065f46]"
+                      : "text-[#94a3b8] hover:text-[#475569] dark:hover:text-white bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
+                  }`}
+                  title="Helpful response (Mark as Success)"
+                >
+                  <ThumbsUp size={13} /><span>Like</span>
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={handleThumbsDownClick}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition ${
-                        msg.liked === false || showFeedbackModal
-                          ? "text-[#e11d48] dark:text-[#fb7185] bg-[#fff1f2] dark:bg-[#4c0519]/40 border border-[#fecdd3] dark:border-[#881337]"
-                          : "text-[#94a3b8] hover:text-[#475569] dark:hover:text-white bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
-                      }`}
-                      title="Report issue / Give feedback"
-                    >
-                      <ThumbsDown size={13} />
-                      <span>Unlike / Feedback</span>
-                    </button>
+                <button
+                  type="button"
+                  onClick={handleThumbsDown}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-lg font-semibold transition ${
+                    msg.liked === false
+                      ? "text-[#e11d48] dark:text-[#fb7185] bg-[#fff1f2] dark:bg-[#4c0519]/40 border border-[#fecdd3] dark:border-[#881337]"
+                      : "text-[#94a3b8] hover:text-[#e11d48] dark:hover:text-[#fb7185] bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
+                  }`}
+                  title="Dislike response — Move to Failed in History"
+                >
+                  <ThumbsDown size={13} /><span>Dislike</span>
+                </button>
 
-                    {feedbackSaved && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-[11px] font-bold">
-                        <CheckCircle2 size={11} />
-                        Feedback Saved
-                      </span>
-                    )}
-                  </>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !showFeedbackModal;
+                    setShowFeedbackModal(next);
+                    if (next) loadTables();
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-lg font-semibold transition ${
+                    showFeedbackModal
+                      ? "text-[#4f46e5] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca]"
+                      : "text-[#6366f1] hover:text-[#4f46e5] bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]"
+                  }`}
+                  title="Open Training & SQL Fix Panel"
+                >
+                  <Wand2 size={13} /><span>Fix / Train AI</span>
+                </button>
+
+                {msg.liked === false && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#fff1f2] dark:bg-[#4c0519]/40 text-[#e11d48] dark:text-[#fb7185] border border-[#fecdd3] dark:border-[#881337] px-2 py-0.5 text-lg font-bold animate-in fade-in-50">
+                    <XCircle size={11} />
+                    Moved to Failed in History
+                  </span>
+                )}
+
+                {msg.liked === true && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-lg font-bold animate-in fade-in-50">
+                    <CheckCircle2 size={11} />
+                    Marked as Success
+                  </span>
+                )}
+
+                {ruleSaved && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-lg font-bold animate-in fade-in-50">
+                    <CheckCircle2 size={11} />
+                    AI Trained! ✓
+                  </span>
                 )}
               </div>
-
-              <span
-                className={`text-[15px] font-medium shrink-0 ${
-                  isUser ? "text-white/80" : "text-[#94a3b8]"
-                }`}
-              >
+              <span className={`text-lg font-medium shrink-0 ${isUser ? "text-white/80" : "text-[#94a3b8]"}`}>
                 {formatMessageTime(msg.createdAt)}
               </span>
             </div>
 
-            {/* Inline Feedback Popover / Panel */}
+            {/* ── UPGRADED TRAINING PANEL ── */}
             {!isUser && showFeedbackModal && (
-              <div className="mt-2 rounded-xl border border-primary/20 bg-[#f8fafc] dark:bg-[#0f172a] p-3 text-left shadow-sm animate-in fade-in-50 zoom-in-95 duration-200">
-                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-[#e2e8f0] dark:border-[#334155]">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#193A69] dark:text-white">
-                    <Sparkle size={13} className="text-primary" />
-                    <span>Feedback & Correction (AutoVyn AI Model)</span>
+              <div className="mt-2 rounded-xl border border-[#6366f1]/30 bg-gradient-to-b from-[#f8fafc] to-[#f1f5f9] dark:from-[#0f172a] dark:to-[#1e293b] p-4 text-left shadow-md animate-in fade-in-50 zoom-in-95 duration-200 space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#334155]">
+                  <div className="flex items-center gap-2 text-lg font-bold text-[#193A69] dark:text-white">
+                    <GraduationCap size={15} className="text-[#6366f1]" />
+                    <span>AI Training Panel</span>
+                    <span className="text-lg font-normal bg-[#6366f1]/10 text-[#6366f1] border border-[#6366f1]/20 rounded-full px-2 py-0.5">Instant Learning</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowFeedbackModal(false)}
-                    className="text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white"
-                  >
+                  <button type="button" onClick={() => setShowFeedbackModal(false)} className="text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white">
                     <X size={14} />
                   </button>
                 </div>
 
-                <form onSubmit={handleFormSubmit} className="space-y-2.5">
-                  {/* Reason tags */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">
-                      Kaisa Issue Hai? (Select Issue Type)
-                    </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {feedbackOptions.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setSelectedReason(opt.id)}
-                          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition ${
-                            selectedReason === opt.id
-                              ? "bg-primary text-white font-bold shadow-xs"
-                              : "bg-white dark:bg-[#1e293b] text-[#475569] dark:text-[#cbd5e1] border border-[#e2e8f0] dark:border-[#334155] hover:border-primary/40"
-                          }`}
-                        >
-                          <span>{opt.icon}</span>
-                          <span>{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
+                {/* Dislike Status Alert */}
+                {msg.liked === false && (
+                  <div className="rounded-lg bg-[#fff1f2] dark:bg-[#4c0519]/30 border border-[#fecdd3] dark:border-[#881337] p-2.5 text-lg text-[#9f1239] dark:text-[#fecdd3] flex items-center gap-2">
+                    <XCircle size={15} className="text-[#e11d48] shrink-0" />
+                    <span>Ye query <strong>History ke FAILED</strong> section me move ho chuki hai. Aage se sahi response aane ke liye niche correct SQL likh kar <strong>"Save & Train AI Now"</strong> karein:</span>
                   </div>
+                )}
 
-                  {/* User Comment / Correction Input */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">
-                      Sahi Jawab / Rule Batayein (Aapke hisaab se sahi kya hona chahiye?)
-                    </label>
-                    <textarea
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      rows={2}
-                      placeholder="e.g. Iska birthday ya salary slip galat aayi, sahi format ye hona chahiye ya rule ye lagao..."
-                      className="w-full rounded-lg border border-[#cbd5e1] dark:border-[#334155] bg-white dark:bg-[#1e293b] p-2 text-xs text-[#1e293b] dark:text-white placeholder-[#94a3b8] focus:border-primary focus:outline-none"
+                {/* Original Question display */}
+                {msg.userQuery && (
+                  <div className="rounded-lg bg-[#f1f5f9] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155] px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-0.5">Original Question:</p>
+                      <p className="text-lg font-medium text-[#334155] dark:text-[#e2e8f0] break-words">{msg.userQuery}</p>
+                    </div>
+                    <CopyButton
+                      text={msg.userQuery}
+                      label="Copy"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-lg font-medium text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] transition shadow-xs cursor-pointer"
                     />
                   </div>
+                )}
 
-                  {/* Target Module selection */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">
-                      Target Module / Table (Optional)
-                    </label>
-                    <div className="flex flex-wrap gap-1">
-                      {tableSuggestions.map((tbl, tIdx) => {
-                        const code = tbl.split(" ")[0];
-                        return (
-                          <button
-                            key={tIdx}
-                            type="button"
-                            onClick={() => setTargetTable(code)}
-                            className={`rounded-md px-1.5 py-0.5 text-[11px] font-mono transition ${
-                              targetTable === code
-                                ? "bg-primary/20 text-primary font-bold border border-primary/40"
-                                : "bg-white dark:bg-[#1e293b] text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155] hover:bg-[#f1f5f9]"
-                            }`}
-                          >
-                            {tbl}
-                          </button>
-                        );
-                      })}
-                    </div>
+                {/* Issue Type */}
+                <div>
+                  <label className="block text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1.5">Issue Type</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {feedbackOptions.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSelectedReason(opt.id)}
+                        className={`flex items-center gap-1 rounded-lg px-2 py-1 text-lg font-medium transition ${
+                          selectedReason === opt.id
+                            ? "bg-[#6366f1] text-white font-bold shadow-sm"
+                            : "bg-white dark:bg-[#1e293b] text-[#475569] dark:text-[#cbd5e1] border border-[#e2e8f0] dark:border-[#334155] hover:border-[#6366f1]/40"
+                        }`}
+                      >
+                        <span>{opt.icon}</span><span>{opt.label}</span>
+                      </button>
+                    ))}
                   </div>
+                </div>
 
-                  {/* Submit & Cancel */}
-                  <div className="flex items-center justify-end gap-2 pt-1">
+                {/* Correct SQL — THE KEY FIELD */}
+                <div>
+                  <label className="block text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1.5">
+                    ⚡ Sahi SQL Query (AI isse seekhega)
+                  </label>
+                  <textarea
+                    value={correctSQL}
+                    onChange={(e) => { setCorrectSQL(e.target.value); setSqlTestResult(null); }}
+                    rows={4}
+                    placeholder={`SELECT TOP 100 *\nFROM [dbo].[Srv_Reminder_Tbl] WITH (NOLOCK)\nWHERE CAST(Final_Due_Date AS DATE) = CAST(GETDATE() AS DATE)\nORDER BY Final_Due_Date ASC;`}
+                    className="w-full rounded-lg border border-[#cbd5e1] dark:border-[#334155] bg-[#0f172a] text-[#a5f3fc] p-2.5 text-lg font-mono placeholder-[#475569] focus:border-[#6366f1] focus:outline-none focus:ring-1 focus:ring-[#6366f1]/30 resize-y"
+                    spellCheck={false}
+                  />
+                  {/* Test SQL Button */}
+                  <div className="mt-1.5 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowFeedbackModal(false)}
-                      className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#64748b] dark:text-[#94a3b8] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] transition"
+                      onClick={handleTestSQL}
+                      disabled={isTestingSQL || !correctSQL.trim()}
+                      className="flex items-center gap-1.5 rounded-lg bg-[#0f172a] dark:bg-[#1e293b] border border-[#334155] hover:border-[#6366f1]/50 text-[#a5f3fc] px-2.5 py-1 text-lg font-bold transition disabled:opacity-40"
                     >
-                      Cancel
+                      {isTestingSQL ? <Loader2 size={11} className="animate-spin" /> : <FlaskConical size={11} />}
+                      {isTestingSQL ? "Testing..." : "Test SQL Live"}
+                    </button>
+                    {sqlTestResult && (
+                      <span className={`text-lg font-bold flex items-center gap-1 ${
+                        sqlTestResult.success ? "text-[#059669]" : "text-[#e11d48]"
+                      }`}>
+                        {sqlTestResult.success
+                          ? <><CheckCircle2 size={11} /> {sqlTestResult.rowCount ?? 0} rows · {sqlTestResult.latencyMs}ms</>
+                          : <><AlertCircle size={11} /> {sqlTestResult.error?.slice(0, 60)}</>}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Target Table — with search */}
+                <div>
+                  <label className="block text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1.5">Target ERP Table</label>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="relative flex-1">
+                      <Search size={11} className="absolute left-2 top-2 text-[#94a3b8] pointer-events-none" />
+                      <input
+                        type="text"
+                        value={tableSearch}
+                        onChange={(e) => setTableSearch(e.target.value)}
+                        placeholder="Search ERP tables..."
+                        className="w-full pl-6 pr-2 py-1.5 text-lg rounded-lg border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#334155] dark:text-white placeholder-[#94a3b8] focus:border-[#6366f1] focus:outline-none"
+                      />
+                    </div>
+                    {targetTable && (
+                      <span className="text-lg font-mono font-bold text-[#6366f1] bg-[#6366f1]/10 border border-[#6366f1]/20 rounded px-1.5 py-0.5">{targetTable}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                    {filteredTables.map((tbl) => (
+                      <button
+                        key={tbl}
+                        type="button"
+                        onClick={() => setTargetTable(tbl)}
+                        className={`rounded-md px-1.5 py-0.5 text-lg font-mono transition ${
+                          targetTable === tbl
+                            ? "bg-[#6366f1]/20 text-[#6366f1] font-bold border border-[#6366f1]/40"
+                            : "bg-white dark:bg-[#1e293b] text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {tbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Synonyms / alternate phrasings */}
+                <div>
+                  <label className="block text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">Alternate Phrasings (Optional, comma separated)</label>
+                  <input
+                    type="text"
+                    value={synonyms}
+                    onChange={(e) => setSynonyms(e.target.value)}
+                    placeholder="e.g. aaj ki service list, today service due, service reminder today"
+                    className="w-full rounded-lg border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-2.5 py-1.5 text-lg text-[#334155] dark:text-white placeholder-[#94a3b8] focus:border-[#6366f1] focus:outline-none"
+                  />
+                </div>
+
+                {/* Comment */}
+                <div>
+                  <label className="block text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] mb-1">Comment (Optional)</label>
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    rows={2}
+                    placeholder="Kya galat tha aur kyun ye sahi hai..."
+                    className="w-full rounded-lg border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] p-2 text-lg text-[#334155] dark:text-white placeholder-[#94a3b8] focus:border-[#6366f1] focus:outline-none resize-none"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#e2e8f0] dark:border-[#334155]">
+                  <button
+                    type="button"
+                    onClick={() => setShowFeedbackModal(false)}
+                    className="rounded-lg px-2.5 py-1.5 text-lg font-semibold text-[#64748b] dark:text-[#94a3b8] hover:bg-[#e2e8f0] dark:hover:bg-[#334155] transition"
+                  >
+                    Cancel
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    {/* Light feedback — just log */}
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleFormSubmit as any}
+                      className="flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] hover:bg-[#f8fafc] text-[#475569] dark:text-[#cbd5e1] px-2.5 py-1.5 text-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                      Log Feedback
                     </button>
 
+                    {/* Strong action — train AI immediately */}
                     <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-white px-3 py-1 text-xs font-bold shadow-xs transition disabled:opacity-50"
+                      type="button"
+                      onClick={handleSaveAndTrain}
+                      disabled={isSavingRule || !correctSQL.trim()}
+                      className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#6366f1] to-[#4f46e5] hover:from-[#4f46e5] hover:to-[#4338ca] text-white px-3 py-1.5 text-lg font-bold shadow-sm transition disabled:opacity-40 disabled:pointer-events-none"
+                      title={!correctSQL.trim() ? "Pehle Sahi SQL likhiye" : "AI ko train karo with this SQL"}
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 size={12} className="animate-spin" />
-                          <span>Saving...</span>
-                        </>
+                      {isSavingRule ? (
+                        <><Loader2 size={11} className="animate-spin" /><span>Training...</span></>
                       ) : (
                         <>
-                          <Send size={12} />
-                          <span>Submit Feedback & Train AI</span>
-                        </>
+                        <Wand2 size={11} />
+                        <span>Save & Train AI Now</span></>
                       )}
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* User Avatar */}
@@ -1096,7 +1346,7 @@ const EmptyState = ({
                   </h3>
                 </div>
 
-                <span className="rounded-full bg-[#f1f5f9] dark:bg-[#0f172a] px-2 py-0.5 text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155]">
+                <span className="rounded-full bg-[#f1f5f9] dark:bg-[#0f172a] px-2 py-0.5 text-lg font-bold text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155]">
                   {cat.badge}
                 </span>
               </div>
@@ -1400,12 +1650,13 @@ export default function AIAssistantPage() {
     }
   };
 
-  // ── Feedback Handler ──
+  // ── Feedback Handler (also auto-trains if correctSQL provided) ──
   const handleFeedback = async (
     id: string,
     feedbackType: string,
     userComment?: string,
-    targetTable?: string
+    targetTable?: string,
+    correctSQL?: string
   ) => {
     const isHelpful = feedbackType === "HELPFUL";
     const targetMsg = messages.find((m) => m.id === id);
@@ -1432,7 +1683,7 @@ export default function AIAssistantPage() {
           userComment,
           targetTable,
           userQuery: targetMsg?.userQuery,
-          correctSQL: targetMsg?.sql,
+          correctSQL: correctSQL ? correctSQL.trim() : undefined,
           intent: targetMsg?.intent,
         },
         user
@@ -1551,7 +1802,7 @@ export default function AIAssistantPage() {
   const isInputDisabled = isLoading || isLoadingHistory;
 
   return (
-    <div className="relative flex h-[calc(100vh-75px)] sm:h-[calc(100vh-90px)] w-full overflow-hidden rounded-2xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-md">
+    <div className="relative flex h-[calc(100vh-75px)] sm:h-[calc(100vh-160px)] w-full overflow-hidden rounded-2xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] shadow-md">
 
       {/* ── MOBILE BACKDROP OVERLAY ── */}
       {showHistorySidebar && (
@@ -1565,7 +1816,7 @@ export default function AIAssistantPage() {
       <div
         className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] transition-all duration-300 md:relative md:z-auto ${
           showHistorySidebar
-            ? "w-72 max-w-[85vw] md:w-64 shrink-0 translate-x-0"
+            ? "w-72 max-w-7xl md:w-64 shrink-0 translate-x-0"
             : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-none"
         }`}
       >
@@ -1594,9 +1845,9 @@ export default function AIAssistantPage() {
               type="button"
               onClick={handleNewChat}
               title="New Chat"
-              className="rounded-lg p-1.5 text-primary hover:bg-primary/10 transition font-bold"
+              className="rounded-lg p-1.5 text-primary hover:bg-primary/10 transition font-bold text-lg"
             >
-              <Plus size={16} />
+              <Plus size={22} />
             </button>
           </div>
         </div>
@@ -1698,7 +1949,7 @@ export default function AIAssistantPage() {
 
               {/* Lazy Loading Indicator */}
               {isLoadingMoreConversations && (
-                <div className="flex items-center justify-center py-2.5 gap-2 text-xs text-[#64748b] dark:text-[#94a3b8]">
+                <div className="flex items-center justify-center py-2.5 gap-2 text-lg text-[#64748b] dark:text-[#94a3b8]">
                   <Loader2 size={13} className="animate-spin text-primary" />
                   <span>Loading older chats...</span>
                 </div>
@@ -1711,7 +1962,7 @@ export default function AIAssistantPage() {
         <div className="shrink-0 border-t border-[#e2e8f0] dark:border-[#334155] p-2.5 bg-white dark:bg-[#1e293b] space-y-1">
           <Link
             href="/autovyn/ai/history"
-            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[15px] font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
+            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-lg font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
           >
             <div className="flex items-center gap-2">
               <Activity size={13} className="text-emerald-500" />
@@ -1722,7 +1973,7 @@ export default function AIAssistantPage() {
 
           <Link
             href="/autovyn/ai/knowledge"
-            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[15px] font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
+            className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-lg font-bold text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] hover:text-primary transition"
           >
             <div className="flex items-center gap-2">
               <Database size={13} className="text-primary" />
@@ -1731,7 +1982,7 @@ export default function AIAssistantPage() {
             <ChevronRight size={13} className="text-[#94a3b8]" />
           </Link>
 
-          <div className="flex items-center justify-between px-2.5 pt-1 text-[13px] text-[#64748b]">
+          <div className="flex items-center justify-between px-2.5 pt-1 text-lg text-[#64748b]">
             <span>{conversations.length} sessions</span>
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-[#10b981]" />
@@ -1772,12 +2023,12 @@ export default function AIAssistantPage() {
                 <h1 className="font-extrabold text-[#193A69] dark:text-white text-lg sm:text-lg leading-tight truncate tracking-wide">
                   AutoVyn Copilot Pro
                 </h1>
-                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-[15px] font-bold text-[#047857] dark:text-[#34d399]">
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#ecfdf5] dark:bg-[#022c22]/40 border border-[#a7f3d0] dark:border-[#065f46] px-2 py-0.5 text-lg font-bold text-[#047857] dark:text-[#34d399]">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#10b981] animate-pulse" />
                   ERP DB Connected
                 </span>
               </div>
-              <p className="text-[15px] sm:text-[16px] text-[#64748b] dark:text-[#94a3b8] leading-tight truncate">
+              <p className="text-lg sm:text-[16px] text-[#64748b] dark:text-[#94a3b8] leading-tight truncate">
                 {activeConversationId
                   ? `Active Session • ID: ${activeConversationId.slice(0, 14)}...`
                   : "Attendance, Salary Slip, Employee Bio, and Vouchers"}
@@ -1791,11 +2042,11 @@ export default function AIAssistantPage() {
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
-                className="rounded-xl border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f8fafc] dark:hover:bg-[#334155] font-semibold text-xs gap-1.5 shadow-xs"
+                size="lg"
+                className="rounded-xl border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f8fafc] dark:hover:bg-[#334155] font-semibold text-lg gap-1.5 shadow-xs"
                 title="View all user queries, responses & SQL logs"
               >
-                <Activity size={14} className="text-emerald-500" />
+                {/* <Activity size={14} className="text-emerald-500" /> */}
                 <span className="hidden sm:inline">Query Logs</span>
               </Button>
             </Link>
@@ -1807,7 +2058,7 @@ export default function AIAssistantPage() {
                 title="Clear current messages"
                 className="flex items-center gap-1.5 rounded-xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] px-3 py-1.5 text-lg font-bold text-[#475569] dark:text-[#cbd5e1] transition hover:border-[#fda4af] hover:bg-[#fff1f2] hover:text-[#e11d48] shadow-xs"
               >
-                <Trash2 size={13} />
+                {/* <Trash2 size={13} /> */}
                 <span className="hidden sm:inline">Clear</span>
               </button>
             )}
@@ -1815,11 +2066,11 @@ export default function AIAssistantPage() {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="lg"
               onClick={handleNewChat}
               className="rounded-xl border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#193A69] dark:text-white hover:bg-[#f8fafc] dark:hover:bg-[#334155] font-bold shadow-xs"
             >
-              <Plus size={14} className="sm:mr-1 text-primary" />
+              {/* <Plus size={14} className="sm:mr-1 text-primary" /> */}
               <span className="hidden sm:inline">New Chat</span>
             </Button>
           </div>
@@ -1838,11 +2089,11 @@ export default function AIAssistantPage() {
               onPromptClick={handlePromptClick}
             />
           ) : (
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 min-w-0">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 min-w-0">
               {/* Date Separator */}
               <div className="flex items-center gap-3 my-1">
                 <div className="flex-1 border-t border-[#e2e8f0] dark:border-[#334155]" />
-                <span className="text-[15px] font-bold uppercase tracking-wider text-[#64748b] px-3 py-0.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155]">
+                <span className="text-lg font-bold uppercase tracking-wider text-[#64748b] px-3 py-0.5 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155]">
                   {messages[0]?.createdAt.toLocaleDateString([], {
                     weekday: "short",
                     day: "numeric",
@@ -1859,6 +2110,7 @@ export default function AIAssistantPage() {
                   msg={msg}
                   conversationId={activeConversationId}
                   onFeedback={handleFeedback}
+                  user={user}
                 />
               ))}
 
@@ -1890,7 +2142,7 @@ export default function AIAssistantPage() {
         {/* ── Suggestion Chips Bar ── */}
         {hasMessages && (
           <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none border-t border-[#e2e8f0] dark:border-[#334155] bg-white/70 dark:bg-[#1e293b]/70 backdrop-blur-xs">
-            <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8] uppercase shrink-0">
+            <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase shrink-0">
               Suggestions:
             </span>
             {QUICK_SUGGESTION_CHIPS.map((chip, idx) => (
@@ -1911,7 +2163,7 @@ export default function AIAssistantPage() {
           onSubmit={handleFormSubmit}
           className="shrink-0 border-t border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] p-3 sm:p-4 shadow-md"
         >
-          <div className="mx-auto flex w-full max-w-4xl items-end gap-2 sm:gap-3">
+          <div className="mx-auto flex w-full  items-end gap-2 sm:gap-3">
             {/* Input Capsule */}
             <div className="relative flex-1 rounded-2xl border border-[#cbd5e1] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs">
               <textarea
@@ -1935,7 +2187,7 @@ export default function AIAssistantPage() {
 
               {/* Character count */}
               {message.length > 150 && (
-                <span className="absolute right-3.5 bottom-2 text-[15px] text-[#94a3b8] pointer-events-none font-mono">
+                <span className="absolute right-3.5 bottom-2 text-lg text-[#94a3b8] pointer-events-none font-mono">
                   {message.length}
                 </span>
               )}
@@ -1970,7 +2222,7 @@ export default function AIAssistantPage() {
           </div>
 
           {/* Footer Shortcuts & Attribution */}
-          <div className="mx-auto mt-2 flex w-full max-w-4xl items-center justify-between text-[15px] text-[#94a3b8] dark:text-[#64748b] px-1">
+          <div className="mx-auto mt-2 flex w-full max-w-4xl items-center justify-between text-lg text-[#94a3b8] dark:text-[#64748b] px-1">
             <span>
               Press <kbd className="rounded border border-[#e2e8f0] dark:border-[#334155] bg-[#f1f5f9] dark:bg-[#0f172a] px-1 py-0.5 font-mono text-[#475569] dark:text-[#cbd5e1]">Enter ↵</kbd> to send • <kbd className="rounded border border-[#e2e8f0] dark:border-[#334155] bg-[#f1f5f9] dark:bg-[#0f172a] px-1 py-0.5 font-mono text-[#475569] dark:text-[#cbd5e1]">Shift + Enter</kbd> for new line
             </span>
