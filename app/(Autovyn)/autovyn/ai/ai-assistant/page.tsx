@@ -398,12 +398,16 @@ const STARTER_CATEGORIES = [
 
 // Quick follow-up contextual suggestion chips
 const QUICK_SUGGESTION_CHIPS = [
-  "Iska permanent address nikalo",
+  "April 2026 me kitne employee ka pf deduction hua hai",
+  "April 2026 me kon kon employee ka pf deduction hua hai",
+  "Basic salary 20000 se 50000 ke beech wale kitne employee hain",
+  "Aaj kitne employee present hain?",
+  "Is mahine kiski salary sabse jyada hai?",
+  "Kaun kaun aaj leave par hai?",
   "Iska birthday kab aata hai?",
-  "April 2026 ki salary slip",
-  "21/10/2025 absent count",
-  "Kaun kaun aaj present hai?",
-  "Top 10 highest employee salary",
+  "Iska permanent address aur contact",
+  "Today's service reminders due list",
+  "Duplicate bank account wale employees",
 ];
 
 // ============================================================
@@ -1915,10 +1919,10 @@ export default function AIAssistantPage() {
                         setShowHistorySidebar(false);
                       }
                     }}
-                    className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer border ${
+                    className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all cursor-pointer ${
                       active
-                        ? "bg-primary/10 dark:bg-primary/20 text-primary font-bold border-primary/30 shadow-xs"
-                        : "border-transparent text-[#475569] dark:text-[#cbd5e1] hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
+                        ? "bg-primary/10 dark:bg-primary/30 text-primary font-bold shadow-xs"
+                        : "text-[#475569] dark:text-[#cbd5e1] hover:bg-white dark:hover:bg-[#1e293b] hover:text-[#193A69] dark:hover:text-white"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0 pr-1">
@@ -2046,7 +2050,6 @@ export default function AIAssistantPage() {
                 className="rounded-xl border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#0f172a] text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f8fafc] dark:hover:bg-[#334155] font-semibold text-lg gap-1.5 shadow-xs"
                 title="View all user queries, responses & SQL logs"
               >
-                {/* <Activity size={14} className="text-emerald-500" /> */}
                 <span className="hidden sm:inline">Query Logs</span>
               </Button>
             </Link>
@@ -2138,9 +2141,8 @@ export default function AIAssistantPage() {
             </button>
           </div>
         )}
-
         {/* ── Suggestion Chips Bar ── */}
-        {hasMessages && (
+        {/* {hasMessages && (
           <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none border-t border-[#e2e8f0] dark:border-[#334155] bg-white/70 dark:bg-[#1e293b]/70 backdrop-blur-xs">
             <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase shrink-0">
               Suggestions:
@@ -2156,7 +2158,9 @@ export default function AIAssistantPage() {
               </button>
             ))}
           </div>
-        )}
+        )} */}
+
+       
 
         {/* ── Chat Input Dock ── */}
         <form
@@ -2219,16 +2223,6 @@ export default function AIAssistantPage() {
                 <Send size={18} />
               )}
             </button>
-          </div>
-
-          {/* Footer Shortcuts & Attribution */}
-          <div className="mx-auto mt-2 flex w-full max-w-4xl items-center justify-between text-lg text-[#94a3b8] dark:text-[#64748b] px-1">
-            <span>
-              Press <kbd className="rounded border border-[#e2e8f0] dark:border-[#334155] bg-[#f1f5f9] dark:bg-[#0f172a] px-1 py-0.5 font-mono text-[#475569] dark:text-[#cbd5e1]">Enter ↵</kbd> to send • <kbd className="rounded border border-[#e2e8f0] dark:border-[#334155] bg-[#f1f5f9] dark:bg-[#0f172a] px-1 py-0.5 font-mono text-[#475569] dark:text-[#cbd5e1]">Shift + Enter</kbd> for new line
-            </span>
-            <span className="hidden sm:inline font-semibold">
-              AutoVyn AI Copilot • Enterprise Live Data
-            </span>
           </div>
         </form>
       </div>

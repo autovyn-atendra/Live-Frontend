@@ -114,6 +114,38 @@ const DEFAULT_INTENT_OPTIONS = [
   { value: "OTHER", label: "➕ OTHER (Type Custom Intent Category...)" },
 ];
 
+// Helper to accurately format audit timestamps in Indian Standard Time (IST)
+// without unwanted UTC forward skew (+5:30) caused by MSSQL datetime serialization
+const formatAuditDateTime = (dateStr?: string | Date | null) => {
+  if (!dateStr) return { date: "-", time: "-", full: "-" };
+  try {
+    let cleanStr = typeof dateStr === "string" ? dateStr.trim() : String(dateStr);
+    if (typeof cleanStr === "string") {
+      if (cleanStr.endsWith("Z") && !cleanStr.includes("+")) {
+        cleanStr = cleanStr.slice(0, -1);
+      }
+      cleanStr = cleanStr.replace(" ", "T");
+    }
+    const d = new Date(cleanStr);
+    if (isNaN(d.getTime())) return { date: String(dateStr), time: "", full: String(dateStr) };
+
+    const time = d.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+    const date = d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    return { date, time, full: `${date}, ${time}` };
+  } catch (_) {
+    return { date: String(dateStr), time: "", full: String(dateStr) };
+  }
+};
+
 export default function AIQueryAuditPage() {
   const user = useCurrentUser();
   const { toast } = useToast();
@@ -551,7 +583,7 @@ export default function AIQueryAuditPage() {
 
     const rows = logs.map((l) => [
       l.UTD,
-      `"${new Date(l.createdAt).toLocaleString("en-IN")}"`,
+      `"${formatAuditDateTime(l.createdAt).full}"`,
       `"${l.userId || ""}"`,
       `"${l.empCode || ""}"`,
       `"${l.role || ""}"`,
@@ -1036,13 +1068,20 @@ export default function AIQueryAuditPage() {
                             <td className="py-3.5 px-4 font-mono font-bold text-[#64748b] text-[13px]">
                               #{log.UTD}
                             </td>
-                            <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] text-[13px] whitespace-nowrap">
-                              {new Date(log.createdAt).toLocaleString("en-IN", {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              {(() => {
+                                const dt = formatAuditDateTime(log.createdAt);
+                                return (
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-[13px] tracking-tight">
+                                      {dt.time}
+                                    </span>
+                                    <span className="text-[11px] font-medium text-[#94a3b8]">
+                                      {dt.date}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">
                               <div className="truncate group-hover:text-primary transition-colors">
@@ -1584,7 +1623,7 @@ export default function AIQueryAuditPage() {
                     )}
                   </h3>
                   <p className="text-[14px] text-[#64748b] dark:text-[#94a3b8] mt-0.5">
-                    Logged at {new Date(selectedRecord.createdAt).toLocaleString("en-IN")} • Latency: {selectedRecord.executionTimeMs}ms
+                    Logged at {formatAuditDateTime(selectedRecord.createdAt).full} • Latency: {selectedRecord.executionTimeMs}ms
                   </p>
                 </div>
               </div>
