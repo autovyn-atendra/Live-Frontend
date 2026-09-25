@@ -621,12 +621,12 @@ export default function AIQueryAuditPage() {
                 <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
                   AI Query Logs, Audit & Model Training
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[13px] font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#047857] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] flex items-center gap-1.5">
+                <span className="px-2.5 py-0.5 rounded-full text-lg font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#047857] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-[#10b981] animate-pulse"></span>
                   Live RLHF Training
                 </span>
               </div>
-              <p className="text-[14px] sm:text-[15px] text-[#64748b] dark:text-[#94a3b8] mt-0.5">
+              <p className="text-lg sm:text-lg text-[#64748b] dark:text-[#94a3b8] mt-0.5">
                 Double-click any query row or click &quot;Train AI&quot; to teach golden SQL rules, fix queries & fine-tune the AI Copilot.
               </p>
             </div>
@@ -637,28 +637,28 @@ export default function AIQueryAuditPage() {
               onClick={() => handleOpenTrainModal(null)}
               variant="input"
               size="sm"
-              className="h-10 px-4 gap-2 text-[15px] font-bold bg-gradient-to-r from-[#d97706] via-primary to-[#4f46e5] hover:from-[#b45309] hover:to-[#4338ca] text-white shadow-md shadow-primary/20"
+              className="h-10 px-4 gap-2 text-lg font-bold bg-gradient-to-r from-[#d97706] via-primary to-[#4f46e5] hover:from-[#b45309] hover:to-[#4338ca] text-white shadow-md shadow-primary/20"
             >
-              <Zap className="h-4 w-4 text-[#fcd34d] fill-[#fcd34d]" />
+              {/* <Zap className="h-4 w-4 text-[#fcd34d] fill-[#fcd34d]" /> */}
               + Train New AI Rule
             </Button>
 
-            <Link href="/autovyn/ai/ai-assistant">
+            <Link href="/autovyn/admin/Ai_Assistance/Ai_Assistant_Page">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 px-3.5 gap-2 text-[15px] font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
+                className="h-10 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
               >
                 {/* <MessageSquare className="h-4 w-4 text-primary" /> */}
                 AI Assistant
               </Button>
             </Link>
 
-            <Link href="/autovyn/ai/knowledge">
+            <Link href="/autovyn/admin/Ai_Assistance/Ai_Assistant_Descr">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 px-3.5 gap-2 text-[15px] font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
+                className="h-10 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
               >
                 {/* <Layers className="h-4 w-4 text-[#6366f1]" /> */}
                 Knowledge Base
@@ -670,7 +670,7 @@ export default function AIQueryAuditPage() {
               variant="outline"
               size="sm"
               disabled={isLoading}
-              className="h-10 px-3.5 gap-2 text-[15px] border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold"
+              className="h-10 px-3.5 gap-2 text-lg border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold"
             >
               {/* <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} /> */}
               Refresh
@@ -685,7 +685,7 @@ export default function AIQueryAuditPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between">
-              <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8]">Total Queries</span>
+              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Total Queries</span>
               <div className="h-9 w-9 rounded-lg bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] dark:text-[#60a5fa] flex items-center justify-center">
                 <FileText className="h-5 w-5" />
               </div>
@@ -694,13 +694,13 @@ export default function AIQueryAuditPage() {
               <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
                 {stats.totalQueries.toLocaleString()}
               </span>
-              <span className="text-[13px] text-[#94a3b8]">lifetime</span>
+              <span className="text-lg text-[#94a3b8]">lifetime</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between">
-              <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8]">Today&apos;s Queries</span>
+              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Today&apos;s Queries</span>
               <div className="h-9 w-9 rounded-lg bg-[#eef2ff] dark:bg-[#312e81]/40 text-[#4f46e5] dark:text-[#818cf8] flex items-center justify-center">
                 <Calendar className="h-5 w-5" />
               </div>
@@ -709,13 +709,13 @@ export default function AIQueryAuditPage() {
               <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
                 {stats.todayQueriesCount.toLocaleString()}
               </span>
-              <span className="text-[13px] text-primary font-bold">today</span>
+              <span className="text-lg text-primary font-bold">today</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between">
-              <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8]">Success Rate</span>
+              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Success Rate</span>
               <div className="h-9 w-9 rounded-lg bg-[#ecfdf5] dark:bg-[#064e3b]/40 text-[#059669] dark:text-[#34d399] flex items-center justify-center">
                 <ShieldCheck className="h-5 w-5" />
               </div>
@@ -724,13 +724,13 @@ export default function AIQueryAuditPage() {
               <span className="text-3xl font-extrabold tracking-tight text-[#059669] dark:text-[#34d399]">
                 {stats.successRate}
               </span>
-              <span className="text-[13px] text-[#94a3b8]">accuracy</span>
+              <span className="text-lg text-[#94a3b8]">accuracy</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between">
-              <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8]">Avg Latency</span>
+              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Avg Latency</span>
               <div className="h-9 w-9 rounded-lg bg-[#fffbeb] dark:bg-[#78350f]/40 text-[#d97706] dark:text-[#fbbf24] flex items-center justify-center">
                 <Clock className="h-5 w-5" />
               </div>
@@ -744,7 +744,7 @@ export default function AIQueryAuditPage() {
 
           <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between">
-              <span className="text-[15px] font-bold text-[#64748b] dark:text-[#94a3b8]">Active Users</span>
+              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Active Users</span>
               <div className="h-9 w-9 rounded-lg bg-[#faf5ff] dark:bg-[#581c87]/40 text-[#9333ea] dark:text-[#c084fc] flex items-center justify-center">
                 <User className="h-5 w-5" />
               </div>
@@ -753,7 +753,7 @@ export default function AIQueryAuditPage() {
               <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
                 {stats.activeUsersCount}
               </span>
-              <span className="text-[13px] text-[#94a3b8]">emp / users</span>
+              <span className="text-lg text-[#94a3b8]">emp / users</span>
             </div>
           </div>
         </div>
@@ -763,7 +763,7 @@ export default function AIQueryAuditPage() {
           <button
             type="button"
             onClick={() => setActiveTab("audit")}
-            className={`px-4 py-2.5 rounded-xl font-bold text-[15px] flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 rounded-xl font-bold text-lg flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === "audit"
                 ? "bg-[#193A69] text-white shadow-md shadow-[#193A69]/20 ring-2 ring-[#193A69]/40"
                 : "bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
@@ -771,7 +771,7 @@ export default function AIQueryAuditPage() {
           >
             <Activity className="h-4 w-4" />
             <span>📊 AI Query Audit Logs</span>
-            <span className={`px-2 py-0.5 text-[12px] rounded-full font-extrabold ${activeTab === "audit" ? "bg-white/20 text-white" : "bg-[#f1f5f9] dark:bg-[#0f172a] text-[#193A69] dark:text-white"}`}>
+            <span className={`px-2 py-0.5 text-lg rounded-full font-extrabold ${activeTab === "audit" ? "bg-white/20 text-white" : "bg-[#f1f5f9] dark:bg-[#0f172a] text-[#193A69] dark:text-white"}`}>
               {pagination.totalRecords || logs.length}
             </span>
           </button>
@@ -782,7 +782,7 @@ export default function AIQueryAuditPage() {
               setActiveTab("rules");
               fetchTrainedRules();
             }}
-            className={`px-4 py-2.5 rounded-xl font-bold text-[15px] flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 rounded-xl font-bold text-lg flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === "rules"
                 ? "bg-gradient-to-r from-[#d97706] via-[#f59e0b] to-[#b45309] text-white shadow-md shadow-[#d97706]/20 ring-2 ring-[#f59e0b]/40"
                 : "bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
@@ -790,7 +790,7 @@ export default function AIQueryAuditPage() {
           >
             <Zap className="h-4 w-4 fill-current text-[#fef08a]" />
             <span>🧠 Trained AI Rules & Golden Queries</span>
-            <span className={`px-2 py-0.5 text-[12px] rounded-full font-extrabold ${activeTab === "rules" ? "bg-white/20 text-white" : "bg-[#fef3c7] dark:bg-[#451a03]/60 text-[#b45309] dark:text-[#fde68a]"}`}>
+            <span className={`px-2 py-0.5 text-lg rounded-full font-extrabold ${activeTab === "rules" ? "bg-white/20 text-white" : "bg-[#fef3c7] dark:bg-[#451a03]/60 text-[#b45309] dark:text-[#fde68a]"}`}>
               {trainedRules.length}
             </span>
           </button>
@@ -806,7 +806,7 @@ export default function AIQueryAuditPage() {
                   placeholder="Filter trained rules by question, table, or intent..."
                   value={rulesSearch}
                   onChange={(e) => setRulesSearch(e.target.value)}
-                  className="pl-11 pr-9 h-11 text-[15px] bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
+                  className="pl-11 pr-9 h-11 text-lg bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
                 />
               </div>
 
@@ -815,7 +815,7 @@ export default function AIQueryAuditPage() {
                   onClick={() => handleOpenTrainModal(null)}
                   variant="input"
                   size="sm"
-                  className="h-11 px-5 gap-2 text-[15px] font-bold bg-[#d97706] hover:bg-[#b45309] text-white shadow-xs"
+                  className="h-11 px-5 gap-2 text-lg font-bold bg-[#d97706] hover:bg-[#b45309] text-white shadow-xs"
                 >
                   {/* <Plus className="h-4 w-4" /> */}
                   Add New Golden Rule
@@ -825,7 +825,7 @@ export default function AIQueryAuditPage() {
                   variant="outline"
                   size="sm"
                   disabled={isRulesLoading}
-                  className="h-11 px-4 gap-2 text-[15px] border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold"
+                  className="h-11 px-4 gap-2 text-lg border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold"
                 >
                   {/* <RefreshCw className={`h-4 w-4 ${isRulesLoading ? "animate-spin" : ""}`} /> */}
                   Refresh
@@ -838,8 +838,8 @@ export default function AIQueryAuditPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-[13px] font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
-                      <th className="py-3.5 px-4"># UTD</th>
+                    <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-lg font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
+                      {/* <th className="py-3.5 px-4"># UTD</th> */}
                       <th className="py-3.5 px-4 min-w-[220px]">Trigger Question / Phrase</th>
                       <th className="py-3.5 px-4">Target Table</th>
                       <th className="py-3.5 px-4">Intent</th>
@@ -849,7 +849,7 @@ export default function AIQueryAuditPage() {
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-[14px]">
+                  <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-lg">
                     {isRulesLoading ? (
                       <tr>
                         <td colSpan={8} className="py-16 text-center text-[#64748b]">
@@ -862,7 +862,7 @@ export default function AIQueryAuditPage() {
                         <td colSpan={8} className="py-16 text-center text-[#64748b]">
                           <Zap className="h-10 w-10 text-[#d97706] opacity-40 mx-auto mb-3" />
                           <div className="text-lg font-bold text-[#193A69] dark:text-white">No Trained Rules Found</div>
-                          <p className="text-[14px] text-[#94a3b8] mt-1 max-w-md mx-auto">
+                          <p className="text-lg text-[#94a3b8] mt-1 max-w-md mx-auto">
                             Train your first query by clicking &quot;+ Add New Golden Rule&quot; or double-clicking any query from the Audit tab.
                           </p>
                         </td>
@@ -884,29 +884,29 @@ export default function AIQueryAuditPage() {
                             key={r.UTD || idx}
                             className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors"
                           >
-                            <td className="py-3.5 px-4 font-mono font-bold text-[#64748b] text-[13px]">
+                            {/* <td className="py-3.5 px-4 font-mono font-bold text-[#64748b] text-lg">
                               #{r.UTD}
-                            </td>
+                            </td> */}
                             <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white">
                               {r.Normalized_Question}
                             </td>
                             <td className="py-3.5 px-4">
-                              <span className="px-2.5 py-1 rounded-md text-[12px] font-bold bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] dark:text-[#93c5fd] border border-[#bfdbfe] dark:border-[#1e3a8a]">
+                              <span className="px-2.5 py-1 rounded-md text-lg font-bold bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] dark:text-[#93c5fd] border border-[#bfdbfe] dark:border-[#1e3a8a]">
                                 {r.Tables_Used || "ERP_MASTER"}
                               </span>
                             </td>
-                            <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-medium text-[13px]">
+                            <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-medium text-lg">
                               {r.Intent || "DYNAMIC_CUSTOM"}
                             </td>
                             <td className="py-3.5 px-4">
-                              <pre className="p-2 rounded-lg bg-[#0f172a] text-[#93c5fd] font-mono text-[12px] max-w-md overflow-x-auto truncate">
+                              <pre className="p-2 rounded-lg bg-[#0f172a] text-[#93c5fd] font-mono text-lg max-w-md overflow-x-auto truncate">
                                 <code>{r.SQL_Query}</code>
                               </pre>
                             </td>
                             <td className="py-3.5 px-4 text-center font-bold text-[#059669]">
                               {r.Success_Count || 1}
                             </td>
-                            <td className="py-3.5 px-4 text-[13px] text-[#64748b] whitespace-nowrap">
+                            <td className="py-3.5 px-4 text-lg text-[#64748b] whitespace-nowrap">
                               {r.Last_Verified_At ? new Date(r.Last_Verified_At).toLocaleDateString("en-IN") : "-"}
                             </td>
                             <td className="py-3.5 px-4 text-right">
@@ -915,7 +915,7 @@ export default function AIQueryAuditPage() {
                                   onClick={() => handleOpenTrainModal(null, r)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 px-2.5 text-[13px] font-bold text-[#2563eb] hover:bg-[#eff6ff] dark:hover:bg-[#1e3a8a]/40"
+                                  className="h-8 px-2.5 text-lg font-bold text-[#2563eb] hover:bg-[#eff6ff] dark:hover:bg-[#1e3a8a]/40"
                                 >
                                   <Edit3 className="h-3.5 w-3.5 mr-1" />
                                   Edit / Test
@@ -924,7 +924,7 @@ export default function AIQueryAuditPage() {
                                   onClick={() => handleDeleteRule(r.UTD, r.Normalized_Question)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 px-2 text-[13px] font-bold text-[#e11d48] hover:bg-[#fff1f2] dark:hover:bg-[#450a0a]/40"
+                                  className="h-8 px-2 text-lg font-bold text-[#e11d48] hover:bg-[#fff1f2] dark:hover:bg-[#450a0a]/40"
                                 >
                                   <X className="h-3.5 w-3.5" />
                                 </Button>
@@ -950,7 +950,7 @@ export default function AIQueryAuditPage() {
                     placeholder="Search by question, SQL, employee code, user..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-11 pr-9 h-11 text-[15px] sm:text-[16px] bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
+                    className="pl-11 pr-9 h-11 text-lg sm:text-[16px] bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
                   />
                   {searchTerm && (
                     <button
@@ -969,7 +969,7 @@ export default function AIQueryAuditPage() {
                   type="submit"
                   variant="outline"
                   size="sm"
-                  className="h-11 px-4 text-[15px] font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#193A69] dark:text-white hover:bg-[#e2e8f0]"
+                  className="h-11 px-4 text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#193A69] dark:text-white hover:bg-[#e2e8f0]"
                 >
                   Search
                 </Button>
@@ -979,7 +979,7 @@ export default function AIQueryAuditPage() {
                 <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-1 rounded-lg border border-[#e2e8f0] dark:border-[#334155]">
                   <button
                     onClick={() => handleStatusChange("ALL")}
-                    className={`px-3 py-1.5 text-[13px] font-bold rounded-md transition-colors ${
+                    className={`px-3 py-1.5 text-lg font-bold rounded-md transition-colors ${
                       statusFilter === "ALL"
                         ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
                         : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#1e293b]"
@@ -989,7 +989,7 @@ export default function AIQueryAuditPage() {
                   </button>
                   <button
                     onClick={() => handleStatusChange("SUCCESS")}
-                    className={`px-3 py-1.5 text-[13px] font-bold rounded-md transition-colors ${
+                    className={`px-3 py-1.5 text-lg font-bold rounded-md transition-colors ${
                       statusFilter === "SUCCESS"
                         ? "bg-white dark:bg-[#1e293b] text-[#059669] dark:text-[#34d399] shadow-xs"
                         : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#059669]"
@@ -999,7 +999,7 @@ export default function AIQueryAuditPage() {
                   </button>
                   <button
                     onClick={() => handleStatusChange("FAILED")}
-                    className={`px-3 py-1.5 text-[13px] font-bold rounded-md transition-colors ${
+                    className={`px-3 py-1.5 text-lg font-bold rounded-md transition-colors ${
                       statusFilter === "FAILED"
                         ? "bg-white dark:bg-[#1e293b] text-[#e11d48] dark:text-[#fda4af] shadow-xs"
                         : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#e11d48]"
@@ -1013,9 +1013,9 @@ export default function AIQueryAuditPage() {
                   onClick={handleExportCSV}
                   variant="outline"
                   size="sm"
-                  className="h-11 px-3.5 gap-2 text-[14px] font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white"
+                  className="h-11 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white"
                 >
-                  <Download className="h-4 w-4" />
+                  {/* <Download className="h-4 w-4" /> */}
                   Export CSV
                 </Button>
               </div>
@@ -1026,9 +1026,9 @@ export default function AIQueryAuditPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-[13px] font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
-                      <th className="py-3.5 px-4"># UTD</th>
-                      <th className="py-3.5 px-4 min-w-[130px]">Time</th>
+                    <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-lg font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
+                      {/* <th className="py-3.5 px-4"># UTD</th> */}
+                     
                       <th className="py-3.5 px-4 min-w-[260px]">User Prompt / Question</th>
                       <th className="py-3.5 px-4">Intent</th>
                       <th className="py-3.5 px-4">Target Table</th>
@@ -1036,10 +1036,11 @@ export default function AIQueryAuditPage() {
                       <th className="py-3.5 px-4 text-center">Rows</th>
                       <th className="py-3.5 px-4 text-center">Latency</th>
                       <th className="py-3.5 px-4 text-center">Status</th>
+                       <th className="py-3.5 px-4 min-w-[130px]">Time</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-[14px]">
+                  <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-lg">
                     {isLoading ? (
                       <tr>
                         <td colSpan={10} className="py-16 text-center text-[#64748b]">
@@ -1052,7 +1053,7 @@ export default function AIQueryAuditPage() {
                         <td colSpan={10} className="py-16 text-center text-[#64748b]">
                           <Database className="h-10 w-10 text-[#94a3b8] mx-auto mb-3" />
                           <div className="text-lg font-bold text-[#193A69] dark:text-white">No Logs Found</div>
-                          <p className="text-[14px] text-[#94a3b8] mt-1">Try changing filters or ask questions in AI Assistant.</p>
+                          <p className="text-lg text-[#94a3b8] mt-1">Try changing filters or ask questions in AI Assistant.</p>
                         </td>
                       </tr>
                     ) : (
@@ -1065,35 +1066,21 @@ export default function AIQueryAuditPage() {
                             className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors cursor-pointer group"
                             title="Double-click to Train AI with this Query"
                           >
-                            <td className="py-3.5 px-4 font-mono font-bold text-[#64748b] text-[13px]">
+                            {/* <td className="py-3.5 px-4 font-mono font-bold text-[#64748b] text-lg">
                               #{log.UTD}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              {(() => {
-                                const dt = formatAuditDateTime(log.createdAt);
-                                return (
-                                  <div className="flex flex-col">
-                                    <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-[13px] tracking-tight">
-                                      {dt.time}
-                                    </span>
-                                    <span className="text-[11px] font-medium text-[#94a3b8]">
-                                      {dt.date}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-                            </td>
+                            </td> */}
+                            
                             <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">
                               <div className="truncate group-hover:text-primary transition-colors">
                                 {log.userQuery}
                               </div>
                             </td>
                             <td className="py-3.5 px-4">
-                              <span className="px-2 py-0.5 rounded text-[12px] font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                              <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
                                 {log.intent || "GENERAL"}
                               </span>
                             </td>
-                            <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-mono text-[12px] truncate max-w-[130px]">
+                            <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-mono text-lg truncate max-w-[130px]">
                               {log.tablesUsed || "EMPLOYEEMASTER"}
                             </td>
                             <td className="py-3.5 px-4 max-w-xs">
@@ -1102,18 +1089,18 @@ export default function AIQueryAuditPage() {
                                   <code>{log.generatedSql}</code>
                                 </pre>
                               ) : (
-                                <span className="text-[#94a3b8] text-[12px] italic">No SQL generated</span>
+                                <span className="text-[#94a3b8] text-lg italic">No SQL generated</span>
                               )}
                             </td>
                             <td className="py-3.5 px-4 text-center font-bold text-[#193A69] dark:text-white">
                               {log.rowsReturned || 0}
                             </td>
-                            <td className="py-3.5 px-4 text-center text-[#64748b] dark:text-[#94a3b8] text-[13px]">
+                            <td className="py-3.5 px-4 text-center text-[#64748b] dark:text-[#94a3b8] text-lg">
                               {log.executionTimeMs}ms
                             </td>
                             <td className="py-3.5 px-4 text-center">
                               <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-bold ${
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-lg font-bold ${
                                   isSuccess
                                     ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
                                     : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
@@ -1129,6 +1116,21 @@ export default function AIQueryAuditPage() {
                                 </span>
                               )}
                             </td>
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              {(() => {
+                                const dt = formatAuditDateTime(log.createdAt);
+                                return (
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-lg tracking-tight">
+                                      {dt.time}
+                                    </span>
+                                    <span className="text-[11px] font-medium text-[#94a3b8]">
+                                      {dt.date}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                            </td>
                             <td className="py-3.5 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 {/* Quick Fix button — extra prominent for failed or 0-row queries */}
@@ -1140,7 +1142,7 @@ export default function AIQueryAuditPage() {
                                     }}
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 px-2.5 text-[12px] font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1 animate-pulse"
+                                    className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1 animate-pulse"
                                     title="Fix this failed query — train AI with correct SQL"
                                   >
                                     <Zap className="h-3.5 w-3.5 fill-current" />
@@ -1154,7 +1156,7 @@ export default function AIQueryAuditPage() {
                                     }}
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 px-2.5 text-[13px] font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 gap-1"
+                                    className="h-8 px-2.5 text-lg font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 gap-1"
                                   >
                                     <Zap className="h-3.5 w-3.5 fill-current" />
                                     Train
@@ -1184,7 +1186,7 @@ export default function AIQueryAuditPage() {
               {/* Pagination */}
               {pagination.totalPages > 1 && (
                 <div className="px-6 py-4 border-t border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/40 flex items-center justify-between">
-                  <span className="text-[14px] text-[#64748b] dark:text-[#94a3b8]">
+                  <span className="text-lg text-[#64748b] dark:text-[#94a3b8]">
                     Showing page <span className="font-bold">{pagination.page}</span> of{" "}
                     <span className="font-bold">{pagination.totalPages}</span> ({pagination.totalRecords} records)
                   </span>
@@ -1218,7 +1220,7 @@ export default function AIQueryAuditPage() {
       {/* ── AI TRAINING / FINE-TUNING MODAL (WITH LIVE SQL TEST RUN) ── */}
       {trainModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#1e293b] rounded-2xl border border-[#e2e8f0] dark:border-[#334155] shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl border border-[#e2e8f0] dark:border-[#334155] shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[#e2e8f0] dark:border-[#334155] flex items-center justify-between bg-[#f8fafc] dark:bg-[#0f172a]">
               <div className="flex items-center gap-3">
@@ -1229,7 +1231,7 @@ export default function AIQueryAuditPage() {
                   <h2 className="text-lg sm:text-xl font-extrabold text-[#193A69] dark:text-white">
                     {editingRuleUtd ? `Edit Trained AI Golden Rule (#${editingRuleUtd})` : "Train & Fine-Tune AutoVyn AI Copilot"}
                   </h2>
-                  <p className="text-[13px] text-[#64748b] dark:text-[#94a3b8]">
+                  <p className="text-lg text-[#64748b] dark:text-[#94a3b8]">
                     Teach golden SQL patterns and test live on database without touching code.
                   </p>
                 </div>
@@ -1245,10 +1247,10 @@ export default function AIQueryAuditPage() {
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="p-6 overflow-y-auto space-y-5 text-[15px]">
+            <div className="p-6 overflow-y-auto space-y-5 text-lg">
               {/* 1. Training Action Type */}
               <div className="space-y-2">
-                <label className="text-[14px] font-bold text-[#193A69] dark:text-white flex items-center gap-2">
+                <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-primary" />
                   RLHF Training Purpose / Category:
                 </label>
@@ -1263,10 +1265,10 @@ export default function AIQueryAuditPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[14px]">🏆 Golden Query</span>
+                      <span className="font-bold text-lg">🏆 Golden Query</span>
                       {trainActionType === "GOLDEN" && <Check className="h-4 w-4 text-primary" />}
                     </div>
-                    <span className="text-[12px] opacity-80 mt-1">Verified standard answer for this question</span>
+                    <span className="text-lg opacity-80 mt-1">Verified standard answer for this question</span>
                   </button>
 
                   <button
@@ -1279,10 +1281,10 @@ export default function AIQueryAuditPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[14px]">🎯 Bug Correction</span>
+                      <span className="font-bold text-lg">🎯 Bug Correction</span>
                       {trainActionType === "CORRECTION" && <Check className="h-4 w-4 text-[#d97706]" />}
                     </div>
-                    <span className="text-[12px] opacity-80 mt-1">Fix a failed or inaccurate response</span>
+                    <span className="text-lg opacity-80 mt-1">Fix a failed or inaccurate response</span>
                   </button>
 
                   <button
@@ -1295,10 +1297,10 @@ export default function AIQueryAuditPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[14px]">📜 Business Rule</span>
+                      <span className="font-bold text-lg">📜 Business Rule</span>
                       {trainActionType === "RULE" && <Check className="h-4 w-4 text-[#2563eb]" />}
                     </div>
-                    <span className="text-[12px] opacity-80 mt-1">Leave types, status mapping, formulas</span>
+                    <span className="text-lg opacity-80 mt-1">Leave types, status mapping, formulas</span>
                   </button>
 
                   <button
@@ -1311,10 +1313,10 @@ export default function AIQueryAuditPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[14px]">👍 Upvote & Boost</span>
+                      <span className="font-bold text-lg">👍 Upvote & Boost</span>
                       {trainActionType === "HELPFUL" && <Check className="h-4 w-4 text-[#059669]" />}
                     </div>
-                    <span className="text-[12px] opacity-80 mt-1">Reinforce successful query hit</span>
+                    <span className="text-lg opacity-80 mt-1">Reinforce successful query hit</span>
                   </button>
                 </div>
               </div>
@@ -1322,23 +1324,24 @@ export default function AIQueryAuditPage() {
               {/* 2. User Question / Prompt */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[14px] font-bold text-[#193A69] dark:text-white flex items-center gap-2">
+                  <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-2">
                     <User className="h-4 w-4 text-primary" />
                     Target User Question / Trigger Prompt:
                   </label>
-                  <span className="text-[12px] text-[#64748b] dark:text-[#94a3b8]">Will trigger this trained rule</span>
+                  <span className="text-lg text-[#64748b] dark:text-[#94a3b8]">Will trigger this trained rule</span>
                 </div>
                 <Input
                   value={trainQuery}
+                  readOnly
                   onChange={(e) => setTrainQuery(e.target.value)}
                   placeholder="e.g. Today's service reminders due list or Emp 1004 salary..."
-                  className="h-11 text-[15px] font-medium bg-[#f8fafc] dark:bg-[#0f172a] border-[#cbd5e1] dark:border-[#334155] text-[#1e293b] dark:text-white"
+                  className="h-11 text-lg font-medium bg-[#f8fafc] dark:bg-[#0f172a] border-[#cbd5e1] dark:border-[#334155] text-[#1e293b] dark:text-white"
                 />
               </div>
 
               {/* 3. Question Variations / Synonyms */}
               <div className="space-y-1.5">
-                <label className="text-[13px] font-bold text-[#64748b] dark:text-[#94a3b8] flex items-center gap-1.5">
+                <label className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-[#f59e0b]" />
                   Alternative Question Phrases / Synonyms (Optional, Comma separated):
                 </label>
@@ -1346,7 +1349,7 @@ export default function AIQueryAuditPage() {
                   value={trainSynonyms}
                   onChange={(e) => setTrainSynonyms(e.target.value)}
                   placeholder="e.g. service due list, service reminder today, aaj ke service reminder"
-                  className="h-10 text-[14px] bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
+                  className="h-10 text-lg bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
                 />
               </div>
 
@@ -1355,12 +1358,12 @@ export default function AIQueryAuditPage() {
                 {/* Table Selector & Custom Table Input */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[14px] font-bold text-[#193A69] dark:text-white flex items-center gap-2">
+                    <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-2">
                       <Database className="h-4 w-4 text-[#6366f1]" />
                       Primary ERP Target Table:
                     </label>
                     {trainTableSelect === "OTHER" && (
-                      <span className="text-[12px] font-bold text-[#d97706] bg-[#fef3c7] dark:bg-[#451a03]/50 px-2 py-0.5 rounded">
+                      <span className="text-lg font-bold text-[#d97706] bg-[#fef3c7] dark:bg-[#451a03]/50 px-2 py-0.5 rounded">
                         Custom Active
                       </span>
                     )}
@@ -1368,7 +1371,7 @@ export default function AIQueryAuditPage() {
                   <select
                     value={trainTableSelect}
                     onChange={(e) => setTrainTableSelect(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#cbd5e1] dark:border-[#334155] text-[14px] font-bold text-[#1e293b] dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                    className="w-full h-10 px-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#cbd5e1] dark:border-[#334155] text-lg font-bold text-[#1e293b] dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     {DEFAULT_TABLE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -1385,7 +1388,7 @@ export default function AIQueryAuditPage() {
                           value={customTrainTable}
                           onChange={(e) => setCustomTrainTable(e.target.value)}
                           placeholder="Type custom table (e.g. Srv_Reminder_Tbl, Item_Master)..."
-                          className="pl-9 h-10 text-[14px] font-bold bg-[#eff6ff] dark:bg-[#172554]/40 border-[#60a5fa] text-[#1e293b] dark:text-white shadow-inner"
+                          className="pl-9 h-10 text-lg font-bold bg-[#eff6ff] dark:bg-[#172554]/40 border-[#60a5fa] text-[#1e293b] dark:text-white shadow-inner"
                         />
                       </div>
                     </div>
@@ -1395,12 +1398,12 @@ export default function AIQueryAuditPage() {
                 {/* Intent Selector & Custom Intent Input */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[14px] font-bold text-[#193A69] dark:text-white flex items-center gap-2">
+                    <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-2">
                       <Layers className="h-4 w-4 text-[#10b981]" />
                       Intent Category:
                     </label>
                     {trainIntentSelect === "OTHER" && (
-                      <span className="text-[12px] font-bold text-[#059669] bg-[#d1fae5] dark:bg-[#022c22]/50 px-2 py-0.5 rounded">
+                      <span className="text-lg font-bold text-[#059669] bg-[#d1fae5] dark:bg-[#022c22]/50 px-2 py-0.5 rounded">
                         Custom Active
                       </span>
                     )}
@@ -1408,7 +1411,7 @@ export default function AIQueryAuditPage() {
                   <select
                     value={trainIntentSelect}
                     onChange={(e) => setTrainIntentSelect(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#cbd5e1] dark:border-[#334155] text-[14px] font-bold text-[#1e293b] dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                    className="w-full h-10 px-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#cbd5e1] dark:border-[#334155] text-lg font-bold text-[#1e293b] dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     {DEFAULT_INTENT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -1425,7 +1428,7 @@ export default function AIQueryAuditPage() {
                           value={customTrainIntent}
                           onChange={(e) => setCustomTrainIntent(e.target.value)}
                           placeholder="Type custom intent (e.g. SERVICE_REMINDER_LIST)..."
-                          className="pl-9 h-10 text-[14px] font-bold bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] text-[#064e3b] dark:text-white shadow-inner"
+                          className="pl-9 h-10 text-lg font-bold bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] text-[#064e3b] dark:text-white shadow-inner"
                         />
                       </div>
                     </div>
@@ -1436,7 +1439,7 @@ export default function AIQueryAuditPage() {
               {/* 5. SQL Query Editor + Live Test Run Button */}
               <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-[14px] font-bold text-[#193A69] dark:text-white flex items-center gap-2">
+                  <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-2">
                     <Code2 className="h-4 w-4 text-primary" />
                     Verified Microsoft SQL Statement (Golden Query):
                   </label>
@@ -1449,9 +1452,9 @@ export default function AIQueryAuditPage() {
                       disabled={isTestingSql}
                       variant="input"
                       size="sm"
-                      className="h-8 px-3 text-[13px] font-bold bg-[#059669] hover:bg-[#047857] text-white gap-1.5 shadow-xs"
+                      className="h-8 px-3 text-lg font-bold bg-[#059669] hover:bg-[#047857] text-white gap-1.5 shadow-xs"
                     >
-                      <Zap className={`h-3.5 w-3.5 ${isTestingSql ? "animate-spin" : "fill-current"}`} />
+                      {/* <Zap className={`h-3.5 w-3.5 ${isTestingSql ? "animate-spin" : "fill-current"}`} /> */}
                       {isTestingSql ? "Testing Live..." : "⚡ Test Run SQL Now"}
                     </Button>
 
@@ -1462,7 +1465,7 @@ export default function AIQueryAuditPage() {
                           setTrainSql((prev) => prev.replace(/(FROM\s+\[?dbo\]?\.?\[?[a-zA-Z0-9_]+\]?)/i, "$1 WITH (NOLOCK)"));
                         }
                       }}
-                      className="px-2.5 py-1 rounded text-[12px] font-bold bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] hover:bg-[#dbeafe]"
+                      className="px-2.5 py-1 rounded text-lg font-bold bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] hover:bg-[#dbeafe]"
                     >
                       + NOLOCK
                     </button>
@@ -1473,7 +1476,7 @@ export default function AIQueryAuditPage() {
                           setTrainSql((prev) => prev.replace(/SELECT\s+/i, "SELECT TOP 50 "));
                         }
                       }}
-                      className="px-2.5 py-1 rounded text-[12px] font-bold bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] hover:bg-[#dbeafe]"
+                      className="px-2.5 py-1 rounded text-lg font-bold bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] hover:bg-[#dbeafe]"
                     >
                       + TOP 50
                     </button>
@@ -1489,13 +1492,13 @@ export default function AIQueryAuditPage() {
                   }}
                   rows={5}
                   placeholder="SELECT TOP 50 Final_Due_Date, * FROM [dbo].[Srv_Reminder_Tbl] WITH (NOLOCK) WHERE ..."
-                  className="w-full p-4 rounded-xl font-mono text-[13px] bg-[#0f172a] text-[#93c5fd] border border-[#334155] focus:outline-hidden focus:ring-2 focus:ring-primary leading-relaxed shadow-inner"
+                  className="w-full p-4 rounded-xl font-mono text-lg bg-[#0f172a] text-[#93c5fd] border border-[#334155] focus:outline-hidden focus:ring-2 focus:ring-primary leading-relaxed shadow-inner"
                 />
 
                 {/* Live SQL Test Results Preview Box */}
                 {testResult && (
                   <div
-                    className={`p-3.5 rounded-xl border text-[13px] space-y-2 animate-in fade-in duration-150 ${
+                    className={`p-3.5 rounded-xl border text-lg space-y-2 animate-in fade-in duration-150 ${
                       testResult.success
                         ? "bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] dark:border-[#10b981] text-[#064e3b] dark:text-[#a7f3d0]"
                         : "bg-[#fff1f2] dark:bg-[#450a0a]/40 border-[#fecaca] dark:border-[#f43f5e] text-[#9f1239] dark:text-[#fca5a5]"
@@ -1507,7 +1510,7 @@ export default function AIQueryAuditPage() {
                         {testResult.success ? `SQL Tested Live: ${testResult.rowCount} Rows Returned in ${testResult.latencyMs}ms` : `SQL Error: ${testResult.error}`}
                       </span>
                       {testResult.success && (
-                        <span className="text-[12px] font-mono opacity-80">
+                        <span className="text-lg font-mono opacity-80">
                           Columns: {testResult.columns?.slice(0, 6).join(", ")} {testResult.columns && testResult.columns.length > 6 ? `+${testResult.columns.length - 6} more` : ""}
                         </span>
                       )}
@@ -1516,7 +1519,7 @@ export default function AIQueryAuditPage() {
                     {/* Preview Rows Table if available */}
                     {testResult.success && testResult.rows && testResult.rows.length > 0 && (
                       <div className="max-h-40 overflow-auto rounded-lg border border-[#a7f3d0] dark:border-[#065f46] bg-white dark:bg-[#0f172a]">
-                        <table className="w-full text-[12px] text-left border-collapse">
+                        <table className="w-full text-lg text-left border-collapse">
                           <thead className="bg-[#f8fafc] dark:bg-[#1e293b] text-[#64748b] dark:text-[#94a3b8] sticky top-0 border-b border-[#e2e8f0]">
                             <tr>
                               {testResult.columns?.slice(0, 7).map((col) => (
@@ -1544,7 +1547,7 @@ export default function AIQueryAuditPage() {
 
               {/* 6. Training Comment */}
               <div className="space-y-1.5">
-                <label className="text-[14px] font-bold text-[#193A69] dark:text-white flex items-center gap-2">
+                <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-primary" />
                   Business Reasoning / Training Note:
                 </label>
@@ -1553,14 +1556,14 @@ export default function AIQueryAuditPage() {
                   onChange={(e) => setTrainComment(e.target.value)}
                   rows={2}
                   placeholder="Explain why this SQL is correct..."
-                  className="w-full p-3 rounded-lg text-[14px] bg-[#f8fafc] dark:bg-[#0f172a] border border-[#cbd5e1] dark:border-[#334155] text-[#1e293b] dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                  className="w-full p-3 rounded-lg text-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#cbd5e1] dark:border-[#334155] text-[#1e293b] dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-[13px] text-[#64748b] dark:text-[#94a3b8] text-center sm:text-left">
+              <span className="text-lg text-[#64748b] dark:text-[#94a3b8] text-center sm:text-left">
                 ⚡ Training permanently updates AI memory in MSSQL & purges stale caches.
               </span>
 
@@ -1569,7 +1572,7 @@ export default function AIQueryAuditPage() {
                   onClick={() => setTrainModalOpen(false)}
                   variant="outline"
                   size="sm"
-                  className="h-10 px-4 text-[14px] font-bold border-[#cbd5e1] dark:border-[#334155] text-[#64748b]"
+                  className="h-10 px-4 text-lg font-bold border-[#cbd5e1] dark:border-[#334155] text-[#64748b]"
                 >
                   Cancel
                 </Button>
@@ -1579,7 +1582,7 @@ export default function AIQueryAuditPage() {
                   disabled={isTraining}
                   variant="input"
                   size="sm"
-                  className="h-10 px-6 gap-2 text-[15px] font-bold bg-gradient-to-r from-[#d97706] via-primary to-[#4f46e5] hover:from-[#b45309] hover:to-[#4338ca] text-white shadow-md shadow-primary/20"
+                  className="h-10 px-6 gap-2 text-lg font-bold bg-gradient-to-r from-[#d97706] via-primary to-[#4f46e5] hover:from-[#b45309] hover:to-[#4338ca] text-white shadow-md shadow-primary/20"
                 >
                   {isTraining ? (
                     <>
@@ -1613,16 +1616,16 @@ export default function AIQueryAuditPage() {
                   <h3 className="text-lg sm:text-xl font-extrabold text-[#193A69] dark:text-white flex items-center gap-2.5">
                     Query Audit Record #{selectedRecord.UTD}
                     {selectedRecord.statusCode === "SUCCESS" ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[13px] font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#047857] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46]">
+                      <span className="px-2.5 py-0.5 rounded-full text-lg font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#047857] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46]">
                         SUCCESS
                       </span>
                     ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-[13px] font-bold bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca] dark:border-[#991b1b]">
+                      <span className="px-2.5 py-0.5 rounded-full text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca] dark:border-[#991b1b]">
                         FAILED
                       </span>
                     )}
                   </h3>
-                  <p className="text-[14px] text-[#64748b] dark:text-[#94a3b8] mt-0.5">
+                  <p className="text-lg text-[#64748b] dark:text-[#94a3b8] mt-0.5">
                     Logged at {formatAuditDateTime(selectedRecord.createdAt).full} • Latency: {selectedRecord.executionTimeMs}ms
                   </p>
                 </div>
@@ -1636,7 +1639,7 @@ export default function AIQueryAuditPage() {
                   }}
                   variant="input"
                   size="sm"
-                  className="h-9 px-3 gap-1.5 text-[13px] font-bold bg-[#f59e0b] hover:bg-[#d97706] text-white"
+                  className="h-9 px-3 gap-1.5 text-lg font-bold bg-[#f59e0b] hover:bg-[#d97706] text-white"
                 >
                   <Zap className="h-3.5 w-3.5 fill-current" />
                   Train this Query
@@ -1653,7 +1656,7 @@ export default function AIQueryAuditPage() {
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-[15px] sm:text-base">
+            <div className="p-6 overflow-y-auto space-y-6 text-lg sm:text-base">
               {/* 1. User Question */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1665,7 +1668,7 @@ export default function AIQueryAuditPage() {
                     onClick={() => handleCopy(selectedRecord.userQuery, "question")}
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2.5 text-[13px] font-bold gap-1 text-[#64748b]"
+                    className="h-7 px-2.5 text-lg font-bold gap-1 text-[#64748b]"
                   >
                     {copiedField === "question" ? <Check className="h-3.5 w-3.5 text-[#10b981]" /> : <Copy className="h-3.5 w-3.5" />}
                     {copiedField === "question" ? "Copied" : "Copy"}
@@ -1687,13 +1690,13 @@ export default function AIQueryAuditPage() {
                     onClick={() => handleCopy(selectedRecord.aiResponse || "", "answer")}
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2.5 text-[13px] font-bold gap-1 text-[#64748b]"
+                    className="h-7 px-2.5 text-lg font-bold gap-1 text-[#64748b]"
                   >
                     {copiedField === "answer" ? <Check className="h-3.5 w-3.5 text-[#10b981]" /> : <Copy className="h-3.5 w-3.5" />}
                     {copiedField === "answer" ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                <div className="p-4.5 rounded-xl bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white whitespace-pre-wrap font-sans text-[15px] sm:text-base leading-relaxed">
+                <div className="p-4.5 rounded-xl bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white whitespace-pre-wrap font-sans text-lg sm:text-base leading-relaxed">
                   {selectedRecord.aiResponse || "No response recorded."}
                 </div>
               </div>
@@ -1710,13 +1713,13 @@ export default function AIQueryAuditPage() {
                       onClick={() => handleCopy(selectedRecord.generatedSql || "", "sql")}
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2.5 text-[13px] font-bold gap-1 text-[#64748b]"
+                      className="h-7 px-2.5 text-lg font-bold gap-1 text-[#64748b]"
                     >
                       {copiedField === "sql" ? <Check className="h-3.5 w-3.5 text-[#10b981]" /> : <Copy className="h-3.5 w-3.5" />}
                       {copiedField === "sql" ? "Copied SQL" : "Copy SQL"}
                     </Button>
                   </div>
-                  <pre className="p-4 rounded-xl bg-[#0f172a] text-[#93c5fd] font-mono text-[14px] overflow-x-auto border border-[#334155] leading-relaxed">
+                  <pre className="p-4 rounded-xl bg-[#0f172a] text-[#93c5fd] font-mono text-lg overflow-x-auto border border-[#334155] leading-relaxed">
                     <code>{selectedRecord.generatedSql}</code>
                   </pre>
                 </div>
@@ -1725,20 +1728,20 @@ export default function AIQueryAuditPage() {
               {/* 4. Execution Telemetry Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 pt-2">
                 <div className="p-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]">
-                  <div className="text-[12px] font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">Intent</div>
-                  <div className="font-bold text-[15px] text-[#193A69] dark:text-white mt-0.5 truncate">{selectedRecord.intent || "GENERAL"}</div>
+                  <div className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">Intent</div>
+                  <div className="font-bold text-lg text-[#193A69] dark:text-white mt-0.5 truncate">{selectedRecord.intent || "GENERAL"}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]">
-                  <div className="text-[12px] font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">Tables Used</div>
-                  <div className="font-bold text-[15px] text-[#193A69] dark:text-white mt-0.5 truncate">{selectedRecord.tablesUsed || "EMPLOYEEMASTER"}</div>
+                  <div className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">Tables Used</div>
+                  <div className="font-bold text-lg text-[#193A69] dark:text-white mt-0.5 truncate">{selectedRecord.tablesUsed || "EMPLOYEEMASTER"}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]">
-                  <div className="text-[12px] font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">Rows Returned</div>
-                  <div className="font-bold text-[15px] text-[#193A69] dark:text-white mt-0.5">{selectedRecord.rowsReturned || 0}</div>
+                  <div className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">Rows Returned</div>
+                  <div className="font-bold text-lg text-[#193A69] dark:text-white mt-0.5">{selectedRecord.rowsReturned || 0}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155]">
-                  <div className="text-[12px] font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">User / Emp Code</div>
-                  <div className="font-bold text-[15px] text-[#193A69] dark:text-white mt-0.5 truncate">{selectedRecord.empCode || selectedRecord.userId || "-"}</div>
+                  <div className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">User / Emp Code</div>
+                  <div className="font-bold text-lg text-[#193A69] dark:text-white mt-0.5 truncate">{selectedRecord.empCode || selectedRecord.userId || "-"}</div>
                 </div>
               </div>
             </div>
@@ -1753,7 +1756,7 @@ export default function AIQueryAuditPage() {
                 }}
                 variant="input"
                 size="sm"
-                className="h-9 px-4 gap-2 text-[14px] font-bold bg-[#f59e0b] hover:bg-[#d97706] text-white shadow-xs"
+                className="h-9 px-4 gap-2 text-lg font-bold bg-[#f59e0b] hover:bg-[#d97706] text-white shadow-xs"
               >
                 <Zap className="h-4 w-4 fill-current" />
                 Train / Fine-Tune Model
@@ -1763,7 +1766,7 @@ export default function AIQueryAuditPage() {
                 onClick={() => setSelectedRecord(null)}
                 variant="outline"
                 size="sm"
-                className="h-9 px-5 text-[15px] font-bold border-[#cbd5e1] dark:border-[#334155] text-[#193A69] dark:text-white"
+                className="h-9 px-5 text-lg font-bold border-[#cbd5e1] dark:border-[#334155] text-[#193A69] dark:text-white"
               >
                 Close
               </Button>
