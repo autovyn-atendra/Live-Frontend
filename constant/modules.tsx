@@ -465,4 +465,58 @@ export const treeData = [
       },
     ]
   },
+  {
+    title: "Meta",
+    url: "/autovyn/meta",
+    ShortCut: "alt+m",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "15",
+    children: [
+      {
+        title: "Echer Pages|",
+        key: "15.1",
+        url: "/autovyn",
+        children: [
+          {
+            title: "Echer Config | ",
+            key: "15.1.1",
+            url: "/autovyn/eicher-config",
+          },
+
+
+        ],
+      },
+    ]
+  },
+  {
+    title: "Default MST",
+    url: "/autovyn/default_mst",
+    ShortCut: "alt+m",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "15",
+    children: [
+      {
+        title: "Default MST |",
+        key: "15.1",
+        url: "/autovyn/default_mst",
+        children: [
+          {
+            title: "Default MST | ",
+            key: "15.1.1",
+            url: "/autovyn/default_mst",
+          },
+
+
+        ],
+      },
+    ]
+  },
 ];
