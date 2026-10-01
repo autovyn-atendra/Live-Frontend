@@ -82,7 +82,12 @@ export const treeData = [
             title: "Employee Face Data |",
             key: "9.1.4",
             url: "/autovyn/employee-master/face_data"
-          },
+          },  
+          {
+            title: "Employee Master Data Import |",
+            key: "9.1.5",
+            url: "/autovyn/employee-master/Employee_Master_Data_Import"
+          }
         ],
       },
     ]

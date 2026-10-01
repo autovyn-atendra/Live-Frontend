@@ -5,7 +5,7 @@ import {
     Database, ChevronRight, Search, RefreshCw,
     AlertCircle, Hash, CheckCircle2, XCircle,
     ArrowLeft, Info, PlusCircle, X, Loader2, Save,
-    Plus, ArrowRightLeft, Pencil,
+    Plus, ArrowRightLeft, Pencil, Power,
 } from "lucide-react";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import axios, { AxiosError } from "axios";
@@ -1583,6 +1583,8 @@ export default function MiscMasterPage() {
     const [showTransfer, setShowTransfer] = useState(false);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [viewMode1001, setViewMode1001] = useState<"tree" | "table">("tree");
+    const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+    const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
     // ── Fetch Available Misc Types ────────────────────────
     useEffect(() => {
@@ -1652,7 +1654,7 @@ export default function MiscMasterPage() {
     }, [allSidebarTypes, searchLeft]);
 
     // ── Fetch Data ─────────────────────────────────────────
-    const fetchData = useCallback(async (type: string) => {
+    const fetchData = useCallback(async (type: string, filterStatus: "active" | "inactive" | "all" = statusFilter) => {
         setLoading(true);
         setError(null);
         setRecords([]);
@@ -1660,7 +1662,11 @@ export default function MiscMasterPage() {
         try {
             const res = await axios.get<APIResponse<MiscRecord[]>>(
                 `${BASE_URL}/misc/${type}`,
-                { headers: buildHeaders(user), timeout: 30000 }
+                {
+                    headers: buildHeaders(user),
+                    params: { status: filterStatus },
+                    timeout: 30000,
+                }
             );
             setRecords(res.data?.data || []);
             setColumns(res.data?.columns || []);
@@ -1670,7 +1676,49 @@ export default function MiscMasterPage() {
         } finally {
             setLoading(false);
         }
-    }, [user]);
+    }, [user, statusFilter]);
+
+    const handleStatusFilterChange = (newStatus: "active" | "inactive" | "all") => {
+        setStatusFilter(newStatus);
+        if (selectedType) {
+            fetchData(selectedType, newStatus);
+        }
+    };
+
+    const handleToggleStatus = async (record: MiscRecord) => {
+        const isInactive = record.Export_Type === 33 || record.Export_Type >= 3;
+        const targetStatus = isInactive ? 1 : 33;
+        const targetLabel = isInactive ? "Active" : "Inactive";
+        const key = `${record.Misc_Type}_${record.Misc_Code}_${record.UTD}`;
+
+        setTogglingKey(key);
+        try {
+            const res = await axios.post(
+                `${BASE_URL}/misc/status`,
+                {
+                    Misc_Type: record.Misc_Type,
+                    Misc_Code: record.Misc_Code,
+                    UTD: record.UTD,
+                    status: targetStatus,
+                },
+                { headers: buildHeaders(user) }
+            );
+
+            if (res.data?.success) {
+                setSuccessMsg(res.data.message || `Record marked as ${targetLabel}`);
+                if (selectedType) {
+                    fetchData(selectedType, statusFilter);
+                }
+                setTimeout(() => setSuccessMsg(null), 3500);
+            } else {
+                setError(res.data?.message || "Failed to update status");
+            }
+        } catch (err) {
+            setError(getErrorMessage(err));
+        } finally {
+            setTogglingKey(null);
+        }
+    };
 
     const hasInitialSelected = useRef(false);
 
@@ -1696,7 +1744,7 @@ export default function MiscMasterPage() {
                 setViewMode1001("tree");
             }
         }
-        fetchData(type);
+        fetchData(type, statusFilter);
     };
 
     // Auto-select on refresh: stay in previous tab, or open first tab by default
@@ -1805,22 +1853,18 @@ export default function MiscMasterPage() {
     );
 
     // ── Stats ──────────────────────────────────────────────
-    const activeCol = columns.find((c) =>
-        c.ColumnName.toLowerCase() === "active" ||
-        c.ColumnName.toLowerCase().includes("status")
-    );
-    const activeCount = activeCol
-        ? records.filter((r) => { const v = r[activeCol.ColumnName]; return v === 1 || v === true || v === null || v === undefined; }).length
-        : records.length;
-    const inactiveCount = activeCol
-        ? records.filter((r) => { const v = r[activeCol.ColumnName]; return v === 0 || v === false; }).length
-        : 0;
+    const activeCount = records.filter(
+        (r) => r.Export_Type === null || r.Export_Type === undefined || r.Export_Type < 3
+    ).length;
+    const inactiveCount = records.filter(
+        (r) => r.Export_Type !== null && r.Export_Type !== undefined && r.Export_Type >= 3
+    ).length;
 
     const handleCreateSuccess = (name: string) => {
         setShowCreate(false);
         setSuccessMsg(`"${name}" created successfully!`);
         // Refresh both types list and current data
-        if (selectedType) fetchData(selectedType);
+        if (selectedType) fetchData(selectedType, statusFilter);
         setTimeout(() => setSuccessMsg(null), 4000);
     };
 
@@ -1833,7 +1877,7 @@ export default function MiscMasterPage() {
         setShowEdit(false);
         setEditingRecord(null);
         setSuccessMsg(`"${name}" updated successfully!`);
-        if (selectedType) fetchData(selectedType);
+        if (selectedType) fetchData(selectedType, statusFilter);
         setTimeout(() => setSuccessMsg(null), 4000);
     };
 
@@ -2066,23 +2110,44 @@ export default function MiscMasterPage() {
                                         </div>
 
                                         <div className="flex items-center gap-2">
-
-                                            {/* Info */}
-                                            {MISC_TYPE_DESC[selectedType] && (
-                                                <div className="group relative">
-                                                    <button
-                                                        type="button"
-                                                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF] hover:text-primary dark:border-[#334155] dark:bg-[#0F172A]"
-                                                    >
-                                                        <Info size={13} />
-                                                    </button>
-                                                    <div className="absolute right-0 top-full z-50 mt-1 hidden w-72 rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] p-3 shadow-xl group-hover:block dark:border-[#334155] dark:bg-[#1E293B]">
-                                                        <p className="text-lg leading-relaxed text-[#374151] dark:text-[#D1D5DB]">
-                                                            {MISC_TYPE_DESC[selectedType]}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            {/* Status Filter Tabs */}
+                                            <div className="flex h-12 items-center rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-1 dark:border-[#334155] dark:bg-[#0F172A]">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleStatusFilterChange("active")}
+                                                    className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
+                                                        statusFilter === "active"
+                                                            ? "bg-primary text-[#FFFFFF] shadow-xs"
+                                                            : "text-[#6B7280] hover:text-[#111827] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]"
+                                                    }`}
+                                                >
+                                                    <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
+                                                    Active (&lt; 3)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleStatusFilterChange("inactive")}
+                                                    className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
+                                                        statusFilter === "inactive"
+                                                            ? "bg-[#DC2626] text-[#FFFFFF] shadow-xs"
+                                                            : "text-[#6B7280] hover:text-[#DC2626] dark:text-[#9CA3AF] dark:hover:text-[#FCA5A5]"
+                                                    }`}
+                                                >
+                                                    <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
+                                                    Inactive (33)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleStatusFilterChange("all")}
+                                                    className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
+                                                        statusFilter === "all"
+                                                            ? "bg-[#374151] text-[#FFFFFF] shadow-xs dark:bg-[#475569]"
+                                                            : "text-[#6B7280] hover:text-[#111827] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]"
+                                                    }`}
+                                                >
+                                                    All
+                                                </button>
+                                            </div>
 
                                             {/* Search */}
                                             <div className="relative">
@@ -2098,7 +2163,7 @@ export default function MiscMasterPage() {
                                             {/* Refresh */}
                                             <button
                                                 type="button"
-                                                onClick={() => fetchData(selectedType)}
+                                                onClick={() => fetchData(selectedType, statusFilter)}
                                                 disabled={loading}
                                                 className="flex h-12 items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-lg font-semibold text-[#374151] transition-all hover:bg-[#F3F4F6] disabled:opacity-60 active:scale-95 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#D1D5DB]"
                                             >
@@ -2160,7 +2225,7 @@ export default function MiscMasterPage() {
                                         <thead className="sticky top-0 z-10">
                                             <tr className="border-b border-[#E5E7EB] bg-[#F9FAFB] dark:border-[#334155] dark:bg-[#0F172A]">
                                                 {/* <th className="w-10 px-3 py-2.5 font-semibold uppercase tracking-wider text-[#6B7280] dark:text-[#9CA3AF]">
-                                                    #
+                                                     #
                                                 </th> */}
                                                
                                                 {loading
@@ -2179,7 +2244,10 @@ export default function MiscMasterPage() {
                                                         </th>
                                                     ))
                                                 }
-                                                 <th className="w-16 px-3 py-2.5 text-center font-semibold uppercase tracking-wider text-[#6B7280] dark:text-[#9CA3AF]">
+                                                <th className="w-20 px-3 py-2.5 text-center font-semibold uppercase tracking-wider text-[#6B7280] dark:text-[#9CA3AF]">
+                                                    Status
+                                                </th>
+                                                <th className="w-28 px-3 py-2.5 text-center font-semibold uppercase tracking-wider text-[#6B7280] dark:text-[#9CA3AF]">
                                                     Action
                                                 </th>
                                             </tr>
@@ -2193,7 +2261,7 @@ export default function MiscMasterPage() {
                                                         <div className="flex flex-col items-center gap-3">
                                                             <Database size={24} className="text-[#D1D5DB] dark:text-[#374151]" />
                                                             <p className="text-lg font-semibold text-[#6B7280] dark:text-[#9CA3AF]">
-                                                                {searchTable ? "No matching records found" : "No records found for this type"}
+                                                                {searchTable ? "No matching records found" : "No records found for this filter/type"}
                                                             </p>
                                                             {!searchTable && selectedType !== "1001" && (
                                                                 <button
@@ -2245,15 +2313,60 @@ export default function MiscMasterPage() {
                                                                 </td>
                                                             );
                                                         })}
-                                                        <td className="px-3 py-2.5 text-center">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleOpenEdit(row)}
-                                                                title="Edit / Update Record"
-                                                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] text-primary shadow-xs transition-all hover:bg-primary hover:text-[#FFFFFF] active:scale-95 dark:border-[#334155] dark:bg-[#0F172A] dark:hover:bg-primary dark:hover:text-[#FFFFFF]"
-                                                            >
-                                                                <Pencil size={14} />
-                                                            </button>
+                                                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                                                            {row.Export_Type === 33 || row.Export_Type >= 3 ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-[#FEE2E2] px-2 py-0.5 text-xs font-bold text-[#DC2626] dark:bg-[#7F1D1D]/40 dark:text-[#FCA5A5]">
+                                                                    <XCircle size={10} /> Inactive
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-[#DCFCE7] px-2 py-0.5 text-xs font-bold text-[#15803D] dark:bg-[#14532D]/40 dark:text-[#86EFAC]">
+                                                                    <CheckCircle2 size={10} /> Active
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                                                            <div className="flex items-center justify-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenEdit(row)}
+                                                                    title="Edit / Update Record"
+                                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] text-primary shadow-xs transition-all hover:bg-primary hover:text-[#FFFFFF] active:scale-95 dark:border-[#334155] dark:bg-[#0F172A] dark:hover:bg-primary dark:hover:text-[#FFFFFF]"
+                                                                >
+                                                                    <Pencil size={14} />
+                                                                </button>
+
+                                                                {(() => {
+                                                                    const isInactive = row.Export_Type === 33 || row.Export_Type >= 3;
+                                                                    const isToggling = togglingKey === `${row.Misc_Type}_${row.Misc_Code}_${row.UTD}`;
+                                                                    return (
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isToggling}
+                                                                            onClick={() => handleToggleStatus(row)}
+                                                                            title={isInactive ? "Click to Activate (Export_Type: 1)" : "Click to Inactivate (Export_Type: 33)"}
+                                                                            className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-bold shadow-xs transition-all active:scale-95 disabled:opacity-50 ${
+                                                                                isInactive
+                                                                                    ? "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626] hover:border-[#BBF7D0] hover:bg-[#F0FDF4] hover:text-[#15803D] dark:border-[#7F1D1D] dark:bg-[#450A0A]/30 dark:text-[#FCA5A5] dark:hover:bg-[#14532D]/30 dark:hover:text-[#86EFAC]"
+                                                                                    : "border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D] hover:border-[#FECACA] hover:bg-[#FEF2F2] hover:text-[#DC2626] dark:border-[#14532D] dark:bg-[#052E16]/30 dark:text-[#86EFAC] dark:hover:bg-[#7F1D1D]/30 dark:hover:text-[#FCA5A5]"
+                                                                            }`}
+                                                                        >
+                                                                            {isToggling ? (
+                                                                                <Loader2 size={13} className="animate-spin" />
+                                                                            ) : isInactive ? (
+                                                                                <>
+                                                                                    <Power size={12} className="text-[#DC2626]" />
+                                                                                    <span>Inactive</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Power size={12} className="text-[#15803D]" />
+                                                                                    <span>Active</span>
+                                                                                </>
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                })()}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))
