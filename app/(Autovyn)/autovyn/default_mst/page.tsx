@@ -1583,7 +1583,7 @@ export default function MiscMasterPage() {
     const [showTransfer, setShowTransfer] = useState(false);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [viewMode1001, setViewMode1001] = useState<"tree" | "table">("tree");
-    const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+    const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("all");
     const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
     // ── Fetch Available Misc Types ────────────────────────
@@ -1654,17 +1654,18 @@ export default function MiscMasterPage() {
     }, [allSidebarTypes, searchLeft]);
 
     // ── Fetch Data ─────────────────────────────────────────
-    const fetchData = useCallback(async (type: string, filterStatus: "active" | "inactive" | "all" = statusFilter) => {
+    const fetchData = useCallback(async (type: string, filterStatus?: "active" | "inactive" | "all") => {
         setLoading(true);
         setError(null);
         setRecords([]);
         setColumns([]);
+        const effectiveStatus = type === "1001" ? "active" : (filterStatus ?? statusFilter);
         try {
             const res = await axios.get<APIResponse<MiscRecord[]>>(
                 `${BASE_URL}/misc/${type}`,
                 {
                     headers: buildHeaders(user),
-                    params: { status: filterStatus },
+                    params: { status: effectiveStatus },
                     timeout: 30000,
                 }
             );
@@ -1743,8 +1744,11 @@ export default function MiscMasterPage() {
             } else {
                 setViewMode1001("tree");
             }
+            fetchData("1001", "active");
+        } else {
+            setStatusFilter("all");
+            fetchData(type, "all");
         }
-        fetchData(type, statusFilter);
     };
 
     // Auto-select on refresh: stay in previous tab, or open first tab by default
@@ -1763,7 +1767,12 @@ export default function MiscMasterPage() {
         if (savedType && MISC_TYPE_MAPPING[savedType]) {
             hasInitialSelected.current = true;
             setSelectedType(savedType);
-            fetchData(savedType);
+            if (savedType === "1001") {
+                fetchData("1001", "active");
+            } else {
+                setStatusFilter("all");
+                fetchData(savedType, "all");
+            }
             return;
         }
 
@@ -1773,7 +1782,12 @@ export default function MiscMasterPage() {
             hasInitialSelected.current = true;
             setSelectedType(firstType);
             localStorage.setItem("default_mst_selected_type", firstType);
-            fetchData(firstType);
+            if (firstType === "1001") {
+                fetchData("1001", "active");
+            } else {
+                setStatusFilter("all");
+                fetchData(firstType, "all");
+            }
         }
     }, [user, loadingTypes, filteredTypes, fetchData]);
 
@@ -2081,11 +2095,11 @@ export default function MiscMasterPage() {
                                     user={user}
                                     onSaveSuccess={(count) => {
                                         setSuccessMsg(`Mobile Rights saved successfully (${count} rights saved with Module Code 10)!`);
-                                        fetchData("1001");
+                                        fetchData("1001", "active");
                                         setTimeout(() => setSuccessMsg(null), 4500);
                                     }}
                                     loading={loading}
-                                    onRefresh={() => fetchData("1001")}
+                                    onRefresh={() => fetchData("1001", "active")}
                                     onToggleView={() => handleToggleViewMode1001("table")}
                                 />
                             ) : (
@@ -2110,44 +2124,47 @@ export default function MiscMasterPage() {
                                         </div>
 
                                         <div className="flex items-center gap-2">
-                                            {/* Status Filter Tabs */}
-                                            <div className="flex h-12 items-center rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-1 dark:border-[#334155] dark:bg-[#0F172A]">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleStatusFilterChange("active")}
-                                                    className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
-                                                        statusFilter === "active"
-                                                            ? "bg-primary text-[#FFFFFF] shadow-xs"
-                                                            : "text-[#6B7280] hover:text-[#111827] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]"
-                                                    }`}
-                                                >
-                                                    <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
-                                                    Active (&lt; 3)
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleStatusFilterChange("inactive")}
-                                                    className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
-                                                        statusFilter === "inactive"
-                                                            ? "bg-[#DC2626] text-[#FFFFFF] shadow-xs"
-                                                            : "text-[#6B7280] hover:text-[#DC2626] dark:text-[#9CA3AF] dark:hover:text-[#FCA5A5]"
-                                                    }`}
-                                                >
-                                                    <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
-                                                    Inactive (33)
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleStatusFilterChange("all")}
-                                                    className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
-                                                        statusFilter === "all"
-                                                            ? "bg-[#374151] text-[#FFFFFF] shadow-xs dark:bg-[#475569]"
-                                                            : "text-[#6B7280] hover:text-[#111827] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]"
-                                                    }`}
-                                                >
-                                                    All
-                                                </button>
-                                            </div>
+                                            {/* Status Filter Tabs - Excluded for Mobile Rights (1001) */}
+                                            {selectedType !== "1001" && (
+                                                <div className="flex h-12 items-center rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-1 dark:border-[#334155] dark:bg-[#0F172A]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStatusFilterChange("all")}
+                                                        className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
+                                                            statusFilter === "all"
+                                                                ? "bg-[#374151] text-[#FFFFFF] shadow-xs dark:bg-[#475569]"
+                                                                : "text-[#6B7280] hover:text-[#111827] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]"
+                                                        }`}
+                                                    >
+                                                        All
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStatusFilterChange("active")}
+                                                        className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
+                                                            statusFilter === "active"
+                                                                ? "bg-primary text-[#FFFFFF] shadow-xs"
+                                                                : "text-[#6B7280] hover:text-[#111827] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]"
+                                                        }`}
+                                                    >
+                                                        <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
+                                                        Active
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStatusFilterChange("inactive")}
+                                                        className={`flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-all ${
+                                                            statusFilter === "inactive"
+                                                                ? "bg-[#DC2626] text-[#FFFFFF] shadow-xs"
+                                                                : "text-[#6B7280] hover:text-[#DC2626] dark:text-[#9CA3AF] dark:hover:text-[#FCA5A5]"
+                                                        }`}
+                                                    >
+                                                        <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
+                                                        Inactive 
+                                                    </button>
+                                                    
+                                                </div>
+                                            )}
 
                                             {/* Search */}
                                             <div className="relative">
@@ -2163,7 +2180,7 @@ export default function MiscMasterPage() {
                                             {/* Refresh */}
                                             <button
                                                 type="button"
-                                                onClick={() => fetchData(selectedType, statusFilter)}
+                                                onClick={() => fetchData(selectedType, selectedType === "1001" ? "active" : statusFilter)}
                                                 disabled={loading}
                                                 className="flex h-12 items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-lg font-semibold text-[#374151] transition-all hover:bg-[#F3F4F6] disabled:opacity-60 active:scale-95 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#D1D5DB]"
                                             >
