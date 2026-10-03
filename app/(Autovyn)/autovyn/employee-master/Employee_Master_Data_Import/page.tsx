@@ -39,6 +39,21 @@ interface Approver2Props {
 const formatDisplayDate = (value: any) => {
   if (value === null || value === undefined || value === "") return "";
   const str = String(value).trim();
+  const clean = str.replace(/[\s\-_.\/\\]/g, "");
+  if (
+    clean === "01011900" ||
+    clean === "19000101" ||
+    clean === "111900" ||
+    clean === "010100" ||
+    clean === "1100" ||
+    /^0+$/.test(clean) ||
+    str === "01/01/1900" ||
+    str === "1900-01-01" ||
+    str === "01-01-1900" ||
+    str === "1/1/1900"
+  ) {
+    return "";
+  }
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(str) || /^\d{2}\/\d{2}\/\d{2}$/.test(str)) return str;
 
   // Match YYYY-MM-DD or YYYY/MM/DD
@@ -47,6 +62,7 @@ const formatDisplayDate = (value: any) => {
     const yyyy = m[1];
     const mm = m[2].padStart(2, "0");
     const dd = m[3].padStart(2, "0");
+    if (Number(yyyy) <= 1900) return "";
     return `${dd}/${mm}/${yyyy}`;
   }
 
@@ -56,6 +72,7 @@ const formatDisplayDate = (value: any) => {
     const dd = m2[1].padStart(2, "0");
     const mm = m2[2].padStart(2, "0");
     const yyyy = m2[3];
+    if (Number(yyyy) <= 1900) return "";
     return `${dd}/${mm}/${yyyy}`;
   }
 
@@ -70,6 +87,7 @@ const formatDisplayDate = (value: any) => {
 
   const d = new Date(value);
   if (!isNaN(d.getTime())) {
+    if (d.getFullYear() <= 1900) return "";
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
   }

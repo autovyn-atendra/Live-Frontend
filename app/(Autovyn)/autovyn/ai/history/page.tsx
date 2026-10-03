@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   History,
@@ -30,6 +30,8 @@ import {
   ShieldCheck,
   MessageSquare,
   ChevronDown,
+  ChevronUp,
+  Table as TableIcon,
   Zap,
   GraduationCap,
   BookOpen,
@@ -52,6 +54,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_URL;
 interface AuditLogRecord {
   UTD: number;
   conversationId?: string;
+  conversationTitle?: string;
   userId?: string;
   empCode?: string;
   role?: string;
@@ -68,6 +71,22 @@ interface AuditLogRecord {
   statusCode: string;
   errorMessage?: string;
   createdAt: string;
+}
+
+interface ConversationGroup {
+  conversationId: string;
+  title: string;
+  userId?: string;
+  empCode?: string;
+  role?: string;
+  queries: AuditLogRecord[];
+  totalQueries: number;
+  successCount: number;
+  failedCount: number;
+  avgExecutionTimeMs: number;
+  totalRows: number;
+  latestCreatedAt: string;
+  earliestCreatedAt: string;
 }
 
 interface AuditStats {
@@ -162,7 +181,7 @@ export default function AIQueryAuditPage() {
   });
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
-    limit: 20,
+    limit: 50,
     totalRecords: 0,
     totalPages: 1,
     hasMore: false,
@@ -173,6 +192,14 @@ export default function AIQueryAuditPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [selectedRecord, setSelectedRecord] = useState<AuditLogRecord | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // ── VIEW MODE: "CONVERSATION" (DEFAULT) vs "TABLE" ──
+  const [viewMode, setViewMode] = useState<"conversation" | "table">("conversation");
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [sessionSearch, setSessionSearch] = useState<string>("");
+  const [sidebarFilter, setSidebarFilter] = useState<"ALL" | "SUCCESS" | "FAILED">("ALL");
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // ── TABS: "AUDIT" vs "RULES" ──
   const [activeTab, setActiveTab] = useState<"audit" | "rules">("audit");
@@ -226,8 +253,12 @@ export default function AIQueryAuditPage() {
   }, [user]);
 
   const fetchAuditLogs = useCallback(
-    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm) => {
-      setIsLoading(true);
+    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm, isAppend = false) => {
+      if (isAppend) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
       try {
         const res = await axios.get(`${BASE_URL}/ai/audit`, {
           headers: buildAIHeaders(),
@@ -240,14 +271,27 @@ export default function AIQueryAuditPage() {
         });
 
         if (res.data?.success) {
-          setLogs(res.data.data || []);
+          const incoming: AuditLogRecord[] = res.data.data || [];
+          if (isAppend) {
+            setLogs((prev) => {
+              const existingUtds = new Set(prev.map((l) => l.UTD));
+              const newUnique = incoming.filter((l) => !existingUtds.has(l.UTD));
+              return [...prev, ...newUnique];
+            });
+          } else {
+            setLogs(incoming);
+          }
           if (res.data.stats) setStats(res.data.stats);
           if (res.data.pagination) setPagination(res.data.pagination);
         }
       } catch (err) {
         console.error("Failed to load AI audit logs:", err);
       } finally {
-        setIsLoading(false);
+        if (isAppend) {
+          setIsLoadingMore(false);
+        } else {
+          setIsLoading(false);
+        }
       }
     },
     [buildAIHeaders, pagination.limit, searchTerm, statusFilter]
@@ -274,6 +318,148 @@ export default function AIQueryAuditPage() {
     fetchAuditLogs(1, "ALL", "");
     fetchTrainedRules();
   }, []);
+
+  // Group logs by Conversation ID
+  const conversationGroups = useMemo<ConversationGroup[]>(() => {
+    const map = new Map<string, ConversationGroup>();
+
+    logs.forEach((log) => {
+      const rawCid = log.conversationId ? String(log.conversationId).trim() : "";
+      const cid = rawCid && rawCid !== "null" && rawCid !== "undefined" ? rawCid : `direct_${log.UTD}`;
+
+      if (!map.has(cid)) {
+        map.set(cid, {
+          conversationId: cid,
+          title: log.conversationTitle || (rawCid ? `Session • ${rawCid.slice(0, 8)}...` : log.userQuery || "Direct Query"),
+          userId: log.userId,
+          empCode: log.empCode,
+          role: log.role,
+          queries: [],
+          totalQueries: 0,
+          successCount: 0,
+          failedCount: 0,
+          avgExecutionTimeMs: 0,
+          totalRows: 0,
+          latestCreatedAt: log.createdAt,
+          earliestCreatedAt: log.createdAt,
+        });
+      }
+
+      const group = map.get(cid)!;
+      group.queries.push(log);
+      group.totalQueries++;
+      if (log.statusCode === "SUCCESS") group.successCount++;
+      else group.failedCount++;
+      group.totalRows += (log.rowsReturned || 0);
+
+      if (log.conversationTitle && (!group.title || group.title.startsWith("Session • ") || group.title === "Direct Query")) {
+        group.title = log.conversationTitle;
+      }
+      if (new Date(log.createdAt).getTime() > new Date(group.latestCreatedAt).getTime()) {
+        group.latestCreatedAt = log.createdAt;
+      }
+      if (new Date(log.createdAt).getTime() < new Date(group.earliestCreatedAt).getTime()) {
+        group.earliestCreatedAt = log.createdAt;
+      }
+    });
+
+    const result = Array.from(map.values()).map((g) => {
+      const sumLatency = g.queries.reduce((acc, q) => acc + (q.executionTimeMs || 0), 0);
+      g.avgExecutionTimeMs = g.queries.length > 0 ? Math.round(sumLatency / g.queries.length) : 0;
+      // Sort queries within the conversation chronologically (turn 1, turn 2, ...)
+      g.queries.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      // If title is just Session ID fallback, pick the first user query as conversation title
+      if (!g.title || g.title.startsWith("Session • ") || g.title === "Direct Query") {
+        g.title = g.queries[0]?.userQuery || g.title;
+      }
+      return g;
+    });
+
+    // Sort conversations so the newest active conversation is on top
+    result.sort((a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime());
+    return result;
+  }, [logs]);
+
+  // Auto-select the first conversation when loaded or updated
+  useEffect(() => {
+    if (conversationGroups.length > 0) {
+      setSelectedSessionId((prev) => {
+        if (prev && conversationGroups.some((g) => g.conversationId === prev)) {
+          return prev;
+        }
+        return conversationGroups[0].conversationId;
+      });
+    } else {
+      setSelectedSessionId(null);
+    }
+  }, [conversationGroups]);
+
+  const filteredSidebarSessions = useMemo(() => {
+    let list = conversationGroups;
+    if (sidebarFilter === "SUCCESS") {
+      list = list.filter((g) => g.failedCount === 0);
+    } else if (sidebarFilter === "FAILED") {
+      list = list.filter((g) => g.failedCount > 0);
+    }
+    if (!sessionSearch.trim()) return list;
+    const q = sessionSearch.toLowerCase().trim();
+    return list.filter(
+      (g) =>
+        g.title?.toLowerCase().includes(q) ||
+        g.conversationId?.toLowerCase().includes(q) ||
+        g.userId?.toLowerCase().includes(q) ||
+        g.empCode?.toLowerCase().includes(q) ||
+        g.queries?.some((item) => item.userQuery?.toLowerCase().includes(q))
+    );
+  }, [conversationGroups, sessionSearch, sidebarFilter]);
+
+  const activeSession = useMemo(() => {
+    if (!selectedSessionId) return conversationGroups[0] || null;
+    return (
+      conversationGroups.find((g) => g.conversationId === selectedSessionId) ||
+      conversationGroups[0] ||
+      null
+    );
+  }, [conversationGroups, selectedSessionId]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore) return;
+    if (pagination.page >= pagination.totalPages) return;
+    await fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm, true);
+  }, [fetchAuditLogs, isLoading, isLoadingMore, pagination.page, pagination.totalPages, statusFilter, searchTerm]);
+
+  const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
+      if (!isLoading && !isLoadingMore && pagination.page < pagination.totalPages) {
+        handleLoadMore();
+      }
+    }
+  }, [isLoading, isLoadingMore, pagination.page, pagination.totalPages, handleLoadMore]);
+
+  // Infinite scroll listener via IntersectionObserver for sentinel element
+  useEffect(() => {
+    if (viewMode !== "conversation") return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0]?.isIntersecting &&
+          !isLoading &&
+          !isLoadingMore &&
+          pagination.page < pagination.totalPages
+        ) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: "150px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [viewMode, isLoading, isLoadingMore, pagination.page, pagination.totalPages, handleLoadMore]);
 
   const handleStatusChange = (newStatus: string) => {
     setStatusFilter(newStatus);
@@ -976,6 +1162,37 @@ export default function AIQueryAuditPage() {
               </form>
 
               <div className="flex items-center gap-2.5 flex-wrap self-end md:self-auto">
+                {/* View Mode Toggle: Conversation vs Flat Table */}
+                <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-1 rounded-lg border border-[#e2e8f0] dark:border-[#334155]">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("conversation")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors ${
+                      viewMode === "conversation"
+                        ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
+                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
+                    }`}
+                    title="Group questions by conversation session"
+                  >
+                    <MessageSquare className="h-4 w-4 text-blue-500" />
+                    <span>Conversation Wise</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("table")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors ${
+                      viewMode === "table"
+                        ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
+                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
+                    }`}
+                    title="View individual queries in flat table"
+                  >
+                    <TableIcon className="h-4 w-4" />
+                    <span>Flat Queries</span>
+                  </button>
+                </div>
+
+                {/* Status Filter */}
                 <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-1 rounded-lg border border-[#e2e8f0] dark:border-[#334155]">
                   <button
                     onClick={() => handleStatusChange("ALL")}
@@ -1015,204 +1232,768 @@ export default function AIQueryAuditPage() {
                   size="sm"
                   className="h-11 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white"
                 >
-                  {/* <Download className="h-4 w-4" /> */}
                   Export CSV
                 </Button>
               </div>
             </div>
 
-            {/* ── AUDIT LOGS TABLE ── */}
-            <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-lg font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
-                      {/* <th className="py-3.5 px-4"># UTD</th> */}
-                     
-                      <th className="py-3.5 px-4 min-w-[260px]">User Prompt / Question</th>
-                      <th className="py-3.5 px-4">Intent</th>
-                      <th className="py-3.5 px-4">Target Table</th>
-                      <th className="py-3.5 px-4 min-w-[220px]">Executed SQL</th>
-                      <th className="py-3.5 px-4 text-center">Rows</th>
-                      <th className="py-3.5 px-4 text-center">Latency</th>
-                      <th className="py-3.5 px-4 text-center">Status</th>
-                       <th className="py-3.5 px-4 min-w-[130px]">Time</th>
-                      <th className="py-3.5 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-lg">
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={10} className="py-16 text-center text-[#64748b]">
-                          <RefreshCw className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                          Loading telemetry logs...
-                        </td>
-                      </tr>
-                    ) : logs.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="py-16 text-center text-[#64748b]">
-                          <Database className="h-10 w-10 text-[#94a3b8] mx-auto mb-3" />
-                          <div className="text-lg font-bold text-[#193A69] dark:text-white">No Logs Found</div>
-                          <p className="text-lg text-[#94a3b8] mt-1">Try changing filters or ask questions in AI Assistant.</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      logs.map((log) => {
-                        const isSuccess = log.statusCode === "SUCCESS";
-                        return (
-                          <tr
-                            key={log.UTD}
-                            onDoubleClick={() => handleOpenTrainModal(log)}
-                            className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors cursor-pointer group"
-                            title="Double-click to Train AI with this Query"
-                          >
-                            {/* <td className="py-3.5 px-4 font-mono font-bold text-[#64748b] text-lg">
-                              #{log.UTD}
-                            </td> */}
-                            
-                            <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">
-                              <div className="truncate group-hover:text-primary transition-colors">
-                                {log.userQuery}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
-                                {log.intent || "GENERAL"}
+            {/* ── CONVERSATION WISE VIEW: SIDEBAR + DETAIL THREAD ── */}
+            {viewMode === "conversation" ? (
+              isLoading ? (
+                <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
+                  <RefreshCw className="h-8 w-8 animate-spin text-[#193A69] dark:text-blue-400 mx-auto mb-3" />
+                  <div className="text-base font-bold text-[#1e293b] dark:text-white">Loading conversations...</div>
+                  <p className="text-sm text-[#94a3b8] mt-1">Grouping telemetry queries by conversation sessions</p>
+                </div>
+              ) : conversationGroups.length === 0 ? (
+                <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
+                  <MessageSquare className="h-10 w-10 text-[#94a3b8] mx-auto mb-3 opacity-60" />
+                  <div className="text-base font-bold text-[#193A69] dark:text-white">No Conversations Found</div>
+                  <p className="text-sm text-[#94a3b8] mt-1">Try changing filters or search terms.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                  {/* ── LEFT SIDEBAR: CONVERSATION SESSIONS ── */}
+                  <div className="lg:col-span-4 xl:col-span-4 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl shadow-xs overflow-hidden flex flex-col">
+                    {/* Sidebar Header */}
+                    <div className="p-3.5 sm:p-4 border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/60 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40">
+                            <MessageSquare className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-[#193A69] dark:text-white">
+                                Sessions
+                              </h3>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                                {conversationGroups.length}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-mono text-lg truncate max-w-[130px]">
-                              {log.tablesUsed || "EMPLOYEEMASTER"}
-                            </td>
-                            <td className="py-3.5 px-4 max-w-xs">
-                              {log.generatedSql ? (
-                                <pre className="p-1.5 rounded bg-[#0f172a] text-[#93c5fd] font-mono text-[11px] truncate">
-                                  <code>{log.generatedSql}</code>
-                                </pre>
-                              ) : (
-                                <span className="text-[#94a3b8] text-lg italic">No SQL generated</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-bold text-[#193A69] dark:text-white">
-                              {log.rowsReturned || 0}
-                            </td>
-                            <td className="py-3.5 px-4 text-center text-[#64748b] dark:text-[#94a3b8] text-lg">
-                              {log.executionTimeMs}ms
-                            </td>
-                            <td className="py-3.5 px-4 text-center">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-lg font-bold ${
-                                  isSuccess
-                                    ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
-                                    : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
-                                }`}
-                              >
-                                {isSuccess ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                {log.statusCode}
-                              </span>
-                              {/* 0-rows warning sub-badge */}
-                              {isSuccess && (log.rowsReturned === 0 || log.rowsReturned === null) && (
-                                <span className="mt-0.5 flex items-center gap-0.5 text-[10px] font-bold text-[#d97706] dark:text-[#fde68a]">
-                                  ⚠ 0 rows
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              {(() => {
-                                const dt = formatAuditDateTime(log.createdAt);
-                                return (
-                                  <div className="flex flex-col">
-                                    <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-lg tracking-tight">
-                                      {dt.time}
-                                    </span>
-                                    <span className="text-[11px] font-medium text-[#94a3b8]">
-                                      {dt.date}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {/* Quick Fix button — extra prominent for failed or 0-row queries */}
-                                {!isSuccess || (log.rowsReturned === 0 || log.rowsReturned === null) ? (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenTrainModal(log);
-                                    }}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1 animate-pulse"
-                                    title="Fix this failed query — train AI with correct SQL"
-                                  >
-                                    <Zap className="h-3.5 w-3.5 fill-current" />
-                                    Fix & Train
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenTrainModal(log);
-                                    }}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-2.5 text-lg font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 gap-1"
-                                  >
-                                    <Zap className="h-3.5 w-3.5 fill-current" />
-                                    Train
-                                  </Button>
-                                )}
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedRecord(log);
-                                  }}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 text-[#64748b] hover:text-[#193A69]"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            </div>
+                            <span className="text-[11px] text-[#64748b] dark:text-[#94a3b8]">
+                              {logs.length} / {pagination.totalRecords || logs.length} turns loaded
+                            </span>
+                          </div>
+                        </div>
 
-              {/* Pagination */}
-              {pagination.totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/40 flex items-center justify-between">
-                  <span className="text-lg text-[#64748b] dark:text-[#94a3b8]">
-                    Showing page <span className="font-bold">{pagination.page}</span> of{" "}
-                    <span className="font-bold">{pagination.totalPages}</span> ({pagination.totalRecords} records)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => fetchAuditLogs(pagination.page - 1, statusFilter, searchTerm)}
-                      disabled={pagination.page <= 1}
-                      variant="outline"
-                      size="sm"
-                      className="h-9 px-3 gap-1"
+                        {/* Quick reload button */}
+                        <button
+                          type="button"
+                          onClick={() => fetchAuditLogs(1, statusFilter, searchTerm, false)}
+                          title="Reload latest sessions"
+                          disabled={isLoading || isLoadingMore}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${isLoading && !isLoadingMore ? "animate-spin" : ""}`} />
+                        </button>
+                      </div>
+
+                      {/* Local Search inside sessions */}
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#94a3b8]" />
+                        <Input
+                          placeholder="Search title, query, user..."
+                          value={sessionSearch}
+                          onChange={(e) => setSessionSearch(e.target.value)}
+                          className="pl-8 pr-7 h-8 text-xs bg-white dark:bg-[#1e293b] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white placeholder:text-[#94a3b8] focus-visible:ring-1 focus-visible:ring-blue-500"
+                        />
+                        {sessionSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setSessionSearch("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Quick Filter Pills */}
+                      <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-200/60 dark:bg-slate-800/60 rounded-lg text-[11px] font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setSidebarFilter("ALL")}
+                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${
+                            sidebarFilter === "ALL"
+                              ? "bg-white dark:bg-[#1e293b] text-blue-600 dark:text-blue-400 shadow-xs font-bold"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                          }`}
+                        >
+                          All ({conversationGroups.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSidebarFilter("SUCCESS")}
+                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${
+                            sidebarFilter === "SUCCESS"
+                              ? "bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                          }`}
+                        >
+                          ✓ OK ({conversationGroups.filter((g) => g.failedCount === 0).length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSidebarFilter("FAILED")}
+                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${
+                            sidebarFilter === "FAILED"
+                              ? "bg-white dark:bg-[#1e293b] text-rose-600 dark:text-rose-400 shadow-xs font-bold"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                          }`}
+                        >
+                          ⚠ Issues ({conversationGroups.filter((g) => g.failedCount > 0).length})
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Scrollable Sessions List with Infinite Scroll & Lazy Loading */}
+                    <div
+                      onScroll={handleSidebarScroll}
+                      className="p-2 sm:p-2.5 space-y-2 overflow-y-auto max-h-[720px] divide-y divide-transparent"
                     >
-                      <ChevronLeft className="h-4 w-4" /> Prev
-                    </Button>
-                    <Button
-                      onClick={() => fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm)}
-                      disabled={pagination.page >= pagination.totalPages}
-                      variant="outline"
-                      size="sm"
-                      className="h-9 px-3 gap-1"
-                    >
-                      Next <ChevronRight className="h-4 w-4" />
-                    </Button>
+                      {filteredSidebarSessions.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-[#94a3b8] space-y-2">
+                          <MessageSquare className="h-7 w-7 text-slate-300 dark:text-slate-600 mx-auto" />
+                          <div>No sessions match your filter</div>
+                          {sessionSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setSessionSearch("")}
+                              className="text-blue-500 hover:underline text-[11px]"
+                            >
+                              Clear search query
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        filteredSidebarSessions.map((group) => {
+                          const isSelected = activeSession?.conversationId === group.conversationId;
+                          const dt = formatAuditDateTime(group.latestCreatedAt);
+                          const allOk = group.failedCount === 0;
+                          const isDirect = group.conversationId.startsWith("direct_");
+                          const firstQueryText = group.queries[0]?.userQuery || "";
+
+                          return (
+                            <button
+                              key={group.conversationId}
+                              type="button"
+                              onClick={() => setSelectedSessionId(group.conversationId)}
+                              className={`w-full text-left p-3 rounded-xl border transition-all duration-150 flex flex-col gap-2 relative ${
+                                isSelected
+                                  ? "bg-blue-50/90 dark:bg-blue-950/40 border-blue-500 dark:border-blue-400 border-l-[4px] border-l-blue-600 dark:border-l-blue-400 shadow-xs"
+                                  : "bg-white dark:bg-[#1e293b] border-[#e2e8f0] dark:border-[#334155] border-l-[4px] border-l-transparent hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
+                              }`}
+                            >
+                              {/* Top Row: Title + Status Indicator */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <span
+                                    className={`text-xs sm:text-sm font-bold line-clamp-2 leading-snug ${
+                                      isSelected
+                                        ? "text-blue-950 dark:text-blue-100"
+                                        : "text-[#1e293b] dark:text-[#f1f5f9]"
+                                    }`}
+                                    title={group.title}
+                                  >
+                                    {group.title}
+                                  </span>
+                                </div>
+                                <span className="shrink-0 mt-0.5">
+                                  {allOk ? (
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block shadow-xs ring-2 ring-emerald-500/20"
+                                      title="All queries succeeded"
+                                    />
+                                  ) : group.successCount === 0 ? (
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full bg-rose-500 inline-block shadow-xs ring-2 ring-rose-500/20"
+                                      title="All queries failed"
+                                    />
+                                  ) : (
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block shadow-xs ring-2 ring-amber-500/20"
+                                      title={`${group.failedCount} query failed`}
+                                    />
+                                  )}
+                                </span>
+                              </div>
+
+                              {/* Question preview snippet if different from title */}
+                              {firstQueryText && firstQueryText !== group.title && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 italic">
+                                  &ldquo;{firstQueryText}&rdquo;
+                                </p>
+                              )}
+
+                              {/* Middle Row: Turn Count & Metric Badges */}
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
+                                      isSelected
+                                        ? "bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300"
+                                        : "bg-[#f1f5f9] dark:bg-[#0f172a] text-[#475569] dark:text-[#cbd5e1]"
+                                    }`}
+                                  >
+                                    {group.totalQueries}{" "}
+                                    {group.totalQueries === 1 ? "Turn" : "Turns"}
+                                  </span>
+                                  {group.avgExecutionTimeMs > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800">
+                                      {group.avgExecutionTimeMs}ms
+                                    </span>
+                                  )}
+                                  {!allOk && (
+                                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40">
+                                      {group.failedCount} err
+                                    </span>
+                                  )}
+                                </div>
+
+                                <span className="font-mono text-[10px] text-[#94a3b8] truncate max-w-[110px]">
+                                  {!isDirect
+                                    ? `#${group.conversationId.slice(0, 8)}`
+                                    : "Direct"}
+                                </span>
+                              </div>
+
+                              {/* Bottom Row: User & Time */}
+                              <div className="flex items-center justify-between gap-2 text-[11px] text-[#94a3b8] pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                                <span className="truncate flex items-center gap-1 font-medium text-[#64748b] dark:text-[#cbd5e1]">
+                                  <User className="h-3 w-3 shrink-0 text-[#94a3b8]" />
+                                  <span className="truncate">
+                                    {group.userId || group.empCode || "Web User"}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 flex items-center gap-1">
+                                  <Clock className="h-2.5 w-2.5 opacity-70" />
+                                  <span>{dt.time}</span>
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+
+                      {/* ── LAZY LOADING INFINITE SCROLL SENTINEL & FEEDBACK ── */}
+                      {isLoadingMore && (
+                        <div className="p-3 text-center flex items-center justify-center gap-2 bg-blue-50/70 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-semibold animate-pulse">
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Loading older sessions...</span>
+                        </div>
+                      )}
+
+                      {/* Sentinel trigger element for IntersectionObserver */}
+                      <div ref={sentinelRef} className="h-2 w-full" />
+
+                      {/* Manual fallback button if user reaches bottom */}
+                      {!isLoadingMore && pagination.page < pagination.totalPages && (
+                        <button
+                          type="button"
+                          onClick={() => handleLoadMore()}
+                          disabled={isLoading || isLoadingMore}
+                          className="w-full py-2 px-3 text-xs font-semibold text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-blue-50/50 dark:hover:bg-slate-800 rounded-xl transition-all border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          <span>Load More Sessions ({logs.length} of {pagination.totalRecords})</span>
+                        </button>
+                      )}
+
+                      {/* End of results message */}
+                      {!isLoadingMore && pagination.page >= pagination.totalPages && logs.length > 0 && (
+                        <div className="py-2.5 text-center text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                          ✓ All {conversationGroups.length} sessions loaded ({pagination.totalRecords} queries)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── RIGHT MAIN PANEL: SELECTED CONVERSATION DETAIL ── */}
+                  <div className="lg:col-span-8 xl:col-span-8 flex flex-col space-y-4">
+                    {activeSession ? (
+                      <>
+                        {/* Session Header Card */}
+                        {(() => {
+                          const dt = formatAuditDateTime(activeSession.latestCreatedAt);
+                          const allSuccess = activeSession.failedCount === 0;
+                          const isDirect = activeSession.conversationId.startsWith("direct_");
+
+                          return (
+                            <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs space-y-3.5">
+                              {/* Title & Status */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="space-y-1 flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h2 className="text-base sm:text-lg font-bold text-[#193A69] dark:text-white break-words">
+                                      {activeSession.title}
+                                    </h2>
+                                    {!isDirect && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopy(activeSession.conversationId, "active_session_id")}
+                                        className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-[#f1f5f9] dark:bg-[#0f172a] text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155] hover:text-[#193A69] dark:hover:text-white transition-colors flex items-center gap-1"
+                                        title="Click to copy full Session ID"
+                                      >
+                                        <span>Session: {activeSession.conversationId.slice(0, 8)}...</span>
+                                        {copiedField === "active_session_id" ? (
+                                          <Check className="h-3 w-3 text-emerald-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3" />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Status & Turn Badge */}
+                                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#f1f5f9] dark:bg-[#0f172a] text-[#1e293b] dark:text-[#e2e8f0] border border-[#e2e8f0] dark:border-[#334155]">
+                                    <span className="h-2 w-2 rounded-full bg-[#193A69] dark:bg-[#60a5fa]" />
+                                    {activeSession.totalQueries} {activeSession.totalQueries === 1 ? "Query" : "Questions"}
+                                  </span>
+
+                                  {allSuccess ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46]">
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                      All Successful
+                                    </span>
+                                  ) : activeSession.successCount === 0 ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca] dark:border-[#881337]">
+                                      <XCircle className="h-3.5 w-3.5" />
+                                      {activeSession.failedCount} Failed
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#fffbeb] dark:bg-[#451a03]/50 text-[#d97706] dark:text-[#fde68a] border border-[#fde68a] dark:border-[#78350f]">
+                                      <AlertCircle className="h-3.5 w-3.5" />
+                                      {activeSession.successCount} OK, {activeSession.failedCount} Err
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Session Metadata Chips */}
+                              <div className="pt-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 flex items-center gap-2.5 text-xs text-[#64748b] dark:text-[#94a3b8] flex-wrap">
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  <User className="h-3.5 w-3.5 text-[#94a3b8]" />
+                                  <span className="text-[#334155] dark:text-[#cbd5e1] font-semibold">
+                                    {activeSession.userId || activeSession.empCode || "Web User"}
+                                  </span>
+                                  {activeSession.empCode && activeSession.userId !== activeSession.empCode && (
+                                    <span className="font-mono text-[#64748b]">({activeSession.empCode})</span>
+                                  )}
+                                </span>
+
+                                {activeSession.role && (
+                                  <>
+                                    <span className="text-[#cbd5e1] dark:text-[#475569]">•</span>
+                                    <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                                      {activeSession.role}
+                                    </span>
+                                  </>
+                                )}
+
+                                <span className="text-[#cbd5e1] dark:text-[#475569]">•</span>
+                                <span className="inline-flex items-center gap-1 font-medium text-[#64748b] dark:text-[#94a3b8]">
+                                  <Clock className="h-3.5 w-3.5 text-[#94a3b8]" />
+                                  <span>{dt.time} ({dt.date})</span>
+                                </span>
+
+                                <span className="text-[#cbd5e1] dark:text-[#475569]">•</span>
+                                <span className="text-[#64748b] dark:text-[#94a3b8]">
+                                  Avg {activeSession.avgExecutionTimeMs}ms
+                                </span>
+
+                                <span className="text-[#cbd5e1] dark:text-[#475569]">•</span>
+                                <span className="text-[#64748b] dark:text-[#94a3b8]">
+                                  {activeSession.totalRows} rows returned
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Questions / Turns Sequence */}
+                        <div className="space-y-4">
+                          <div className="text-xs font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] flex items-center justify-between px-1">
+                            <span>Questions Flow ({activeSession.queries.length} turns)</span>
+                            <span className="font-normal text-[11px] text-[#94a3b8]">Chronological Sequence</span>
+                          </div>
+
+                          {activeSession.queries.map((q, turnIdx) => {
+                            const qSuccess = q.statusCode === "SUCCESS";
+                            const qDt = formatAuditDateTime(q.createdAt);
+                            return (
+                              <div
+                                key={q.UTD}
+                                className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-shadow space-y-3"
+                              >
+                                {/* Turn Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[#f1f5f9] dark:border-[#334155]/60">
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    {/* Question Badge e.g. Q1, Q2 */}
+                                    <span className="px-2.5 py-1 rounded-lg bg-[#193A69] dark:bg-blue-600 text-white font-mono font-bold text-xs shrink-0 shadow-2xs">
+                                      Q{turnIdx + 1}
+                                    </span>
+
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold text-sm sm:text-base text-[#193A69] dark:text-white break-words">
+                                        {q.userQuery}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                        {/* Intent */}
+                                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                                          {q.intent || "GENERAL"}
+                                        </span>
+                                        {/* Table */}
+                                        <span className="font-mono text-[11px] text-[#64748b] dark:text-[#94a3b8] bg-[#f8fafc] dark:bg-[#0f172a] px-2 py-0.5 rounded border border-[#e2e8f0] dark:border-[#334155]">
+                                          Table: {q.tablesUsed || "EMPLOYEEMASTER"}
+                                        </span>
+                                        {/* Time */}
+                                        <span className="text-[11px] text-[#94a3b8]">
+                                          {qDt.time}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Action Buttons for this question */}
+                                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
+                                    {!qSuccess || (q.rowsReturned === 0 || q.rowsReturned === null) ? (
+                                      <Button
+                                        onClick={() => handleOpenTrainModal(q)}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2.5 text-xs font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1"
+                                        title="Fix this failed query — train AI with correct SQL"
+                                      >
+                                        <Zap className="h-3 w-3 fill-current" />
+                                        Fix & Train
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        onClick={() => handleOpenTrainModal(q)}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2.5 text-xs font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#78350f] gap-1"
+                                        title="Train Golden Rule from this query"
+                                      >
+                                        <Zap className="h-3 w-3 fill-current" />
+                                        Train Rule
+                                      </Button>
+                                    )}
+
+                                    <Button
+                                      onClick={() => setSelectedRecord(q)}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 px-2.5 text-xs font-medium text-[#64748b] dark:text-[#cbd5e1] gap-1 border-[#e2e8f0] dark:border-[#334155]"
+                                      title="View full audit telemetry details"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                      <span>Details</span>
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Turn Details: Executed SQL & Response Preview */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                  {/* Executed SQL Box */}
+                                  <div className="bg-[#0f172a] rounded-lg p-3 text-white flex flex-col justify-between border border-[#1e293b]">
+                                    <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#334155]">
+                                      <span className="text-[11px] font-mono font-bold text-[#94a3b8] flex items-center gap-1.5">
+                                        <Code2 className="h-3.5 w-3.5 text-[#38bdf8]" />
+                                        EXECUTED SQL
+                                      </span>
+                                      {q.generatedSql && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopy(q.generatedSql || "", `sql_${q.UTD}`)}
+                                          className="text-[11px] text-[#94a3b8] hover:text-white flex items-center gap-1 transition-colors"
+                                          title="Copy SQL to clipboard"
+                                        >
+                                          {copiedField === `sql_${q.UTD}` ? (
+                                            <>
+                                              <Check className="h-3 w-3 text-emerald-400" />
+                                              <span className="text-emerald-400">Copied</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Copy className="h-3 w-3" />
+                                              <span>Copy</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="overflow-x-auto max-h-36 text-xs font-mono text-[#93c5fd] leading-relaxed whitespace-pre-wrap">
+                                      {q.generatedSql || <span className="italic text-[#64748b]">No SQL query generated</span>}
+                                    </div>
+                                  </div>
+
+                                  {/* AI Response Preview Box */}
+                                  <div className="bg-[#f8fafc] dark:bg-[#0f172a] rounded-lg p-3 border border-[#e2e8f0] dark:border-[#334155] flex flex-col justify-between">
+                                    <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#e2e8f0] dark:border-[#334155]">
+                                      <span className="text-[11px] font-bold text-[#64748b] dark:text-[#94a3b8] flex items-center gap-1.5">
+                                        <Bot className="h-3.5 w-3.5 text-[#193A69] dark:text-blue-400" />
+                                        AI RESPONSE PREVIEW
+                                      </span>
+                                    </div>
+                                    <div className="overflow-y-auto max-h-36 text-xs text-[#334155] dark:text-[#cbd5e1] leading-relaxed whitespace-pre-wrap">
+                                      {q.aiResponse || (
+                                        <span className="italic text-[#94a3b8]">
+                                          {q.errorMessage ? `Error: ${q.errorMessage}` : "No response preview available"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Turn Footer: Metrics & Chips */}
+                                <div className="pt-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 flex items-center justify-between text-xs flex-wrap gap-2">
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    {/* Status pill */}
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[11px] ${
+                                        qSuccess
+                                          ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
+                                          : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
+                                      }`}
+                                    >
+                                      {qSuccess ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                      {q.statusCode}
+                                    </span>
+
+                                    {/* Rows */}
+                                    <span className="font-medium text-[#475569] dark:text-[#cbd5e1] flex items-center gap-1">
+                                      <Database className="h-3 w-3 text-[#94a3b8]" />
+                                      <strong className="text-[#1e293b] dark:text-white">{q.rowsReturned || 0}</strong> rows
+                                      {qSuccess && (q.rowsReturned === 0 || q.rowsReturned === null) && (
+                                        <span className="ml-1 text-[10px] font-bold text-[#d97706] dark:text-[#fde68a]">
+                                          (0 rows returned)
+                                        </span>
+                                      )}
+                                    </span>
+
+                                    {/* Latency */}
+                                    <span className="font-medium text-[#475569] dark:text-[#cbd5e1] flex items-center gap-1">
+                                      <Clock className="h-3 w-3 text-[#94a3b8]" />
+                                      <span>{q.executionTimeMs}ms</span>
+                                    </span>
+
+                                    {q.compCode && (
+                                      <span className="font-mono text-[11px] text-[#64748b] dark:text-[#94a3b8]">
+                                        Comp: {q.compCode}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* UTD tag */}
+                                  <span className="font-mono text-[11px] text-[#94a3b8]">
+                                    Log #{q.UTD}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
+                        <MessageSquare className="h-10 w-10 text-[#94a3b8] mx-auto mb-3 opacity-60" />
+                        <div className="text-base font-bold text-[#193A69] dark:text-white">Select a session from the sidebar</div>
+                        <p className="text-sm text-[#94a3b8] mt-1">Choose any conversation session on the left to view its question thread.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
+              )
+            ) : (
+              /* ── FLAT AUDIT LOGS TABLE ── */
+              <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-lg font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
+                        <th className="py-3.5 px-4 min-w-[260px]">User Prompt / Question</th>
+                        <th className="py-3.5 px-4">Intent</th>
+                        <th className="py-3.5 px-4">Target Table</th>
+                        <th className="py-3.5 px-4 min-w-[220px]">Executed SQL</th>
+                        <th className="py-3.5 px-4 text-center">Rows</th>
+                        <th className="py-3.5 px-4 text-center">Latency</th>
+                        <th className="py-3.5 px-4 text-center">Status</th>
+                        <th className="py-3.5 px-4 min-w-[130px]">Time</th>
+                        <th className="py-3.5 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-lg">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={10} className="py-16 text-center text-[#64748b]">
+                            <RefreshCw className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+                            Loading telemetry logs...
+                          </td>
+                        </tr>
+                      ) : logs.length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="py-16 text-center text-[#64748b]">
+                            <Database className="h-10 w-10 text-[#94a3b8] mx-auto mb-3" />
+                            <div className="text-lg font-bold text-[#193A69] dark:text-white">No Logs Found</div>
+                            <p className="text-lg text-[#94a3b8] mt-1">Try changing filters or ask questions in AI Assistant.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        logs.map((log) => {
+                          const isSuccess = log.statusCode === "SUCCESS";
+                          return (
+                            <tr
+                              key={log.UTD}
+                              onDoubleClick={() => handleOpenTrainModal(log)}
+                              className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors cursor-pointer group"
+                              title="Double-click to Train AI with this Query"
+                            >
+                              <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">
+                                <div className="truncate group-hover:text-primary transition-colors">
+                                  {log.userQuery}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                                  {log.intent || "GENERAL"}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-mono text-lg truncate max-w-[130px]">
+                                {log.tablesUsed || "EMPLOYEEMASTER"}
+                              </td>
+                              <td className="py-3.5 px-4 max-w-xs">
+                                {log.generatedSql ? (
+                                  <pre className="p-1.5 rounded bg-[#0f172a] text-[#93c5fd] font-mono text-[11px] truncate">
+                                    <code>{log.generatedSql}</code>
+                                  </pre>
+                                ) : (
+                                  <span className="text-[#94a3b8] text-lg italic">No SQL generated</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-bold text-[#193A69] dark:text-white">
+                                {log.rowsReturned || 0}
+                              </td>
+                              <td className="py-3.5 px-4 text-center text-[#64748b] dark:text-[#94a3b8] text-lg">
+                                {log.executionTimeMs}ms
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-lg font-bold ${
+                                    isSuccess
+                                      ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
+                                      : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
+                                  }`}
+                                >
+                                  {isSuccess ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                  {log.statusCode}
+                                </span>
+                                {isSuccess && (log.rowsReturned === 0 || log.rowsReturned === null) && (
+                                  <span className="mt-0.5 flex items-center gap-0.5 text-[10px] font-bold text-[#d97706] dark:text-[#fde68a]">
+                                    ⚠ 0 rows
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 whitespace-nowrap">
+                                {(() => {
+                                  const dt = formatAuditDateTime(log.createdAt);
+                                  return (
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-lg tracking-tight">
+                                        {dt.time}
+                                      </span>
+                                      <span className="text-[11px] font-medium text-[#94a3b8]">
+                                        {dt.date}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {!isSuccess || (log.rowsReturned === 0 || log.rowsReturned === null) ? (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenTrainModal(log);
+                                      }}
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1 animate-pulse"
+                                      title="Fix this failed query — train AI with correct SQL"
+                                    >
+                                      <Zap className="h-3.5 w-3.5 fill-current" />
+                                      Fix & Train
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenTrainModal(log);
+                                      }}
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-2.5 text-lg font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 gap-1"
+                                    >
+                                      <Zap className="h-3.5 w-3.5 fill-current" />
+                                      Train
+                                    </Button>
+                                  )}
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedRecord(log);
+                                    }}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-[#64748b] hover:text-[#193A69]"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Pagination Controls - only for table view (conversation view uses sidebar lazy loading) */}
+            {viewMode === "table" && pagination.totalPages > 1 && (
+              <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl px-6 py-4 shadow-xs flex items-center justify-between">
+                <span className="text-sm sm:text-base text-[#64748b] dark:text-[#94a3b8]">
+                  Showing page <span className="font-bold text-[#1e293b] dark:text-white">{pagination.page}</span> of{" "}
+                  <span className="font-bold text-[#1e293b] dark:text-white">{pagination.totalPages}</span> ({pagination.totalRecords} records)
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => fetchAuditLogs(pagination.page - 1, statusFilter, searchTerm)}
+                    disabled={pagination.page <= 1}
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3 gap-1 text-xs sm:text-sm font-semibold"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Prev
+                  </Button>
+                  <Button
+                    onClick={() => fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm)}
+                    disabled={pagination.page >= pagination.totalPages}
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3 gap-1 text-xs sm:text-sm font-semibold"
+                  >
+                    Next <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
