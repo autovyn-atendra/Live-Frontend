@@ -536,10 +536,233 @@ const renderInline = (text: string) => {
 };
 
 // ============================================================
+// PAGINATED MARKDOWN TABLE COMPONENT
+// ============================================================
+interface MarkdownTableProps {
+  rows: string[];
+}
+
+const MarkdownTable = ({ rows }: MarkdownTableProps) => {
+  const [filter, setFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const clean = rows.filter(
+    (r: string) => !/^\|[\s\-:]*\|[\s\-:|]*$/.test(r)
+  );
+  if (!clean.length) return null;
+
+  const headers = clean[0]
+    .split("|")
+    .slice(1, -1)
+    .map((c: string) => c.trim());
+  const dataRows = clean.slice(1);
+
+  const handleFilterChange = (val: string) => {
+    setFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  };
+
+  const filtered = filter
+    ? dataRows.filter((r: string) =>
+        r.toLowerCase().includes(filter.toLowerCase())
+      )
+    : dataRows;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const activePage = Math.min(currentPage, totalPages);
+
+  const startIndex = (activePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filtered.length);
+  const currentRows = filtered.slice(startIndex, endIndex);
+
+  const csv = [
+    headers.join(","),
+    ...dataRows.map((r: string) =>
+      r
+        .split("|")
+        .slice(1, -1)
+        .map((c: string) => `"${c.trim().replace(/"/g, '""')}"`)
+        .join(",")
+    ),
+  ].join("\n");
+
+  return (
+    <div className="my-3 w-full overflow-hidden rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] shadow-sm dark:border-[#334155] dark:bg-[#0F172A]">
+      {/* Table toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1F5F9] bg-[#F8FAFC] px-4 py-2.5 dark:border-[#334155] dark:bg-[#1E293B]">
+        <div className="flex items-center gap-2">
+          <FileSpreadsheet size={16} className="text-[#059669]" />
+          <span className="text-base font-bold text-[#0F172A] dark:text-[#F1F5F9]">
+            ERP Results
+          </span>
+          <span className="rounded-full border border-[#E2E8F0] bg-[#FFFFFF] px-2.5 py-0.5 text-xs font-bold text-[#64748B] dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#94A3B8]">
+            {filtered.length !== dataRows.length
+              ? `${filtered.length} of ${dataRows.length} records`
+              : `${dataRows.length} records`}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search Filter */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search table..."
+              value={filter}
+              onChange={(e) => handleFilterChange(e.target.value)}
+              className="h-8 w-36 rounded-lg border border-[#CBD5E1] bg-[#FFFFFF] pl-2.5 pr-6 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:outline-none dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#F1F5F9] sm:w-48"
+            />
+            {filter && (
+              <button
+                type="button"
+                onClick={() => handleFilterChange("")}
+                className="absolute right-2 top-2 text-[#94A3B8] hover:text-[#475569] dark:hover:text-[#F1F5F9]"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Page Size Selector */}
+          {dataRows.length > 10 && (
+            <div className="flex items-center gap-1.5 text-xs text-[#64748B] dark:text-[#94A3B8]">
+              <span>Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="h-8 rounded-lg border border-[#CBD5E1] bg-[#FFFFFF] px-2 text-xs font-semibold text-[#0F172A] focus:border-[#2563EB] focus:outline-none dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#F1F5F9]"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          )}
+
+          <CopyButton text={csv} label="Copy CSV" />
+        </div>
+      </div>
+
+      {/* Table scroll */}
+      <div className="max-h-[460px] w-full overflow-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-10 border-b border-[#E2E8F0] bg-[#F1F5F9] dark:border-[#334155] dark:bg-[#1E293B]">
+            <tr>
+              {headers.map((h: string, i: number) => (
+                <th
+                  key={i}
+                  className="whitespace-nowrap border-r border-[#E2E8F0] px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-[#475569] last:border-r-0 dark:border-[#334155] dark:text-[#94A3B8]"
+                >
+                  {renderInline(h)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#F1F5F9] dark:divide-[#334155]">
+            {currentRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={headers.length}
+                  className="px-4 py-8 text-center text-sm text-[#64748B] dark:text-[#94A3B8]"
+                >
+                  No matching records found for "{filter}"
+                </td>
+              </tr>
+            ) : (
+              currentRows.map((rStr: string, rIdx: number) => {
+                const cells = rStr
+                  .split("|")
+                  .slice(1, -1)
+                  .map((c: string) => c.trim());
+                return (
+                  <tr
+                    key={rIdx}
+                    className="transition-colors even:bg-[#F8FAFC] hover:bg-[#F1F5F9] dark:even:bg-[#1E293B]/40 dark:hover:bg-[#1E293B]"
+                  >
+                    {cells.map((cell: string, cIdx: number) => (
+                      <td
+                        key={cIdx}
+                        className="whitespace-nowrap border-r border-[#E2E8F0]/60 px-3 py-2 text-xs font-medium text-[#334155] last:border-r-0 dark:border-[#334155]/60 dark:text-[#CBD5E1]"
+                      >
+                        {renderInline(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Footer */}
+      {filtered.length > pageSize && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F1F5F9] bg-[#F8FAFC] px-4 py-2.5 text-xs text-[#64748B] dark:border-[#334155] dark:bg-[#1E293B] dark:text-[#94A3B8]">
+          <div className="font-medium">
+            Showing <span className="font-bold text-[#0F172A] dark:text-[#F1F5F9]">{startIndex + 1}</span> to{" "}
+            <span className="font-bold text-[#0F172A] dark:text-[#F1F5F9]">{endIndex}</span> of{" "}
+            <span className="font-bold text-[#0F172A] dark:text-[#F1F5F9]">{filtered.length}</span> records
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={activePage === 1}
+              onClick={() => setCurrentPage(1)}
+              className="rounded-md border border-[#CBD5E1] bg-[#FFFFFF] px-2 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#F1F5F9] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#CBD5E1] dark:hover:bg-[#1E293B]"
+              title="First Page"
+            >
+              « First
+            </button>
+            <button
+              type="button"
+              disabled={activePage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="flex items-center gap-0.5 rounded-md border border-[#CBD5E1] bg-[#FFFFFF] px-2.5 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#F1F5F9] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#CBD5E1] dark:hover:bg-[#1E293B]"
+            >
+              <ChevronLeft size={13} />
+              <span>Prev</span>
+            </button>
+
+            <span className="px-2 text-xs font-bold text-[#0F172A] dark:text-[#F1F5F9]">
+              Page {activePage} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              disabled={activePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="flex items-center gap-0.5 rounded-md border border-[#CBD5E1] bg-[#FFFFFF] px-2.5 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#F1F5F9] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#CBD5E1] dark:hover:bg-[#1E293B]"
+            >
+              <span>Next</span>
+              <ChevronRight size={13} />
+            </button>
+            <button
+              type="button"
+              disabled={activePage >= totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+              className="rounded-md border border-[#CBD5E1] bg-[#FFFFFF] px-2 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#F1F5F9] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#CBD5E1] dark:hover:bg-[#1E293B]"
+              title="Last Page"
+            >
+              Last »
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================
 // FORMATTED MARKDOWN
 // ============================================================
 const FormattedMarkdown = ({ content }: { content: string }) => {
-  const [tableFilter, setTableFilter] = useState("");
   if (!content) return null;
 
   const lines = content.split("\n");
@@ -571,105 +794,7 @@ const FormattedMarkdown = ({ content }: { content: string }) => {
         if (block.type === "empty") return <div key={bIdx} className="h-1.5" />;
 
         if (block.type === "table") {
-          const clean = block.rows.filter(
-            (r: string) => !/^\|[\s\-:]*\|[\s\-:|]*$/.test(r)
-          );
-          if (!clean.length) return null;
-          const headers = clean[0]
-            .split("|")
-            .slice(1, -1)
-            .map((c: string) => c.trim());
-          const dataRows = clean.slice(1);
-          const filtered = tableFilter
-            ? dataRows.filter((r: string) =>
-                r.toLowerCase().includes(tableFilter.toLowerCase())
-              )
-            : dataRows;
-          const csv = [
-            headers.join(","),
-            ...dataRows.map((r: string) =>
-              r
-                .split("|")
-                .slice(1, -1)
-                .map((c: string) => `"${c.trim().replace(/"/g, '""')}"`)
-                .join(",")
-            ),
-          ].join("\n");
-
-          return (
-            <div
-              key={bIdx}
-              className="my-3 w-full overflow-hidden rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] shadow-sm dark:border-[#334155] dark:bg-[#0F172A]"
-            >
-              {/* Table toolbar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1F5F9] bg-[#F8FAFC] px-4 py-2.5 dark:border-[#334155] dark:bg-[#1E293B]">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet
-                    size={14}
-                    className="text-[#059669]"
-                  />
-                  <span className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">
-                    ERP Results
-                  </span>
-                  <span className="rounded-full border border-[#E2E8F0] bg-[#FFFFFF] px-2 py-0.5 text-lg font-bold text-[#64748B] dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#94A3B8]">
-                    {dataRows.length} records
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {dataRows.length > 4 && (
-                    <input
-                      type="text"
-                      placeholder="Filter..."
-                      value={tableFilter}
-                      onChange={(e) => setTableFilter(e.target.value)}
-                      className="h-7 w-28 rounded-lg border border-[#CBD5E1] bg-[#FFFFFF] px-2 text-lg text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:outline-none dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#F1F5F9]"
-                    />
-                  )}
-                  <CopyButton text={csv} label="Copy CSV" />
-                </div>
-              </div>
-              {/* Table scroll */}
-              <div className="max-h-80 w-full overflow-auto">
-                <table className="w-full border-collapse text-lg">
-                  <thead className="sticky top-0 z-10 border-b border-[#E2E8F0] bg-[#F1F5F9] dark:border-[#334155] dark:bg-[#1E293B]">
-                    <tr>
-                      {headers.map((h: string, i: number) => (
-                        <th
-                          key={i}
-                          className="whitespace-nowrap border-r border-[#E2E8F0] px-3 py-2 text-left text-lg font-bold uppercase tracking-wider text-[#475569] last:border-r-0 dark:border-[#334155] dark:text-[#94A3B8]"
-                        >
-                          {renderInline(h)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#F1F5F9] dark:divide-[#334155]">
-                    {filtered.map((rStr: string, rIdx: number) => {
-                      const cells = rStr
-                        .split("|")
-                        .slice(1, -1)
-                        .map((c: string) => c.trim());
-                      return (
-                        <tr
-                          key={rIdx}
-                          className="transition-colors even:bg-[#F8FAFC] hover:bg-[#F1F5F9] dark:even:bg-[#1E293B]/40 dark:hover:bg-[#1E293B]"
-                        >
-                          {cells.map((cell: string, cIdx: number) => (
-                            <td
-                              key={cIdx}
-                              className="whitespace-nowrap border-r border-[#E2E8F0]/60 px-3 py-1.5 font-medium text-[#334155] last:border-r-0 dark:border-[#334155]/60 dark:text-[#CBD5E1]"
-                            >
-                              {renderInline(cell)}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
+          return <MarkdownTable key={bIdx} rows={block.rows} />;
         }
 
         const text = block.content;

@@ -201,6 +201,22 @@ export default function AIQueryAuditPage() {
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── HEADER HEIGHT & STICKY OFFSET MEASUREMENT ──
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(84);
+  const [showTopKpis, setShowTopKpis] = useState<boolean>(false);
+
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.offsetHeight);
+      }
+    };
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+    return () => window.removeEventListener("resize", updateHeaderHeight);
+  }, []);
+
   // ── TABS: "AUDIT" vs "RULES" ──
   const [activeTab, setActiveTab] = useState<"audit" | "rules">("audit");
   const [trainedRules, setTrainedRules] = useState<any[]>([]);
@@ -210,6 +226,7 @@ export default function AIQueryAuditPage() {
   // ── AI TRAINING / FINE-TUNING MODAL STATE ──
   const [trainModalOpen, setTrainModalOpen] = useState<boolean>(false);
   const [isTraining, setIsTraining] = useState<boolean>(false);
+  const [verifyingUtd, setVerifyingUtd] = useState<number | null>(null);
   const [trainRecord, setTrainRecord] = useState<AuditLogRecord | null>(null);
   const [editingRuleUtd, setEditingRuleUtd] = useState<number | null>(null);
   const [trainActionType, setTrainActionType] = useState<"GOLDEN" | "CORRECTION" | "RULE" | "HELPFUL">("GOLDEN");
@@ -234,6 +251,11 @@ export default function AIQueryAuditPage() {
     rows?: any[];
     error?: string;
   } | null>(null);
+
+  // ── REJECT / MARK AS FAILED MODAL STATE (DEVELOPER REMARK) ──
+  const [rejectModalRecord, setRejectModalRecord] = useState<AuditLogRecord | null>(null);
+  const [rejectRemark, setRejectRemark] = useState<string>("");
+  const [isSubmittingReject, setIsSubmittingReject] = useState<boolean>(false);
 
   const buildAIHeaders = useCallback(() => {
     const compcode = user?.Comp_Code || user?.compcode || user?.CompCode || user?.branch || "";
@@ -312,6 +334,14 @@ export default function AIQueryAuditPage() {
       setIsRulesLoading(false);
     }
   }, [buildAIHeaders]);
+
+  const trainedQuestionsSet = useMemo(() => {
+    const s = new Set<string>();
+    trainedRules.forEach((r: any) => {
+      if (r.Normalized_Question) s.add(String(r.Normalized_Question).toLowerCase().trim());
+    });
+    return s;
+  }, [trainedRules]);
 
   // Initial load
   useEffect(() => {
@@ -749,6 +779,117 @@ export default function AIQueryAuditPage() {
     }
   };
 
+  // ── QUICK 1-CLICK VERIFY AS GOLDEN RULE ──
+  const handleQuickVerifyGolden = async (record: AuditLogRecord) => {
+    if (!record.generatedSql) {
+      toast({
+        title: "No SQL Found",
+        description: "Cannot verify a query without an executed SQL statement.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setVerifyingUtd(record.UTD);
+    try {
+      const payload = {
+        auditUtd: record.UTD,
+        conversationId: record.conversationId || null,
+        userQuery: record.userQuery,
+        question: record.userQuery,
+        correctSQL: record.generatedSql,
+        sql: record.generatedSql,
+        intent: record.intent || "CUSTOM_SQL",
+        targetTable: record.tablesUsed ? record.tablesUsed.split(",")[0].trim() : "EMPLOYEEMASTER",
+        feedbackType: "GOLDEN",
+        userComment: "Verified as correct golden rule by administrator via conversation audit",
+      };
+      const res = await axios.post(`${BASE_URL}/ai/rules/save`, payload, {
+        headers: buildAIHeaders(),
+      });
+      if (res.data?.success) {
+        toast({
+          title: "🎉 Verified & Trained Successfully!",
+          description: `"${record.userQuery.slice(0, 45)}..." is now saved as Golden Rule in AI memory.`,
+        });
+        fetchAuditLogs(pagination.page, statusFilter, searchTerm);
+        fetchTrainedRules();
+      }
+    } catch (err: any) {
+      toast({
+        title: "Verify Failed",
+        description: err?.response?.data?.message || err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setVerifyingUtd(null);
+    }
+  };
+
+  // ── REJECT QUERY & MARK AS FAILED WITH DEVELOPER REMARK ──
+  const handleOpenRejectModal = (record: AuditLogRecord) => {
+    setRejectModalRecord(record);
+    setRejectRemark("");
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectModalRecord) return;
+    setIsSubmittingReject(true);
+    try {
+      const trimmedRemark = rejectRemark.trim();
+      const payload = {
+        auditUtd: rejectModalRecord.UTD,
+        conversationId: rejectModalRecord.conversationId || null,
+        feedbackType: "FAILED",
+        userComment: trimmedRemark || "Marked as wrong/incorrect by reviewer",
+        userQuery: rejectModalRecord.userQuery,
+      };
+
+      const res = await axios.post(`${BASE_URL}/ai/feedback`, payload, {
+        headers: buildAIHeaders(),
+      });
+
+      if (res.data?.success) {
+        toast({
+          title: "❌ Query Marked as Failed",
+          description: `Query #${rejectModalRecord.UTD} marked as FAILED with developer remark. Added to Issues list.`,
+        });
+
+        // 0ms instant optimistic UI state update
+        setLogs((prev) =>
+          prev.map((l) =>
+            l.UTD === rejectModalRecord.UTD
+              ? {
+                  ...l,
+                  statusCode: "FAILED",
+                  errorMessage: trimmedRemark
+                    ? `Marked as FAILED via user feedback: ${trimmedRemark}`
+                    : "Marked as FAILED via user feedback",
+                }
+              : l
+          )
+        );
+
+        setRejectModalRecord(null);
+        setRejectRemark("");
+        fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+      } else {
+        toast({
+          title: "Action Failed",
+          description: res.data?.message || "Failed to update query status",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.response?.data?.message || err?.message || "Failed to mark as failed",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingReject(false);
+    }
+  };
+
   const handleExportCSV = () => {
     if (!logs.length) return;
     const headers = [
@@ -794,193 +935,199 @@ export default function AIQueryAuditPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0f172a] text-[#1e293b] dark:text-[#f1f5f9] flex flex-col font-sans">
-      {/* ── TOP NAV / HEADER ── */}
-      <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur border-b border-[#e2e8f0] dark:border-[#334155] px-4 lg:px-8 py-4 shadow-xs">
-        <div className="max-w-8xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5">
-          <div className="flex items-center gap-3.5">
-            <div className="h-11 w-11 rounded-xl bg-gradient-to-tr from-[#193A69] via-primary to-[#3b82f6] flex items-center justify-center shadow-md shadow-primary/20 text-white font-bold shrink-0">
-              <Activity className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
-                  AI Query Logs, Audit & Model Training
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-lg font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#047857] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-[#10b981] animate-pulse"></span>
-                  Live RLHF Training
-                </span>
+    <div className="h-[calc(100vh-75px)] sm:h-[calc(100vh-160px)] w-full flex flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#0f172a] text-[#1e293b] dark:text-[#f1f5f9] font-sans p-2 sm:p-2.5 gap-2">
+      {/* ── TOP COMPACT TOOLBAR & NAVIGATION ── */}
+      <header
+        ref={headerRef}
+        className="shrink-0 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl px-3 sm:px-4 py-2 shadow-xs grid  gap-2"
+      >
+        {/* Left: Branding & Tab Switcher */}
+        <div className="flex justify-between items-center gap-2.5">
+          <div className="flex items-center gap-2 shrink-0">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-[#193A69] via-primary to-[#3b82f6] flex items-center justify-center shadow-xs text-white font-bold shrink-0">
+            <Activity className="h-4 w-4" />
+          </div>
+            <h1 className="text-xl sm:text-base font-extrabold tracking-tight text-[#193A69] dark:text-white whitespace-nowrap">
+              AI Query Logs
+            </h1>
+            <span className="hidden xl:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#047857] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46] items-center gap-1 shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#10b981] animate-pulse"></span>
+              Live RLHF
+            </span>
+          </div>
+
+              {/* Train Rule Accent Action */}
+          <Button
+            onClick={() => handleOpenTrainModal(null)}
+            variant="save"
+            size="lg"
+            className="cursor-pointer"
+          >
+            <span className="hidden md:inline"> + Train Rule</span>
+          </Button>
+        </div>
+
+        {/* Right: Actions, Filters & Links (STRICTLY SINGLE ROW - NO WRAP) */}
+        <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
+
+          {/* Tab Switcher (Audit Logs vs Trained Rules) */}
+          <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-0.5 rounded-lg border border-[#e2e8f0] dark:border-[#334155] shrink-0 ml-1 flex-nowrap">
+            <button
+              type="button"
+              onClick={() => setActiveTab("audit")}
+              className={`px-2.5 py-1 rounded-md text-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "audit"
+                  ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
+                  : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
+              }`}
+            >
+              <Activity className="h-3 w-3 text-primary" />
+              <span>Audit Logs</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-[#eff6ff] dark:bg-[#172554] text-[#2563eb] dark:text-[#93c5fd]">
+                {pagination.totalRecords || logs.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("rules");
+                fetchTrainedRules();
+              }}
+              className={`px-2.5 py-1 rounded-md text-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "rules"
+                  ? "bg-gradient-to-r from-[#d97706] to-[#b45309] text-white shadow-xs"
+                  : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
+              }`}
+            >
+              <Zap className="h-3 w-3 fill-current text-[#fef08a]" />
+              <span>Golden Rules</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                  activeTab === "rules"
+                    ? "bg-white/20 text-white"
+                    : "bg-[#fef3c7] dark:bg-[#451a03]/60 text-[#b45309] dark:text-[#fde68a]"
+                }`}
+              >
+                {trainedRules.length}
+              </span>
+            </button>
+         
+
+          </div>
+
+
+
+
+
+        <div className="flex justify-end items-center gap-4 w-full ">
+            {activeTab === "audit" && (
+            <>
+              {/* View Mode Toggle: Conversation vs Flat Table */}
+              <div className="flex justify-end items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-0.5 rounded-lg border border-[#e2e8f0] dark:border-[#334155] shrink-0 flex-nowrap">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("conversation")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    viewMode === "conversation"
+                      ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
+                      : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
+                  }`}
+                  title="Group questions by conversation session"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-[#3b82f6]" />
+                  <span className="hidden sm:inline">Conversation</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    viewMode === "table"
+                      ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
+                      : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
+                  }`}
+                  title="View individual queries in flat table"
+                >
+                  <TableIcon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Flat Table</span>
+                </button>
               </div>
-              <p className="text-lg sm:text-lg text-[#64748b] dark:text-[#94a3b8] mt-0.5">
-                Double-click any query row or click &quot;Train AI&quot; to teach golden SQL rules, fix queries & fine-tune the AI Copilot.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
-            <Button
-              onClick={() => handleOpenTrainModal(null)}
-              variant="input"
-              size="sm"
-              className="h-10 px-4 gap-2 text-lg font-bold bg-gradient-to-r from-[#d97706] via-primary to-[#4f46e5] hover:from-[#b45309] hover:to-[#4338ca] text-white shadow-md shadow-primary/20"
-            >
-              {/* <Zap className="h-4 w-4 text-[#fcd34d] fill-[#fcd34d]" /> */}
-              + Train New AI Rule
-            </Button>
+              {/* Status Filter */}
+              <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-0.5 rounded-lg border border-[#e2e8f0] dark:border-[#334155] shrink-0 flex-nowrap">
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange("ALL")}
+                  className={`px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    statusFilter === "ALL"
+                      ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
+                      : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange("SUCCESS")}
+                  className={`px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    statusFilter === "SUCCESS"
+                      ? "bg-white dark:bg-[#1e293b] text-[#059669] dark:text-[#34d399] shadow-xs"
+                      : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#059669]"
+                  }`}
+                >
+                  ✓ OK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange("FAILED")}
+                  className={`px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    statusFilter === "FAILED"
+                      ? "bg-white dark:bg-[#1e293b] text-[#e11d48] dark:text-[#fda4af] shadow-xs"
+                      : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#e11d48]"
+                  }`}
+                >
+                  ⚠ Err
+                </button>
+              </div>
+            </>
+          )}
+        <div className="flex gap-2 items-center">
+          
+         
+         
 
-            <Link href="/autovyn/admin/Ai_Assistance/Ai_Assistant_Page">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
-              >
-                {/* <MessageSquare className="h-4 w-4 text-primary" /> */}
-                AI Assistant
-              </Button>
-            </Link>
+          
 
-            <Link href="/autovyn/admin/Ai_Assistance/Ai_Assistant_Descr">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
-              >
-                {/* <Layers className="h-4 w-4 text-[#6366f1]" /> */}
-                Knowledge Base
-              </Button>
-            </Link>
+          {/* Refresh Action */}
+          <Button
+            onClick={() => fetchAuditLogs(pagination.page, statusFilter, searchTerm)}
+            variant="input"
+            size="lg"
+            disabled={isLoading}
+            title="Refresh logs"
+            className="h-12 w-8 p-0 border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold shrink-0 shadow-xs cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
 
-            <Button
-              onClick={() => fetchAuditLogs(pagination.page, statusFilter, searchTerm)}
-              variant="outline"
-              size="sm"
-              disabled={isLoading}
-              className="h-10 px-3.5 gap-2 text-lg border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold"
-            >
-              {/* <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} /> */}
-              Refresh
-            </Button>
-          </div>
+          {/* Export CSV Action */}
+          <Button
+            onClick={handleExportCSV}
+            variant="outline"
+            size="sm"
+            title="Export CSV"
+            className="h-8 w-8 p-0 border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shrink-0 shadow-xs cursor-pointer"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        </div>
         </div>
       </header>
 
-      {/* ── MAIN CONTENT AREA ── */}
-      <main className="flex-1 max-w-8xl w-full mx-auto p-4 lg:p-8 space-y-6">
-        {/* ── METRICS / KPI CARDS ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Total Queries</span>
-              <div className="h-9 w-9 rounded-lg bg-[#eff6ff] dark:bg-[#1e3a8a]/40 text-[#2563eb] dark:text-[#60a5fa] flex items-center justify-center">
-                <FileText className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
-                {stats.totalQueries.toLocaleString()}
-              </span>
-              <span className="text-lg text-[#94a3b8]">lifetime</span>
-            </div>
-          </div>
+      {/* ── MAIN WORKSPACE CONTAINER (FITS 100% OF REMAINING SCREEN) ── */}
+      <main className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
 
-          <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Today&apos;s Queries</span>
-              <div className="h-9 w-9 rounded-lg bg-[#eef2ff] dark:bg-[#312e81]/40 text-[#4f46e5] dark:text-[#818cf8] flex items-center justify-center">
-                <Calendar className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
-                {stats.todayQueriesCount.toLocaleString()}
-              </span>
-              <span className="text-lg text-primary font-bold">today</span>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Success Rate</span>
-              <div className="h-9 w-9 rounded-lg bg-[#ecfdf5] dark:bg-[#064e3b]/40 text-[#059669] dark:text-[#34d399] flex items-center justify-center">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-[#059669] dark:text-[#34d399]">
-                {stats.successRate}
-              </span>
-              <span className="text-lg text-[#94a3b8]">accuracy</span>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Avg Latency</span>
-              <div className="h-9 w-9 rounded-lg bg-[#fffbeb] dark:bg-[#78350f]/40 text-[#d97706] dark:text-[#fbbf24] flex items-center justify-center">
-                <Clock className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
-                {stats.avgExecutionTimeMs} <span className="text-base font-normal text-[#64748b]">ms</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs hover:shadow-sm transition-shadow">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8]">Active Users</span>
-              <div className="h-9 w-9 rounded-lg bg-[#faf5ff] dark:bg-[#581c87]/40 text-[#9333ea] dark:text-[#c084fc] flex items-center justify-center">
-                <User className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-[#193A69] dark:text-white">
-                {stats.activeUsersCount}
-              </span>
-              <span className="text-lg text-[#94a3b8]">emp / users</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── TABS BAR (AUDIT LOGS vs TRAINED RULES) ── */}
-        <div className="flex items-center gap-3 border-b border-[#e2e8f0] dark:border-[#334155] pb-3 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setActiveTab("audit")}
-            className={`px-4 py-2.5 rounded-xl font-bold text-lg flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === "audit"
-                ? "bg-[#193A69] text-white shadow-md shadow-[#193A69]/20 ring-2 ring-[#193A69]/40"
-                : "bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
-            }`}
-          >
-            <Activity className="h-4 w-4" />
-            <span>📊 AI Query Audit Logs</span>
-            <span className={`px-2 py-0.5 text-lg rounded-full font-extrabold ${activeTab === "audit" ? "bg-white/20 text-white" : "bg-[#f1f5f9] dark:bg-[#0f172a] text-[#193A69] dark:text-white"}`}>
-              {pagination.totalRecords || logs.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("rules");
-              fetchTrainedRules();
-            }}
-            className={`px-4 py-2.5 rounded-xl font-bold text-lg flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === "rules"
-                ? "bg-gradient-to-r from-[#d97706] via-[#f59e0b] to-[#b45309] text-white shadow-md shadow-[#d97706]/20 ring-2 ring-[#f59e0b]/40"
-                : "bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:bg-[#f1f5f9] dark:hover:bg-[#334155]"
-            }`}
-          >
-            <Zap className="h-4 w-4 fill-current text-[#fef08a]" />
-            <span>🧠 Trained AI Rules & Golden Queries</span>
-            <span className={`px-2 py-0.5 text-lg rounded-full font-extrabold ${activeTab === "rules" ? "bg-white/20 text-white" : "bg-[#fef3c7] dark:bg-[#451a03]/60 text-[#b45309] dark:text-[#fde68a]"}`}>
-              {trainedRules.length}
-            </span>
-          </button>
-        </div>
 
         {activeTab === "rules" ? (
           /* ── TAB 2: TRAINED RULES & GOLDEN QUERIES MANAGEMENT ── */
@@ -1127,151 +1274,41 @@ export default function AIQueryAuditPage() {
         ) : (
           /* ── TAB 1: AUDIT & TELEMETRY CONTROLS & TABLE ── */
           <>
-            {/* ── CONTROLS & FILTER BAR ── */}
-            <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3.5">
-              <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2.5">
-                <div className="relative flex-1 max-w-lg">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-[#94a3b8]" />
-                  <Input
-                    placeholder="Search by question, SQL, employee code, user..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-11 pr-9 h-11 text-lg sm:text-[16px] bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
-                  />
-                  {searchTerm && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchTerm("");
-                        fetchAuditLogs(1, statusFilter, "");
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="sm"
-                  className="h-11 px-4 text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#193A69] dark:text-white hover:bg-[#e2e8f0]"
-                >
-                  Search
-                </Button>
-              </form>
-
-              <div className="flex items-center gap-2.5 flex-wrap self-end md:self-auto">
-                {/* View Mode Toggle: Conversation vs Flat Table */}
-                <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-1 rounded-lg border border-[#e2e8f0] dark:border-[#334155]">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("conversation")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors ${
-                      viewMode === "conversation"
-                        ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
-                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
-                    }`}
-                    title="Group questions by conversation session"
-                  >
-                    <MessageSquare className="h-4 w-4 text-blue-500" />
-                    <span>Conversation Wise</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("table")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors ${
-                      viewMode === "table"
-                        ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
-                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#193A69] dark:hover:text-white"
-                    }`}
-                    title="View individual queries in flat table"
-                  >
-                    <TableIcon className="h-4 w-4" />
-                    <span>Flat Queries</span>
-                  </button>
-                </div>
-
-                {/* Status Filter */}
-                <div className="flex items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-1 rounded-lg border border-[#e2e8f0] dark:border-[#334155]">
-                  <button
-                    onClick={() => handleStatusChange("ALL")}
-                    className={`px-3 py-1.5 text-lg font-bold rounded-md transition-colors ${
-                      statusFilter === "ALL"
-                        ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
-                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#1e293b]"
-                    }`}
-                  >
-                    All ({stats.totalQueries})
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange("SUCCESS")}
-                    className={`px-3 py-1.5 text-lg font-bold rounded-md transition-colors ${
-                      statusFilter === "SUCCESS"
-                        ? "bg-white dark:bg-[#1e293b] text-[#059669] dark:text-[#34d399] shadow-xs"
-                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#059669]"
-                    }`}
-                  >
-                    Success ({stats.successQueries})
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange("FAILED")}
-                    className={`px-3 py-1.5 text-lg font-bold rounded-md transition-colors ${
-                      statusFilter === "FAILED"
-                        ? "bg-white dark:bg-[#1e293b] text-[#e11d48] dark:text-[#fda4af] shadow-xs"
-                        : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#e11d48]"
-                    }`}
-                  >
-                    Failed ({stats.failedQueries})
-                  </button>
-                </div>
-
-                <Button
-                  onClick={handleExportCSV}
-                  variant="outline"
-                  size="sm"
-                  className="h-11 px-3.5 gap-2 text-lg font-bold border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white"
-                >
-                  Export CSV
-                </Button>
-              </div>
-            </div>
-
-            {/* ── CONVERSATION WISE VIEW: SIDEBAR + DETAIL THREAD ── */}
+            {/* ── CONVERSATION WISE VIEW: FIXED TWO-PANE APP CONTAINER (LIKE AI-ASSISTANT) ── */}
             {viewMode === "conversation" ? (
               isLoading ? (
-                <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
-                  <RefreshCw className="h-8 w-8 animate-spin text-[#193A69] dark:text-blue-400 mx-auto mb-3" />
+                <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
+                  <RefreshCw className="h-8 w-8 animate-spin text-[#193A69] dark:text-[#60a5fa] mx-auto mb-3" />
                   <div className="text-base font-bold text-[#1e293b] dark:text-white">Loading conversations...</div>
-                  <p className="text-sm text-[#94a3b8] mt-1">Grouping telemetry queries by conversation sessions</p>
+                  <p className="text-lg text-[#94a3b8] mt-1">Grouping telemetry queries by conversation sessions</p>
                 </div>
               ) : conversationGroups.length === 0 ? (
-                <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
+                <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
                   <MessageSquare className="h-10 w-10 text-[#94a3b8] mx-auto mb-3 opacity-60" />
                   <div className="text-base font-bold text-[#193A69] dark:text-white">No Conversations Found</div>
-                  <p className="text-sm text-[#94a3b8] mt-1">Try changing filters or search terms.</p>
+                  <p className="text-lg text-[#94a3b8] mt-1">Try changing filters or search terms.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                  {/* ── LEFT SIDEBAR: CONVERSATION SESSIONS ── */}
-                  <div className="lg:col-span-4 xl:col-span-4 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl shadow-xs overflow-hidden flex flex-col">
+                <div className="relative flex h-full w-full overflow-hidden rounded-2xl border border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] shadow-md">
+                  {/* ── LEFT SIDEBAR: CONVERSATION SESSIONS (FIXED - LIKE AI-ASSISTANT) ── */}
+                  <div className="w-80 lg:w-[370px] xl:w-[400px] shrink-0 flex flex-col border-r border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/60 overflow-hidden">
                     {/* Sidebar Header */}
-                    <div className="p-3.5 sm:p-4 border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/60 space-y-3">
+                    <div className="shrink-0 p-3.5 sm:p-4 border-b border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40">
+                          <div className="p-1.5 rounded-lg bg-[#eff6ff] dark:bg-[#172554]/60 text-[#2563eb] dark:text-[#60a5fa] border border-[#dbeafe] dark:border-[#1e3a8a]/40">
                             <MessageSquare className="h-4 w-4" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-bold text-[#193A69] dark:text-white">
+                              <h3 className="text-lg font-bold text-[#193A69] dark:text-white">
                                 Sessions
                               </h3>
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                              <span className="text-lg font-bold px-1.5 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#1e3a8a]/60 text-[#1d4ed8] dark:text-[#93c5fd]">
                                 {conversationGroups.length}
                               </span>
                             </div>
-                            <span className="text-[11px] text-[#64748b] dark:text-[#94a3b8]">
+                            <span className="text-lg text-[#64748b] dark:text-[#94a3b8]">
                               {logs.length} / {pagination.totalRecords || logs.length} turns loaded
                             </span>
                           </div>
@@ -1283,7 +1320,7 @@ export default function AIQueryAuditPage() {
                           onClick={() => fetchAuditLogs(1, statusFilter, searchTerm, false)}
                           title="Reload latest sessions"
                           disabled={isLoading || isLoadingMore}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 disabled:opacity-50"
+                          className="p-1.5 text-slate-500 hover:text-[#2563eb] dark:text-slate-400 dark:hover:text-[#93c5fd] hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 disabled:opacity-50"
                         >
                           <RefreshCw className={`h-3.5 w-3.5 ${isLoading && !isLoadingMore ? "animate-spin" : ""}`} />
                         </button>
@@ -1296,7 +1333,7 @@ export default function AIQueryAuditPage() {
                           placeholder="Search title, query, user..."
                           value={sessionSearch}
                           onChange={(e) => setSessionSearch(e.target.value)}
-                          className="pl-8 pr-7 h-8 text-xs bg-white dark:bg-[#1e293b] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white placeholder:text-[#94a3b8] focus-visible:ring-1 focus-visible:ring-blue-500"
+                          className="pl-8 pr-7 h-8 text-lg bg-white dark:bg-[#1e293b] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white placeholder:text-[#94a3b8] focus-visible:ring-1 focus-visible:ring-[#3b82f6]"
                         />
                         {sessionSearch && (
                           <button
@@ -1310,37 +1347,34 @@ export default function AIQueryAuditPage() {
                       </div>
 
                       {/* Quick Filter Pills */}
-                      <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-200/60 dark:bg-slate-800/60 rounded-lg text-[11px] font-semibold">
+                      <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-200/60 dark:bg-slate-800/60 rounded-lg text-lg font-semibold">
                         <button
                           type="button"
                           onClick={() => setSidebarFilter("ALL")}
-                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${
-                            sidebarFilter === "ALL"
-                              ? "bg-white dark:bg-[#1e293b] text-blue-600 dark:text-blue-400 shadow-xs font-bold"
-                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                          }`}
+                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${sidebarFilter === "ALL"
+                            ? "bg-white dark:bg-[#1e293b] text-[#2563eb] dark:text-[#60a5fa] shadow-xs font-bold"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                            }`}
                         >
                           All ({conversationGroups.length})
                         </button>
                         <button
                           type="button"
                           onClick={() => setSidebarFilter("SUCCESS")}
-                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${
-                            sidebarFilter === "SUCCESS"
-                              ? "bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold"
-                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                          }`}
+                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${sidebarFilter === "SUCCESS"
+                            ? "bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                            }`}
                         >
                           ✓ OK ({conversationGroups.filter((g) => g.failedCount === 0).length})
                         </button>
                         <button
                           type="button"
                           onClick={() => setSidebarFilter("FAILED")}
-                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${
-                            sidebarFilter === "FAILED"
-                              ? "bg-white dark:bg-[#1e293b] text-rose-600 dark:text-rose-400 shadow-xs font-bold"
-                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                          }`}
+                          className={`py-1 px-1.5 rounded-md transition-all text-center truncate ${sidebarFilter === "FAILED"
+                            ? "bg-white dark:bg-[#1e293b] text-rose-600 dark:text-rose-400 shadow-xs font-bold"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                            }`}
                         >
                           ⚠ Issues ({conversationGroups.filter((g) => g.failedCount > 0).length})
                         </button>
@@ -1350,17 +1384,17 @@ export default function AIQueryAuditPage() {
                     {/* Scrollable Sessions List with Infinite Scroll & Lazy Loading */}
                     <div
                       onScroll={handleSidebarScroll}
-                      className="p-2 sm:p-2.5 space-y-2 overflow-y-auto max-h-[720px] divide-y divide-transparent"
+                      className="flex-1 overflow-y-auto min-h-0 p-2 sm:p-2.5 space-y-2 divide-y divide-transparent scroll-smooth overscroll-y-contain"
                     >
                       {filteredSidebarSessions.length === 0 ? (
-                        <div className="py-12 text-center text-xs text-[#94a3b8] space-y-2">
+                        <div className="py-12 text-center text-lg text-[#94a3b8] space-y-2">
                           <MessageSquare className="h-7 w-7 text-slate-300 dark:text-slate-600 mx-auto" />
                           <div>No sessions match your filter</div>
                           {sessionSearch && (
                             <button
                               type="button"
                               onClick={() => setSessionSearch("")}
-                              className="text-blue-500 hover:underline text-[11px]"
+                              className="text-[#3b82f6] hover:underline text-lg"
                             >
                               Clear search query
                             </button>
@@ -1379,21 +1413,19 @@ export default function AIQueryAuditPage() {
                               key={group.conversationId}
                               type="button"
                               onClick={() => setSelectedSessionId(group.conversationId)}
-                              className={`w-full text-left p-3 rounded-xl border transition-all duration-150 flex flex-col gap-2 relative ${
-                                isSelected
-                                  ? "bg-blue-50/90 dark:bg-blue-950/40 border-blue-500 dark:border-blue-400 border-l-[4px] border-l-blue-600 dark:border-l-blue-400 shadow-xs"
-                                  : "bg-white dark:bg-[#1e293b] border-[#e2e8f0] dark:border-[#334155] border-l-[4px] border-l-transparent hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
-                              }`}
+                              className={`w-full text-left p-3 rounded-xl border transition-all duration-150 flex flex-col gap-2 relative ${isSelected
+                                ? "bg-[#eff6ff]/90 dark:bg-[#172554]/40 border-[#3b82f6] dark:border-[#60a5fa] border-l-[4px] border-l-[#2563eb] dark:border-l-[#60a5fa] shadow-xs"
+                                : "bg-white dark:bg-[#1e293b] border-[#e2e8f0] dark:border-[#334155] border-l-[4px] border-l-transparent hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
+                                }`}
                             >
                               {/* Top Row: Title + Status Indicator */}
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
                                   <span
-                                    className={`text-xs sm:text-sm font-bold line-clamp-2 leading-snug ${
-                                      isSelected
-                                        ? "text-blue-950 dark:text-blue-100"
+                                    className={`block text-lg sm:text-lg font-bold truncate leading-snug ${isSelected
+                                        ? "text-[#172554] dark:text-[#dbeafe]"
                                         : "text-[#1e293b] dark:text-[#f1f5f9]"
-                                    }`}
+                                      }`}
                                     title={group.title}
                                   >
                                     {group.title}
@@ -1421,45 +1453,14 @@ export default function AIQueryAuditPage() {
 
                               {/* Question preview snippet if different from title */}
                               {firstQueryText && firstQueryText !== group.title && (
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 italic">
+                                <p className="text-lg text-slate-500 dark:text-slate-400 line-clamp-1 italic">
                                   &ldquo;{firstQueryText}&rdquo;
                                 </p>
                               )}
 
-                              {/* Middle Row: Turn Count & Metric Badges */}
-                              <div className="flex items-center justify-between gap-2 text-xs">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
-                                      isSelected
-                                        ? "bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300"
-                                        : "bg-[#f1f5f9] dark:bg-[#0f172a] text-[#475569] dark:text-[#cbd5e1]"
-                                    }`}
-                                  >
-                                    {group.totalQueries}{" "}
-                                    {group.totalQueries === 1 ? "Turn" : "Turns"}
-                                  </span>
-                                  {group.avgExecutionTimeMs > 0 && (
-                                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800">
-                                      {group.avgExecutionTimeMs}ms
-                                    </span>
-                                  )}
-                                  {!allOk && (
-                                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40">
-                                      {group.failedCount} err
-                                    </span>
-                                  )}
-                                </div>
-
-                                <span className="font-mono text-[10px] text-[#94a3b8] truncate max-w-[110px]">
-                                  {!isDirect
-                                    ? `#${group.conversationId.slice(0, 8)}`
-                                    : "Direct"}
-                                </span>
-                              </div>
 
                               {/* Bottom Row: User & Time */}
-                              <div className="flex items-center justify-between gap-2 text-[11px] text-[#94a3b8] pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                              <div className="flex items-center justify-between gap-2 text-lg text-[#94a3b8] pt-1.5 border-t border-slate-100 dark:border-slate-800">
                                 <span className="truncate flex items-center gap-1 font-medium text-[#64748b] dark:text-[#cbd5e1]">
                                   <User className="h-3 w-3 shrink-0 text-[#94a3b8]" />
                                   <span className="truncate">
@@ -1478,7 +1479,7 @@ export default function AIQueryAuditPage() {
 
                       {/* ── LAZY LOADING INFINITE SCROLL SENTINEL & FEEDBACK ── */}
                       {isLoadingMore && (
-                        <div className="p-3 text-center flex items-center justify-center gap-2 bg-blue-50/70 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-semibold animate-pulse">
+                        <div className="p-3 text-center flex items-center justify-center gap-2 bg-[#eff6ff]/70 dark:bg-[#172554]/40 rounded-xl border border-[#dbeafe] dark:border-[#1e3a8a]/30 text-[#2563eb] dark:text-[#60a5fa] text-lg font-semibold animate-pulse">
                           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                           <span>Loading older sessions...</span>
                         </div>
@@ -1493,7 +1494,7 @@ export default function AIQueryAuditPage() {
                           type="button"
                           onClick={() => handleLoadMore()}
                           disabled={isLoading || isLoadingMore}
-                          className="w-full py-2 px-3 text-xs font-semibold text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-blue-50/50 dark:hover:bg-slate-800 rounded-xl transition-all border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5"
+                          className="w-full py-2 px-3 text-lg font-semibold text-slate-600 hover:text-[#2563eb] dark:text-slate-400 dark:hover:text-[#93c5fd] hover:bg-[#eff6ff]/50 dark:hover:bg-slate-800 rounded-xl transition-all border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5"
                         >
                           <ChevronDown className="h-3.5 w-3.5" />
                           <span>Load More Sessions ({logs.length} of {pagination.totalRecords})</span>
@@ -1502,25 +1503,25 @@ export default function AIQueryAuditPage() {
 
                       {/* End of results message */}
                       {!isLoadingMore && pagination.page >= pagination.totalPages && logs.length > 0 && (
-                        <div className="py-2.5 text-center text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                        <div className="py-2.5 text-center text-lg text-slate-400 dark:text-slate-500 font-medium">
                           ✓ All {conversationGroups.length} sessions loaded ({pagination.totalRecords} queries)
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* ── RIGHT MAIN PANEL: SELECTED CONVERSATION DETAIL ── */}
-                  <div className="lg:col-span-8 xl:col-span-8 flex flex-col space-y-4">
+                  {/* ── RIGHT MAIN PANEL: SELECTED CONVERSATION DETAIL (SCROLLABLE CHAT FEED - LIKE AI-ASSISTANT) ── */}
+                  <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-[#1e293b]">
                     {activeSession ? (
                       <>
-                        {/* Session Header Card */}
+                        {/* Session Header Card (Pinned at top) */}
                         {(() => {
                           const dt = formatAuditDateTime(activeSession.latestCreatedAt);
                           const allSuccess = activeSession.failedCount === 0;
                           const isDirect = activeSession.conversationId.startsWith("direct_");
 
                           return (
-                            <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-xs space-y-3.5">
+                            <div className="shrink-0 p-4 sm:p-5 border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/60 space-y-3.5">
                               {/* Title & Status */}
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="space-y-1 flex-1 min-w-0">
@@ -1532,7 +1533,7 @@ export default function AIQueryAuditPage() {
                                       <button
                                         type="button"
                                         onClick={() => handleCopy(activeSession.conversationId, "active_session_id")}
-                                        className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-[#f1f5f9] dark:bg-[#0f172a] text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155] hover:text-[#193A69] dark:hover:text-white transition-colors flex items-center gap-1"
+                                        className="font-mono text-lg px-2 py-0.5 rounded-md bg-[#f1f5f9] dark:bg-[#0f172a] text-[#64748b] dark:text-[#94a3b8] border border-[#e2e8f0] dark:border-[#334155] hover:text-[#193A69] dark:hover:text-white transition-colors flex items-center gap-1"
                                         title="Click to copy full Session ID"
                                       >
                                         <span>Session: {activeSession.conversationId.slice(0, 8)}...</span>
@@ -1548,23 +1549,23 @@ export default function AIQueryAuditPage() {
 
                                 {/* Status & Turn Badge */}
                                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#f1f5f9] dark:bg-[#0f172a] text-[#1e293b] dark:text-[#e2e8f0] border border-[#e2e8f0] dark:border-[#334155]">
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-lg font-bold bg-[#f1f5f9] dark:bg-[#0f172a] text-[#1e293b] dark:text-[#e2e8f0] border border-[#e2e8f0] dark:border-[#334155]">
                                     <span className="h-2 w-2 rounded-full bg-[#193A69] dark:bg-[#60a5fa]" />
                                     {activeSession.totalQueries} {activeSession.totalQueries === 1 ? "Query" : "Questions"}
                                   </span>
 
                                   {allSuccess ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46]">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-lg font-bold bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0] dark:border-[#065f46]">
                                       <CheckCircle2 className="h-3.5 w-3.5" />
                                       All Successful
                                     </span>
                                   ) : activeSession.successCount === 0 ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca] dark:border-[#881337]">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca] dark:border-[#881337]">
                                       <XCircle className="h-3.5 w-3.5" />
                                       {activeSession.failedCount} Failed
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#fffbeb] dark:bg-[#451a03]/50 text-[#d97706] dark:text-[#fde68a] border border-[#fde68a] dark:border-[#78350f]">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-lg font-bold bg-[#fffbeb] dark:bg-[#451a03]/50 text-[#d97706] dark:text-[#fde68a] border border-[#fde68a] dark:border-[#78350f]">
                                       <AlertCircle className="h-3.5 w-3.5" />
                                       {activeSession.successCount} OK, {activeSession.failedCount} Err
                                     </span>
@@ -1573,7 +1574,7 @@ export default function AIQueryAuditPage() {
                               </div>
 
                               {/* Session Metadata Chips */}
-                              <div className="pt-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 flex items-center gap-2.5 text-xs text-[#64748b] dark:text-[#94a3b8] flex-wrap">
+                              <div className="pt-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 flex items-center gap-2.5 text-lg text-[#64748b] dark:text-[#94a3b8] flex-wrap">
                                 <span className="inline-flex items-center gap-1 font-medium">
                                   <User className="h-3.5 w-3.5 text-[#94a3b8]" />
                                   <span className="text-[#334155] dark:text-[#cbd5e1] font-semibold">
@@ -1587,7 +1588,7 @@ export default function AIQueryAuditPage() {
                                 {activeSession.role && (
                                   <>
                                     <span className="text-[#cbd5e1] dark:text-[#475569]">•</span>
-                                    <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                                    <span className="px-1.5 py-0.5 rounded text-lg font-medium bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
                                       {activeSession.role}
                                     </span>
                                   </>
@@ -1613,44 +1614,56 @@ export default function AIQueryAuditPage() {
                           );
                         })()}
 
-                        {/* Questions / Turns Sequence */}
-                        <div className="space-y-4">
-                          <div className="text-xs font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] flex items-center justify-between px-1">
+                        {/* Questions / Turns Sequence (Scrollable messages feed - Like ai-assistant) */}
+                        <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#f8fafc]/40 dark:bg-[#0f172a]/40 scroll-smooth">
+                          <div className="text-lg font-bold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8] flex items-center justify-between px-1">
                             <span>Questions Flow ({activeSession.queries.length} turns)</span>
-                            <span className="font-normal text-[11px] text-[#94a3b8]">Chronological Sequence</span>
+                            <span className="font-normal text-lg text-[#94a3b8]">Chronological Sequence</span>
                           </div>
 
                           {activeSession.queries.map((q, turnIdx) => {
                             const qSuccess = q.statusCode === "SUCCESS";
                             const qDt = formatAuditDateTime(q.createdAt);
+                            const cleanQ = (q.userQuery || "").toLowerCase().trim().replace(/[?!.,;:]/g, "");
+                            const isTurnTrained = trainedQuestionsSet.has(cleanQ);
                             return (
                               <div
                                 key={q.UTD}
-                                className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-shadow space-y-3"
+                                className={`bg-white dark:bg-[#1e293b] border rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-shadow space-y-3 ${isTurnTrained
+                                  ? "border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/15"
+                                  : !qSuccess || q.rowsReturned === 0 || q.rowsReturned === null
+                                    ? "border-rose-200 dark:border-rose-900/50"
+                                    : "border-[#e2e8f0] dark:border-[#334155]"
+                                  }`}
                               >
                                 {/* Turn Header */}
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[#f1f5f9] dark:border-[#334155]/60">
                                   <div className="flex items-start gap-3 flex-1 min-w-0">
                                     {/* Question Badge e.g. Q1, Q2 */}
-                                    <span className="px-2.5 py-1 rounded-lg bg-[#193A69] dark:bg-blue-600 text-white font-mono font-bold text-xs shrink-0 shadow-2xs">
+                                    <span className={`px-2.5 py-1 rounded-lg text-white font-mono font-bold text-lg shrink-0 shadow-2xs ${isTurnTrained
+                                      ? "bg-emerald-600 dark:bg-emerald-700"
+                                      : !qSuccess || q.rowsReturned === 0 || q.rowsReturned === null
+                                        ? "bg-rose-600 dark:bg-rose-700"
+                                        : "bg-[#193A69] dark:bg-[#2563eb]"
+                                      }`}>
                                       Q{turnIdx + 1}
                                     </span>
 
                                     <div className="flex-1 min-w-0">
-                                      <p className="font-bold text-sm sm:text-base text-[#193A69] dark:text-white break-words">
+                                      <p className="font-bold text-lg sm:text-base text-[#193A69] dark:text-white break-words">
                                         {q.userQuery}
                                       </p>
                                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                         {/* Intent */}
-                                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                                        <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
                                           {q.intent || "GENERAL"}
                                         </span>
                                         {/* Table */}
-                                        <span className="font-mono text-[11px] text-[#64748b] dark:text-[#94a3b8] bg-[#f8fafc] dark:bg-[#0f172a] px-2 py-0.5 rounded border border-[#e2e8f0] dark:border-[#334155]">
+                                        <span className="font-mono text-lg text-[#64748b] dark:text-[#94a3b8] bg-[#f8fafc] dark:bg-[#0f172a] px-2 py-0.5 rounded border border-[#e2e8f0] dark:border-[#334155]">
                                           Table: {q.tablesUsed || "EMPLOYEEMASTER"}
                                         </span>
                                         {/* Time */}
-                                        <span className="text-[11px] text-[#94a3b8]">
+                                        <span className="text-lg text-[#94a3b8]">
                                           {qDt.time}
                                         </span>
                                       </div>
@@ -1658,39 +1671,87 @@ export default function AIQueryAuditPage() {
                                   </div>
 
                                   {/* Action Buttons for this question */}
-                                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
-                                    {!qSuccess || (q.rowsReturned === 0 || q.rowsReturned === null) ? (
-                                      <Button
-                                        onClick={() => handleOpenTrainModal(q)}
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 px-2.5 text-xs font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1"
-                                        title="Fix this failed query — train AI with correct SQL"
-                                      >
-                                        <Zap className="h-3 w-3 fill-current" />
-                                        Fix & Train
-                                      </Button>
+                                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-start flex-wrap justify-end">
+                                    {isTurnTrained ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-lg font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                          Golden Rule
+                                        </span>
+                                        <Button
+                                          onClick={() => handleOpenTrainModal(q)}
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 px-2.5 text-lg font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 gap-1"
+                                          title="Review or adjust this trained Golden Rule"
+                                        >
+                                          <Edit3 className="h-3 w-3" />
+                                          Edit Rule
+                                        </Button>
+                                      </div>
                                     ) : (
-                                      <Button
-                                        onClick={() => handleOpenTrainModal(q)}
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 px-2.5 text-xs font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#78350f] gap-1"
-                                        title="Train Golden Rule from this query"
-                                      >
-                                        <Zap className="h-3 w-3 fill-current" />
-                                        Train Rule
-                                      </Button>
+                                      <>
+                                        {/* Quick 1-Click Verify / Reject */}
+                                        {qSuccess && q.generatedSql && (q.rowsReturned ?? 0) > 0 && (
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Button
+                                              onClick={() => handleQuickVerifyGolden(q)}
+                                              disabled={verifyingUtd === q.UTD}
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 px-2.5 text-lg font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 gap-1.5 shadow-2xs"
+                                              title="Mark this query & SQL as verified Golden Rule"
+                                            >
+                                              Right (Verify)
+                                            </Button>
+                                            <Button
+                                              onClick={() => handleOpenRejectModal(q)}
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#ffe4e6] dark:hover:bg-[#450a0a]/60 gap-1.5 shadow-2xs"
+                                              title="Mark this query as Wrong / Failed and add an optional developer remark"
+                                            >
+                                              {/* <X className="h-8 w-8 text-[#e11d48] dark:text-[#fda4af]" /> */}
+                                              Wrong (Dont Verify)
+                                            </Button>
+                                          </div>
+                                        )}
+
+                                        {/* Sahi Karo / Train button */}
+                                        {!qSuccess || (q.rowsReturned === 0 || q.rowsReturned === null) ? (
+                                          <Button
+                                            onClick={() => handleOpenTrainModal(q)}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#ffe4e6] gap-1 shadow-2xs"
+                                            title="Fix this failed query — test SQL live and train AI model"
+                                          >
+                                            {/* <Zap className="h-3 w-3 fill-current" /> */}
+                                            Train
+                                          </Button>
+                                        ) : (
+                                          <Button
+                                            onClick={() => handleOpenTrainModal(q)}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2.5 text-lg font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#78350f] gap-1 shadow-2xs"
+                                            title="Open training modal to adjust SQL or add synonyms"
+                                          >
+                                            {/* <Zap className="h-3 w-3 fill-current" /> */}
+                                            Train Rule
+                                          </Button>
+                                        )}
+                                      </>
                                     )}
 
                                     <Button
                                       onClick={() => setSelectedRecord(q)}
                                       variant="outline"
                                       size="sm"
-                                      className="h-8 px-2.5 text-xs font-medium text-[#64748b] dark:text-[#cbd5e1] gap-1 border-[#e2e8f0] dark:border-[#334155]"
+                                      className="h-8 px-2.5 text-lg font-medium text-[#64748b] dark:text-[#cbd5e1] gap-1 border-[#e2e8f0] dark:border-[#334155]"
                                       title="View full audit telemetry details"
                                     >
-                                      <Eye className="h-3.5 w-3.5" />
+                                      {/* <Eye className="h-3.5 w-3.5" /> */}
                                       <span>Details</span>
                                     </Button>
                                   </div>
@@ -1698,10 +1759,10 @@ export default function AIQueryAuditPage() {
 
                                 {/* Turn Details: Executed SQL & Response Preview */}
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                  {/* Executed SQL Box */}
+                                  {/* Executed SQLff Box */}
                                   <div className="bg-[#0f172a] rounded-lg p-3 text-white flex flex-col justify-between border border-[#1e293b]">
                                     <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#334155]">
-                                      <span className="text-[11px] font-mono font-bold text-[#94a3b8] flex items-center gap-1.5">
+                                      <span className="text-lg font-mono font-bold text-[#94a3b8] flex items-center gap-1.5">
                                         <Code2 className="h-3.5 w-3.5 text-[#38bdf8]" />
                                         EXECUTED SQL
                                       </span>
@@ -1709,7 +1770,7 @@ export default function AIQueryAuditPage() {
                                         <button
                                           type="button"
                                           onClick={() => handleCopy(q.generatedSql || "", `sql_${q.UTD}`)}
-                                          className="text-[11px] text-[#94a3b8] hover:text-white flex items-center gap-1 transition-colors"
+                                          className="text-lg text-[#94a3b8] hover:text-white flex items-center gap-1 transition-colors"
                                           title="Copy SQL to clipboard"
                                         >
                                           {copiedField === `sql_${q.UTD}` ? (
@@ -1726,7 +1787,7 @@ export default function AIQueryAuditPage() {
                                         </button>
                                       )}
                                     </div>
-                                    <div className="overflow-x-auto max-h-36 text-xs font-mono text-[#93c5fd] leading-relaxed whitespace-pre-wrap">
+                                    <div className="overflow-x-auto max-h-36 text-lg font-mono text-[#93c5fd] leading-relaxed whitespace-pre-wrap">
                                       {q.generatedSql || <span className="italic text-[#64748b]">No SQL query generated</span>}
                                     </div>
                                   </div>
@@ -1734,12 +1795,12 @@ export default function AIQueryAuditPage() {
                                   {/* AI Response Preview Box */}
                                   <div className="bg-[#f8fafc] dark:bg-[#0f172a] rounded-lg p-3 border border-[#e2e8f0] dark:border-[#334155] flex flex-col justify-between">
                                     <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#e2e8f0] dark:border-[#334155]">
-                                      <span className="text-[11px] font-bold text-[#64748b] dark:text-[#94a3b8] flex items-center gap-1.5">
-                                        <Bot className="h-3.5 w-3.5 text-[#193A69] dark:text-blue-400" />
+                                      <span className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] flex items-center gap-1.5">
+                                        <Bot className="h-3.5 w-3.5 text-[#193A69] dark:text-[#60a5fa]" />
                                         AI RESPONSE PREVIEW
                                       </span>
                                     </div>
-                                    <div className="overflow-y-auto max-h-36 text-xs text-[#334155] dark:text-[#cbd5e1] leading-relaxed whitespace-pre-wrap">
+                                    <div className="overflow-y-auto max-h-36 text-lg text-[#334155] dark:text-[#cbd5e1] leading-relaxed whitespace-pre-wrap">
                                       {q.aiResponse || (
                                         <span className="italic text-[#94a3b8]">
                                           {q.errorMessage ? `Error: ${q.errorMessage}` : "No response preview available"}
@@ -1749,16 +1810,33 @@ export default function AIQueryAuditPage() {
                                   </div>
                                 </div>
 
+                                {/* Issue / Developer Remark Alert */}
+                                {q.errorMessage && (
+                                  <div className="p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 flex items-start gap-2.5">
+                                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                    <div className="space-y-0.5 min-w-0 flex-1">
+                                      <div className="font-bold text-rose-700 dark:text-rose-300 text-lg flex items-center justify-between">
+                                        <span>Issue / Developer Remark:</span>
+                                        <span className="text-lg text-rose-600 dark:text-rose-400 font-semibold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/50">
+                                          Action Required
+                                        </span>
+                                      </div>
+                                      <p className="text-rose-800 dark:text-rose-200 text-lg whitespace-pre-wrap font-medium leading-relaxed mt-0.5">
+                                        {q.errorMessage.replace(/^Marked as FAILED via user feedback:\s*/i, "")}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Turn Footer: Metrics & Chips */}
-                                <div className="pt-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 flex items-center justify-between text-xs flex-wrap gap-2">
+                                <div className="pt-2 border-t border-[#f1f5f9] dark:border-[#334155]/60 flex items-center justify-between text-lg flex-wrap gap-2">
                                   <div className="flex items-center gap-3 flex-wrap">
                                     {/* Status pill */}
                                     <span
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                                        qSuccess
-                                          ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
-                                          : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
-                                      }`}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-lg ${qSuccess
+                                        ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
+                                        : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
+                                        }`}
                                     >
                                       {qSuccess ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                       {q.statusCode}
@@ -1769,7 +1847,7 @@ export default function AIQueryAuditPage() {
                                       <Database className="h-3 w-3 text-[#94a3b8]" />
                                       <strong className="text-[#1e293b] dark:text-white">{q.rowsReturned || 0}</strong> rows
                                       {qSuccess && (q.rowsReturned === 0 || q.rowsReturned === null) && (
-                                        <span className="ml-1 text-[10px] font-bold text-[#d97706] dark:text-[#fde68a]">
+                                        <span className="ml-1 text-lg font-bold text-[#d97706] dark:text-[#fde68a]">
                                           (0 rows returned)
                                         </span>
                                       )}
@@ -1782,14 +1860,14 @@ export default function AIQueryAuditPage() {
                                     </span>
 
                                     {q.compCode && (
-                                      <span className="font-mono text-[11px] text-[#64748b] dark:text-[#94a3b8]">
+                                      <span className="font-mono text-lg text-[#64748b] dark:text-[#94a3b8]">
                                         Comp: {q.compCode}
                                       </span>
                                     )}
                                   </div>
 
                                   {/* UTD tag */}
-                                  <span className="font-mono text-[11px] text-[#94a3b8]">
+                                  <span className="font-mono text-lg text-[#94a3b8]">
                                     Log #{q.UTD}
                                   </span>
                                 </div>
@@ -1799,10 +1877,10 @@ export default function AIQueryAuditPage() {
                         </div>
                       </>
                     ) : (
-                      <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
-                        <MessageSquare className="h-10 w-10 text-[#94a3b8] mx-auto mb-3 opacity-60" />
-                        <div className="text-base font-bold text-[#193A69] dark:text-white">Select a session from the sidebar</div>
-                        <p className="text-sm text-[#94a3b8] mt-1">Choose any conversation session on the left to view its question thread.</p>
+                      <div className="flex-1 flex flex-col items-center justify-center p-16 text-center text-[#64748b] dark:text-[#94a3b8] space-y-3">
+                        <MessageSquare className="h-12 w-12 text-[#94a3b8] mx-auto opacity-50" />
+                        <div className="text-xl font-bold text-[#193A69] dark:text-white">Select a session from the sidebar</div>
+                        <p className="text-lg text-[#94a3b8] max-w-sm">Choose any conversation session on the left to view its question thread.</p>
                       </div>
                     )}
                   </div>
@@ -1810,188 +1888,288 @@ export default function AIQueryAuditPage() {
               )
             ) : (
               /* ── FLAT AUDIT LOGS TABLE ── */
-              <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a]/70 text-lg font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
-                        <th className="py-3.5 px-4 min-w-[260px]">User Prompt / Question</th>
-                        <th className="py-3.5 px-4">Intent</th>
-                        <th className="py-3.5 px-4">Target Table</th>
-                        <th className="py-3.5 px-4 min-w-[220px]">Executed SQL</th>
-                        <th className="py-3.5 px-4 text-center">Rows</th>
-                        <th className="py-3.5 px-4 text-center">Latency</th>
-                        <th className="py-3.5 px-4 text-center">Status</th>
-                        <th className="py-3.5 px-4 min-w-[130px]">Time</th>
-                        <th className="py-3.5 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-lg">
-                      {isLoading ? (
-                        <tr>
-                          <td colSpan={10} className="py-16 text-center text-[#64748b]">
-                            <RefreshCw className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                            Loading telemetry logs...
-                          </td>
+              <div className="flex-1 min-h-0 flex flex-col space-y-2">
+                <div className="shrink-0 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-2.5 shadow-xs flex items-center justify-between gap-3">
+                  <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2">
+                    <div className="relative flex-1 max-w-lg">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#94a3b8]" />
+                      <Input
+                        placeholder="Search by question, SQL, employee code, user..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9 pr-9 h-8 text-lg bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white"
+                      />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchTerm("");
+                            fetchAuditLogs(1, statusFilter, "");
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#193A69] dark:text-white hover:bg-[#e2e8f0]"
+                    >
+                      Search
+                    </Button>
+                  </form>
+                </div>
+
+                <div className="flex-1 min-h-0 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl shadow-xs overflow-y-auto">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 z-10 bg-[#f8fafc] dark:bg-[#0f172a]">
+                        <tr className="border-b border-[#e2e8f0] dark:border-[#334155] text-lg font-extrabold uppercase tracking-wider text-[#64748b] dark:text-[#94a3b8]">
+                          <th className="py-3.5 px-4 min-w-[260px]">User Prompt / Question</th>
+                          <th className="py-3.5 px-4">Intent</th>
+                          <th className="py-3.5 px-4">Target Table</th>
+                          <th className="py-3.5 px-4 min-w-[220px]">Executed SQL</th>
+                          <th className="py-3.5 px-4 text-center">Rows</th>
+                          <th className="py-3.5 px-4 text-center">Latency</th>
+                          <th className="py-3.5 px-4 text-center">Status</th>
+                          <th className="py-3.5 px-4 min-w-[130px]">Time</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
                         </tr>
-                      ) : logs.length === 0 ? (
-                        <tr>
-                          <td colSpan={10} className="py-16 text-center text-[#64748b]">
-                            <Database className="h-10 w-10 text-[#94a3b8] mx-auto mb-3" />
-                            <div className="text-lg font-bold text-[#193A69] dark:text-white">No Logs Found</div>
-                            <p className="text-lg text-[#94a3b8] mt-1">Try changing filters or ask questions in AI Assistant.</p>
-                          </td>
-                        </tr>
-                      ) : (
-                        logs.map((log) => {
-                          const isSuccess = log.statusCode === "SUCCESS";
-                          return (
-                            <tr
-                              key={log.UTD}
-                              onDoubleClick={() => handleOpenTrainModal(log)}
-                              className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors cursor-pointer group"
-                              title="Double-click to Train AI with this Query"
-                            >
-                              <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">
-                                <div className="truncate group-hover:text-primary transition-colors">
-                                  {log.userQuery}
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
-                                  {log.intent || "GENERAL"}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-mono text-lg truncate max-w-[130px]">
-                                {log.tablesUsed || "EMPLOYEEMASTER"}
-                              </td>
-                              <td className="py-3.5 px-4 max-w-xs">
-                                {log.generatedSql ? (
-                                  <pre className="p-1.5 rounded bg-[#0f172a] text-[#93c5fd] font-mono text-[11px] truncate">
-                                    <code>{log.generatedSql}</code>
-                                  </pre>
-                                ) : (
-                                  <span className="text-[#94a3b8] text-lg italic">No SQL generated</span>
-                                )}
-                              </td>
-                              <td className="py-3.5 px-4 text-center font-bold text-[#193A69] dark:text-white">
-                                {log.rowsReturned || 0}
-                              </td>
-                              <td className="py-3.5 px-4 text-center text-[#64748b] dark:text-[#94a3b8] text-lg">
-                                {log.executionTimeMs}ms
-                              </td>
-                              <td className="py-3.5 px-4 text-center">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-lg font-bold ${
-                                    isSuccess
+                      </thead>
+                      <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#334155] text-lg">
+                        {isLoading ? (
+                          <tr>
+                            <td colSpan={10} className="py-16 text-center text-[#64748b]">
+                              <RefreshCw className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+                              Loading telemetry logs...
+                            </td>
+                          </tr>
+                        ) : logs.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="py-16 text-center text-[#64748b]">
+                              <Database className="h-10 w-10 text-[#94a3b8] mx-auto mb-3" />
+                              <div className="text-lg font-bold text-[#193A69] dark:text-white">No Logs Found</div>
+                              <p className="text-lg text-[#94a3b8] mt-1">Try changing filters or ask questions in AI Assistant.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          logs.map((log) => {
+                            const isSuccess = log.statusCode === "SUCCESS";
+                            const cleanQ = (log.userQuery || "").toLowerCase().trim().replace(/[?!.,;:]/g, "");
+                            const isLogTrained = trainedQuestionsSet.has(cleanQ);
+                            return (
+                              <tr
+                                key={log.UTD}
+                                onDoubleClick={() => handleOpenTrainModal(log)}
+                                className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors cursor-pointer group"
+                                title="Double-click to Train AI with this Query"
+                              >
+                                <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">
+                                  <div className="truncate group-hover:text-primary transition-colors">
+                                    {log.userQuery}
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
+                                    {log.intent || "GENERAL"}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-[#64748b] dark:text-[#94a3b8] font-mono text-lg truncate max-w-[130px]">
+                                  {log.tablesUsed || "EMPLOYEEMASTER"}
+                                </td>
+                                <td className="py-3.5 px-4 max-w-xs">
+                                  {log.generatedSql ? (
+                                    <pre className="p-1.5 rounded bg-[#0f172a] text-[#93c5fd] font-mono text-lg truncate">
+                                      <code>{log.generatedSql}</code>
+                                    </pre>
+                                  ) : (
+                                    <span className="text-[#94a3b8] text-lg italic">No SQL generated</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 text-center font-bold text-[#193A69] dark:text-white">
+                                  {log.rowsReturned || 0}
+                                </td>
+                                <td className="py-3.5 px-4 text-center text-[#64748b] dark:text-[#94a3b8] text-lg">
+                                  {log.executionTimeMs}ms
+                                </td>
+                                <td className="py-3.5 px-4 text-center">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-lg font-bold ${isSuccess
                                       ? "bg-[#ecfdf5] dark:bg-[#022c22]/50 text-[#059669] dark:text-[#34d399] border border-[#a7f3d0]"
                                       : "bg-[#fff1f2] dark:bg-[#450a0a]/50 text-[#e11d48] dark:text-[#fda4af] border border-[#fecaca]"
-                                  }`}
-                                >
-                                  {isSuccess ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                  {log.statusCode}
-                                </span>
-                                {isSuccess && (log.rowsReturned === 0 || log.rowsReturned === null) && (
-                                  <span className="mt-0.5 flex items-center gap-0.5 text-[10px] font-bold text-[#d97706] dark:text-[#fde68a]">
-                                    ⚠ 0 rows
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 px-4 whitespace-nowrap">
-                                {(() => {
-                                  const dt = formatAuditDateTime(log.createdAt);
-                                  return (
-                                    <div className="flex flex-col">
-                                      <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-lg tracking-tight">
-                                        {dt.time}
-                                      </span>
-                                      <span className="text-[11px] font-medium text-[#94a3b8]">
-                                        {dt.date}
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
-                              </td>
-                              <td className="py-3.5 px-4 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {!isSuccess || (log.rowsReturned === 0 || log.rowsReturned === null) ? (
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleOpenTrainModal(log);
-                                      }}
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1 animate-pulse"
-                                      title="Fix this failed query — train AI with correct SQL"
-                                    >
-                                      <Zap className="h-3.5 w-3.5 fill-current" />
-                                      Fix & Train
-                                    </Button>
-                                  ) : (
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleOpenTrainModal(log);
-                                      }}
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 px-2.5 text-lg font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 gap-1"
-                                    >
-                                      <Zap className="h-3.5 w-3.5 fill-current" />
-                                      Train
-                                    </Button>
-                                  )}
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedRecord(log);
-                                    }}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-[#64748b] hover:text-[#193A69]"
+                                      }`}
                                   >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                                    {isSuccess ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                    {log.statusCode}
+                                  </span>
+                                  {isSuccess && (log.rowsReturned === 0 || log.rowsReturned === null) && (
+                                    <span className="mt-0.5 flex items-center gap-0.5 text-lg font-bold text-[#d97706] dark:text-[#fde68a]">
+                                      ⚠ 0 rows
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 whitespace-nowrap">
+                                  {(() => {
+                                    const dt = formatAuditDateTime(log.createdAt);
+                                    return (
+                                      <div className="flex flex-col">
+                                        <span className="font-semibold text-[#1e293b] dark:text-[#f1f5f9] text-lg tracking-tight">
+                                          {dt.time}
+                                        </span>
+                                        <span className="text-lg font-medium text-[#94a3b8]">
+                                          {dt.date}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                    {isLogTrained ? (
+                                      <div className="flex items-center gap-1">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-lg font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                                          <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                          Golden
+                                        </span>
+                                        <Button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenTrainModal(log);
+                                          }}
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 px-2 text-lg font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-700"
+                                          title="Edit Golden Rule"
+                                        >
+                                          <Edit3 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {/* Quick Verify / Reject */}
+                                        {isSuccess && log.generatedSql && (log.rowsReturned ?? 0) > 0 && (
+                                          <>
+                                            <Button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleQuickVerifyGolden(log);
+                                              }}
+                                              disabled={verifyingUtd === log.UTD}
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 px-2 text-lg font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 gap-1 shadow-2xs"
+                                              title="Mark as correct Golden Rule immediately"
+                                            >
+                                              {verifyingUtd === log.UTD ? (
+                                                <RefreshCw className="h-3 w-3 animate-spin" />
+                                              ) : (
+                                                <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                              )}
+                                              Right
+                                            </Button>
+                                            <Button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenRejectModal(log);
+                                              }}
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 px-2 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#ffe4e6] dark:hover:bg-[#450a0a]/60 gap-1 shadow-2xs"
+                                              title="Mark as Wrong / Failed and write developer remark"
+                                            >
+                                              <X className="h-3 w-3 text-[#e11d48] dark:text-[#fda4af]" />
+                                              Wrong
+                                            </Button>
+                                          </>
+                                        )}
 
-            {/* Pagination Controls - only for table view (conversation view uses sidebar lazy loading) */}
-            {viewMode === "table" && pagination.totalPages > 1 && (
-              <div className="bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl px-6 py-4 shadow-xs flex items-center justify-between">
-                <span className="text-sm sm:text-base text-[#64748b] dark:text-[#94a3b8]">
-                  Showing page <span className="font-bold text-[#1e293b] dark:text-white">{pagination.page}</span> of{" "}
-                  <span className="font-bold text-[#1e293b] dark:text-white">{pagination.totalPages}</span> ({pagination.totalRecords} records)
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => fetchAuditLogs(pagination.page - 1, statusFilter, searchTerm)}
-                    disabled={pagination.page <= 1}
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-3 gap-1 text-xs sm:text-sm font-semibold"
-                  >
-                    <ChevronLeft className="h-4 w-4" /> Prev
-                  </Button>
-                  <Button
-                    onClick={() => fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm)}
-                    disabled={pagination.page >= pagination.totalPages}
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-3 gap-1 text-xs sm:text-sm font-semibold"
-                  >
-                    Next <ChevronRight className="h-4 w-4" />
-                  </Button>
+                                        {!isSuccess || (log.rowsReturned === 0 || log.rowsReturned === null) ? (
+                                          <Button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenTrainModal(log);
+                                            }}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#fecdd3] gap-1 shadow-2xs"
+                                            title="Fix this failed query — train AI with correct SQL"
+                                          >
+                                            <Zap className="h-3.5 w-3.5 fill-current" />
+                                            Sahi Karo
+                                          </Button>
+                                        ) : (
+                                          <Button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenTrainModal(log);
+                                            }}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2.5 text-lg font-bold text-[#d97706] hover:bg-[#fffbeb] dark:hover:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#78350f] gap-1 shadow-2xs"
+                                            title="Train Golden Rule from this query"
+                                          >
+                                            <Zap className="h-3.5 w-3.5 fill-current" />
+                                            Train
+                                          </Button>
+                                        )}
+                                      </>
+                                    )}
+
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedRecord(log);
+                                      }}
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 text-[#64748b] hover:text-[#193A69]"
+                                      title="View query details"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+
+                {/* Pagination Controls */}
+                {pagination.totalPages > 1 && (
+                  <div className="shrink-0 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl px-4 py-2.5 shadow-xs flex items-center justify-between">
+                    <span className="text-lg text-[#64748b] dark:text-[#94a3b8]">
+                      Showing page <span className="font-bold text-[#1e293b] dark:text-white">{pagination.page}</span> of{" "}
+                      <span className="font-bold text-[#1e293b] dark:text-white">{pagination.totalPages}</span> ({pagination.totalRecords} records)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => fetchAuditLogs(pagination.page - 1, statusFilter, searchTerm)}
+                        disabled={pagination.page <= 1}
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 gap-1 text-lg font-semibold"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" /> Prev
+                      </Button>
+                      <Button
+                        onClick={() => fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm)}
+                        disabled={pagination.page >= pagination.totalPages}
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 gap-1 text-lg font-semibold"
+                      >
+                        Next <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -2039,11 +2217,10 @@ export default function AIQueryAuditPage() {
                   <button
                     type="button"
                     onClick={() => setTrainActionType("GOLDEN")}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      trainActionType === "GOLDEN"
-                        ? "bg-[#eff6ff] dark:bg-[#1e3a8a]/40 border-[#3b82f6] dark:border-[#60a5fa] text-[#1e3a8a] dark:text-[#93c5fd] ring-2 ring-[#3b82f6]/30 shadow-xs"
-                        : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#93c5fd]"
-                    }`}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${trainActionType === "GOLDEN"
+                      ? "bg-[#eff6ff] dark:bg-[#1e3a8a]/40 border-[#3b82f6] dark:border-[#60a5fa] text-[#1e3a8a] dark:text-[#93c5fd] ring-2 ring-[#3b82f6]/30 shadow-xs"
+                      : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#93c5fd]"
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-lg">🏆 Golden Query</span>
@@ -2055,11 +2232,10 @@ export default function AIQueryAuditPage() {
                   <button
                     type="button"
                     onClick={() => setTrainActionType("CORRECTION")}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      trainActionType === "CORRECTION"
-                        ? "bg-[#fffbeb] dark:bg-[#78350f]/40 border-[#f59e0b] dark:border-[#fbbf24] text-[#92400e] dark:text-[#fde68a] ring-2 ring-[#f59e0b]/30 shadow-xs"
-                        : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#fcd34d]"
-                    }`}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${trainActionType === "CORRECTION"
+                      ? "bg-[#fffbeb] dark:bg-[#78350f]/40 border-[#f59e0b] dark:border-[#fbbf24] text-[#92400e] dark:text-[#fde68a] ring-2 ring-[#f59e0b]/30 shadow-xs"
+                      : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#fcd34d]"
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-lg">🎯 Bug Correction</span>
@@ -2071,11 +2247,10 @@ export default function AIQueryAuditPage() {
                   <button
                     type="button"
                     onClick={() => setTrainActionType("RULE")}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      trainActionType === "RULE"
-                        ? "bg-[#faf5ff] dark:bg-[#581c87]/40 border-[#a855f7] dark:border-[#c084fc] text-[#6b21a8] dark:text-[#e9d5ff] ring-2 ring-[#a855f7]/30 shadow-xs"
-                        : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#d8b4fe]"
-                    }`}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${trainActionType === "RULE"
+                      ? "bg-[#faf5ff] dark:bg-[#581c87]/40 border-[#a855f7] dark:border-[#c084fc] text-[#6b21a8] dark:text-[#e9d5ff] ring-2 ring-[#a855f7]/30 shadow-xs"
+                      : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#d8b4fe]"
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-lg">📜 Business Rule</span>
@@ -2087,11 +2262,10 @@ export default function AIQueryAuditPage() {
                   <button
                     type="button"
                     onClick={() => setTrainActionType("HELPFUL")}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      trainActionType === "HELPFUL"
-                        ? "bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] dark:border-[#10b981] text-[#064e3b] dark:text-[#a7f3d0] ring-2 ring-[#34d399]/30 shadow-xs"
-                        : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#6ee7b7]"
-                    }`}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${trainActionType === "HELPFUL"
+                      ? "bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] dark:border-[#10b981] text-[#064e3b] dark:text-[#a7f3d0] ring-2 ring-[#34d399]/30 shadow-xs"
+                      : "bg-[#f8fafc] dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:border-[#6ee7b7]"
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-lg">👍 Upvote & Boost</span>
@@ -2113,7 +2287,6 @@ export default function AIQueryAuditPage() {
                 </div>
                 <Input
                   value={trainQuery}
-                  readOnly
                   onChange={(e) => setTrainQuery(e.target.value)}
                   placeholder="e.g. Today's service reminders due list or Emp 1004 salary..."
                   className="h-11 text-lg font-medium bg-[#f8fafc] dark:bg-[#0f172a] border-[#cbd5e1] dark:border-[#334155] text-[#1e293b] dark:text-white"
@@ -2279,11 +2452,10 @@ export default function AIQueryAuditPage() {
                 {/* Live SQL Test Results Preview Box */}
                 {testResult && (
                   <div
-                    className={`p-3.5 rounded-xl border text-lg space-y-2 animate-in fade-in duration-150 ${
-                      testResult.success
-                        ? "bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] dark:border-[#10b981] text-[#064e3b] dark:text-[#a7f3d0]"
-                        : "bg-[#fff1f2] dark:bg-[#450a0a]/40 border-[#fecaca] dark:border-[#f43f5e] text-[#9f1239] dark:text-[#fca5a5]"
-                    }`}
+                    className={`p-3.5 rounded-xl border text-lg space-y-2 animate-in fade-in duration-150 ${testResult.success
+                      ? "bg-[#ecfdf5] dark:bg-[#022c22]/40 border-[#34d399] dark:border-[#10b981] text-[#064e3b] dark:text-[#a7f3d0]"
+                      : "bg-[#fff1f2] dark:bg-[#450a0a]/40 border-[#fecaca] dark:border-[#f43f5e] text-[#9f1239] dark:text-[#fca5a5]"
+                      }`}
                   >
                     <div className="flex items-center justify-between font-bold">
                       <span className="flex items-center gap-1.5">
@@ -2422,9 +2594,25 @@ export default function AIQueryAuditPage() {
                   size="sm"
                   className="h-9 px-3 gap-1.5 text-lg font-bold bg-[#f59e0b] hover:bg-[#d97706] text-white"
                 >
-                  <Zap className="h-3.5 w-3.5 fill-current" />
+                  {/* <Zap className="h-3.5 w-3.5 fill-current" /> */}
                   Train this Query
                 </Button>
+                {selectedRecord.statusCode !== "FAILED" && (
+                  <Button
+                    onClick={() => {
+                      const rec = selectedRecord;
+                      setSelectedRecord(null);
+                      handleOpenRejectModal(rec);
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-3 gap-1.5 text-lg font-bold bg-[#fff1f2] dark:bg-[#450a0a]/40 text-[#e11d48] dark:text-[#fda4af] border border-[#fecdd3] dark:border-[#881337] hover:bg-[#ffe4e6]"
+                    title="Mark this query as Wrong / Failed and log remark"
+                  >
+                    {/* <X className="h-3.5 w-3.5" /> */}
+                    Mark as Failed
+                  </Button>
+                )}
                 <Button
                   onClick={() => setSelectedRecord(null)}
                   variant="ghost"
@@ -2438,6 +2626,24 @@ export default function AIQueryAuditPage() {
 
             {/* Modal Scrollable Body */}
             <div className="p-6 overflow-y-auto space-y-6 text-lg sm:text-base">
+              {/* Developer / Issue Remark Alert */}
+              {selectedRecord.errorMessage && (
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="font-bold text-rose-700 dark:text-rose-300 text-lg flex items-center justify-between">
+                      <span>Developer / Issue Remark</span>
+                      <span className="text-lg px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-bold">
+                        Reported Issue
+                      </span>
+                    </div>
+                    <p className="text-rose-800 dark:text-rose-200 text-lg whitespace-pre-wrap leading-relaxed mt-1 font-medium">
+                      {selectedRecord.errorMessage.replace(/^Marked as FAILED via user feedback:\s*/i, "")}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* 1. User Question */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -2528,7 +2734,7 @@ export default function AIQueryAuditPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] flex items-center justify-between">
+            <div className="px-6 py-4 border-t border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] flex items-center  gap-2 justify-between">
               <Button
                 onClick={() => {
                   const rec = selectedRecord;
@@ -2539,7 +2745,7 @@ export default function AIQueryAuditPage() {
                 size="sm"
                 className="h-9 px-4 gap-2 text-lg font-bold bg-[#f59e0b] hover:bg-[#d97706] text-white shadow-xs"
               >
-                <Zap className="h-4 w-4 fill-current" />
+                {/* <Zap className="h-4 w-4 fill-current" /> */}
                 Train / Fine-Tune Model
               </Button>
 
@@ -2550,6 +2756,113 @@ export default function AIQueryAuditPage() {
                 className="h-9 px-5 text-lg font-bold border-[#cbd5e1] dark:border-[#334155] text-[#193A69] dark:text-white"
               >
                 Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── REJECT / MARK AS FAILED MODAL (WITH OPTIONAL DEVELOPER REMARK) ── */}
+      {rejectModalRecord && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl border border-[#e2e8f0] dark:border-[#334155] shadow-2xl max-w-xl w-full flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-[#e2e8f0] dark:border-[#334155] flex items-center justify-between bg-[#fff1f2] dark:bg-[#450a0a]/50">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-[#e11d48] text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                  <XCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-[#9f1239] dark:text-[#fda4af]">
+                    Mark Query as Wrong / Failed
+                  </h3>
+                  <p className="text-lg text-[#be123c] dark:text-[#fca5a5]">
+                    • Move to Failed & Log Remark for Developers
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setRejectModalRecord(null)}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 rounded-full text-[#9f1239] dark:text-[#fda4af] hover:bg-rose-200/50 dark:hover:bg-rose-950/60"
+              >
+                <X className="h-8 w-8" />
+              </Button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              {/* Question Preview */}
+              <div className="space-y-1">
+                <label className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">
+                  User Question:
+                </label>
+                <div className="p-3 rounded-xl bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155] text-lg font-semibold text-[#1e293b] dark:text-white">
+                  {rejectModalRecord.userQuery}
+                </div>
+              </div>
+
+              {/* Executed SQL Preview */}
+              {rejectModalRecord.generatedSql && (
+                <div className="space-y-1">
+                  <label className="text-lg font-bold text-[#64748b] dark:text-[#94a3b8] uppercase">
+                    Executed SQL:
+                  </label>
+                  <pre className="p-2.5 rounded-lg bg-[#0f172a] text-[#93c5fd] font-mono text-lg overflow-x-auto border border-[#334155] max-h-64">
+                    <code>{rejectModalRecord.generatedSql}</code>
+                  </pre>
+                </div>
+              )}
+
+              {/* Developer Remark Input (Optional) */}
+              <div className="space-y-1.5">
+                <label className="text-lg font-bold text-[#193A69] dark:text-white flex items-center gap-1.5">
+                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                  Developer / Issue Remark <span className="text-[#94a3b8] font-normal">(Optional)</span>:
+                </label>
+                <textarea
+                  placeholder="Kya dikkat aayi? (e.g. SQL ne galat column select kiya, calculation wrong hai, ya galat employee filter ho gaya)..."
+                  value={rejectRemark}
+                  onChange={(e) => setRejectRemark(e.target.value)}
+                  rows={3}
+                  className="w-full p-3 text-lg bg-[#f8fafc] dark:bg-[#0f172a] border border-[#e2e8f0] dark:border-[#334155] text-[#1e293b] dark:text-white placeholder:text-[#94a3b8] rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#e11d48]"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 border-t border-[#e2e8f0] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#0f172a] flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                onClick={() => setRejectModalRecord(null)}
+                variant="outline"
+                size="sm"
+                disabled={isSubmittingReject}
+                className="h-9 px-4 text-lg font-semibold border-[#cbd5e1] dark:border-[#334155]"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmReject}
+                disabled={isSubmittingReject}
+                variant="outline"
+                size="sm"
+                className="h-9 px-4 text-lg font-bold bg-[#e11d48] hover:bg-[#be123c] text-white gap-1.5 shadow-xs"
+              >
+                {isSubmittingReject ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4" />
+                    Confirm Mark as Failed
+                  </>
+                )}
               </Button>
             </div>
           </div>
