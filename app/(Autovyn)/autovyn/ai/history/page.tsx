@@ -201,6 +201,18 @@ export default function AIQueryAuditPage() {
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── SESSION-WISE STATE (FOR GUARANTEED 100% QUESTION COMPLETENESS) ──
+  const [sessions, setSessions] = useState<ConversationGroup[]>([]);
+  const [sessionPagination, setSessionPagination] = useState<PaginationMeta>({
+    page: 1,
+    limit: 50,
+    totalRecords: 0,
+    totalPages: 1,
+    hasMore: false,
+  });
+  const [sessionQueriesCache, setSessionQueriesCache] = useState<Record<string, AuditLogRecord[]>>({});
+  const [isLoadingSessionQueries, setIsLoadingSessionQueries] = useState<boolean>(false);
+
   // ── HEADER HEIGHT & STICKY OFFSET MEASUREMENT ──
   const headerRef = useRef<HTMLElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState<number>(84);
@@ -343,89 +355,141 @@ export default function AIQueryAuditPage() {
     return s;
   }, [trainedRules]);
 
+  // ── FETCH SESSION-WISE SUMMARIES ──
+  const fetchSessions = useCallback(
+    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm, isAppend = false) => {
+      if (isAppend) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
+      try {
+        const res = await axios.get(`${BASE_URL}/ai/audit`, {
+          headers: buildAIHeaders(),
+          params: {
+            mode: "sessions",
+            page: pageNumber,
+            limit: sessionPagination.limit,
+            search: currentSearch.trim() || undefined,
+            status: currentStatus !== "ALL" ? currentStatus : undefined,
+          },
+        });
+
+        if (res.data?.success) {
+          const incoming: ConversationGroup[] = (res.data.data || []).map((s: any) => ({
+            conversationId: s.conversationId,
+            title: s.title || s.conversationTitle || s.firstQuery || `Session • ${String(s.conversationId).slice(0, 8)}...`,
+            userId: s.userId,
+            empCode: s.empCode,
+            role: s.role,
+            compCode: s.compCode,
+            queries: [],
+            totalQueries: s.totalQueries || 0,
+            successCount: s.successCount || 0,
+            failedCount: s.failedCount || 0,
+            avgExecutionTimeMs: s.avgExecutionTimeMs || 0,
+            totalRows: s.totalRows || 0,
+            latestCreatedAt: s.latestCreatedAt || s.Created_At || "",
+            earliestCreatedAt: s.earliestCreatedAt || s.Created_At || "",
+          }));
+
+          if (isAppend) {
+            setSessions((prev) => {
+              const existingIds = new Set(prev.map((g) => g.conversationId));
+              const newUnique = incoming.filter((g) => !existingIds.has(g.conversationId));
+              return [...prev, ...newUnique];
+            });
+          } else {
+            setSessions(incoming);
+            if (incoming.length > 0) {
+              setSelectedSessionId((prev) => {
+                if (prev && incoming.some((s) => s.conversationId === prev)) {
+                  return prev;
+                }
+                return incoming[0].conversationId;
+              });
+            } else {
+              setSelectedSessionId(null);
+            }
+          }
+
+          if (res.data.stats) setStats(res.data.stats);
+          if (res.data.pagination) setSessionPagination(res.data.pagination);
+        }
+      } catch (err) {
+        console.error("Failed to load AI sessions:", err);
+      } finally {
+        if (isAppend) {
+          setIsLoadingMore(false);
+        } else {
+          setIsLoading(false);
+        }
+      }
+    },
+    [buildAIHeaders, sessionPagination.limit, searchTerm, statusFilter]
+  );
+
+  // ── FETCH COMPLETE QUESTIONS FOR A SINGLE SESSION (CHRONOLOGICAL ORDER) ──
+  const fetchSessionQueries = useCallback(
+    async (cid: string, force = false) => {
+      if (!cid) return;
+      if (!force && sessionQueriesCache[cid] && sessionQueriesCache[cid].length > 0) {
+        return;
+      }
+      setIsLoadingSessionQueries(true);
+      try {
+        const res = await axios.get(`${BASE_URL}/ai/audit`, {
+          headers: buildAIHeaders(),
+          params: {
+            conversationId: cid,
+            limit: 500,
+          },
+        });
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const records: AuditLogRecord[] = res.data.data;
+          setSessionQueriesCache((prev) => ({
+            ...prev,
+            [cid]: records,
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to load conversation questions:", err);
+      } finally {
+        setIsLoadingSessionQueries(false);
+      }
+    },
+    [buildAIHeaders, sessionQueriesCache]
+  );
+
   // Initial load
   useEffect(() => {
+    fetchSessions(1, "ALL", "");
     fetchAuditLogs(1, "ALL", "");
     fetchTrainedRules();
   }, []);
 
-  // Group logs by Conversation ID
-  const conversationGroups = useMemo<ConversationGroup[]>(() => {
-    const map = new Map<string, ConversationGroup>();
-
-    logs.forEach((log) => {
-      const rawCid = log.conversationId ? String(log.conversationId).trim() : "";
-      const cid = rawCid && rawCid !== "null" && rawCid !== "undefined" ? rawCid : `direct_${log.UTD}`;
-
-      if (!map.has(cid)) {
-        map.set(cid, {
-          conversationId: cid,
-          title: log.conversationTitle || (rawCid ? `Session • ${rawCid.slice(0, 8)}...` : log.userQuery || "Direct Query"),
-          userId: log.userId,
-          empCode: log.empCode,
-          role: log.role,
-          queries: [],
-          totalQueries: 0,
-          successCount: 0,
-          failedCount: 0,
-          avgExecutionTimeMs: 0,
-          totalRows: 0,
-          latestCreatedAt: log.createdAt,
-          earliestCreatedAt: log.createdAt,
-        });
-      }
-
-      const group = map.get(cid)!;
-      group.queries.push(log);
-      group.totalQueries++;
-      if (log.statusCode === "SUCCESS") group.successCount++;
-      else group.failedCount++;
-      group.totalRows += (log.rowsReturned || 0);
-
-      if (log.conversationTitle && (!group.title || group.title.startsWith("Session • ") || group.title === "Direct Query")) {
-        group.title = log.conversationTitle;
-      }
-      if (new Date(log.createdAt).getTime() > new Date(group.latestCreatedAt).getTime()) {
-        group.latestCreatedAt = log.createdAt;
-      }
-      if (new Date(log.createdAt).getTime() < new Date(group.earliestCreatedAt).getTime()) {
-        group.earliestCreatedAt = log.createdAt;
-      }
-    });
-
-    const result = Array.from(map.values()).map((g) => {
-      const sumLatency = g.queries.reduce((acc, q) => acc + (q.executionTimeMs || 0), 0);
-      g.avgExecutionTimeMs = g.queries.length > 0 ? Math.round(sumLatency / g.queries.length) : 0;
-      // Sort queries within the conversation chronologically (turn 1, turn 2, ...)
-      g.queries.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      // If title is just Session ID fallback, pick the first user query as conversation title
-      if (!g.title || g.title.startsWith("Session • ") || g.title === "Direct Query") {
-        g.title = g.queries[0]?.userQuery || g.title;
-      }
-      return g;
-    });
-
-    // Sort conversations so the newest active conversation is on top
-    result.sort((a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime());
-    return result;
-  }, [logs]);
-
-  // Auto-select the first conversation when loaded or updated
+  // When selectedSessionId changes, automatically fetch all questions for that session
   useEffect(() => {
-    if (conversationGroups.length > 0) {
-      setSelectedSessionId((prev) => {
-        if (prev && conversationGroups.some((g) => g.conversationId === prev)) {
-          return prev;
-        }
-        return conversationGroups[0].conversationId;
-      });
-    } else {
-      setSelectedSessionId(null);
+    if (selectedSessionId && viewMode === "conversation") {
+      fetchSessionQueries(selectedSessionId);
     }
-  }, [conversationGroups]);
+  }, [selectedSessionId, viewMode, fetchSessionQueries]);
+
+  // Derived active session with guaranteed complete queries
+  const activeSession = useMemo<ConversationGroup | null>(() => {
+    if (!selectedSessionId) return sessions[0] || null;
+    const found = sessions.find((s) => s.conversationId === selectedSessionId) || sessions[0];
+    if (!found) return null;
+    const cachedQueries = sessionQueriesCache[found.conversationId] || [];
+    return {
+      ...found,
+      queries: cachedQueries,
+      totalQueries: cachedQueries.length || found.totalQueries,
+    };
+  }, [selectedSessionId, sessions, sessionQueriesCache]);
 
   const filteredSidebarSessions = useMemo(() => {
-    let list = conversationGroups;
+    let list = sessions;
     if (sidebarFilter === "SUCCESS") {
       list = list.filter((g) => g.failedCount === 0);
     } else if (sidebarFilter === "FAILED") {
@@ -439,33 +503,31 @@ export default function AIQueryAuditPage() {
         g.conversationId?.toLowerCase().includes(q) ||
         g.userId?.toLowerCase().includes(q) ||
         g.empCode?.toLowerCase().includes(q) ||
-        g.queries?.some((item) => item.userQuery?.toLowerCase().includes(q))
+        (sessionQueriesCache[g.conversationId] &&
+          sessionQueriesCache[g.conversationId].some((item) => item.userQuery?.toLowerCase().includes(q)))
     );
-  }, [conversationGroups, sessionSearch, sidebarFilter]);
-
-  const activeSession = useMemo(() => {
-    if (!selectedSessionId) return conversationGroups[0] || null;
-    return (
-      conversationGroups.find((g) => g.conversationId === selectedSessionId) ||
-      conversationGroups[0] ||
-      null
-    );
-  }, [conversationGroups, selectedSessionId]);
+  }, [sessions, sessionSearch, sidebarFilter, sessionQueriesCache]);
 
   const handleLoadMore = useCallback(async () => {
-    if (isLoading || isLoadingMore) return;
-    if (pagination.page >= pagination.totalPages) return;
-    await fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm, true);
-  }, [fetchAuditLogs, isLoading, isLoadingMore, pagination.page, pagination.totalPages, statusFilter, searchTerm]);
+    if (viewMode === "conversation") {
+      if (isLoading || isLoadingMore) return;
+      if (sessionPagination.page >= sessionPagination.totalPages) return;
+      await fetchSessions(sessionPagination.page + 1, statusFilter, searchTerm, true);
+    } else {
+      if (isLoading || isLoadingMore) return;
+      if (pagination.page >= pagination.totalPages) return;
+      await fetchAuditLogs(pagination.page + 1, statusFilter, searchTerm, true);
+    }
+  }, [viewMode, fetchSessions, fetchAuditLogs, isLoading, isLoadingMore, sessionPagination.page, sessionPagination.totalPages, pagination.page, pagination.totalPages, statusFilter, searchTerm]);
 
   const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
-      if (!isLoading && !isLoadingMore && pagination.page < pagination.totalPages) {
+      if (!isLoading && !isLoadingMore && sessionPagination.page < sessionPagination.totalPages) {
         handleLoadMore();
       }
     }
-  }, [isLoading, isLoadingMore, pagination.page, pagination.totalPages, handleLoadMore]);
+  }, [isLoading, isLoadingMore, sessionPagination.page, sessionPagination.totalPages, handleLoadMore]);
 
   // Infinite scroll listener via IntersectionObserver for sentinel element
   useEffect(() => {
@@ -479,7 +541,7 @@ export default function AIQueryAuditPage() {
           entries[0]?.isIntersecting &&
           !isLoading &&
           !isLoadingMore &&
-          pagination.page < pagination.totalPages
+          sessionPagination.page < sessionPagination.totalPages
         ) {
           handleLoadMore();
         }
@@ -489,22 +551,54 @@ export default function AIQueryAuditPage() {
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [viewMode, isLoading, isLoadingMore, pagination.page, pagination.totalPages, handleLoadMore]);
+  }, [viewMode, isLoading, isLoadingMore, sessionPagination.page, sessionPagination.totalPages, handleLoadMore]);
 
   const handleStatusChange = (newStatus: string) => {
     setStatusFilter(newStatus);
-    fetchAuditLogs(1, newStatus, searchTerm);
+    if (viewMode === "conversation") {
+      fetchSessions(1, newStatus, searchTerm);
+    } else {
+      fetchAuditLogs(1, newStatus, searchTerm);
+    }
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    fetchAuditLogs(1, statusFilter, searchTerm);
+    if (viewMode === "conversation") {
+      fetchSessions(1, statusFilter, searchTerm);
+    } else {
+      fetchAuditLogs(1, statusFilter, searchTerm);
+    }
   };
 
   const handleResetFilters = () => {
     setSearchTerm("");
     setStatusFilter("ALL");
-    fetchAuditLogs(1, "ALL", "");
+    if (viewMode === "conversation") {
+      fetchSessions(1, "ALL", "");
+    } else {
+      fetchAuditLogs(1, "ALL", "");
+    }
+  };
+
+  const handleRefresh = () => {
+    if (viewMode === "conversation") {
+      if (selectedSessionId) {
+        fetchSessionQueries(selectedSessionId, true);
+      }
+      fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+    } else {
+      fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+    }
+  };
+
+  const handleViewModeChange = (mode: "conversation" | "table") => {
+    setViewMode(mode);
+    if (mode === "conversation" && sessions.length === 0) {
+      fetchSessions(1, statusFilter, searchTerm);
+    } else if (mode === "table" && logs.length === 0) {
+      fetchAuditLogs(1, statusFilter, searchTerm);
+    }
   };
 
   const handleCopy = (text: string, fieldId: string) => {
@@ -758,8 +852,23 @@ export default function AIQueryAuditPage() {
           title: "🎉 AI Model Trained Successfully!",
           description: "Golden query and correction rules saved. In-memory caches purged for instant learning.",
         });
+        if (trainRecord?.conversationId) {
+          setSessionQueriesCache((prev) => {
+            const currentQueries = prev[trainRecord.conversationId!] || [];
+            return {
+              ...prev,
+              [trainRecord.conversationId!]: currentQueries.map((l) =>
+                l.UTD === trainRecord.UTD ? { ...l, generatedSql: trainSql, statusCode: "SUCCESS" } : l
+              ),
+            };
+          });
+        }
         setTrainModalOpen(false);
-        fetchAuditLogs(pagination.page, statusFilter, searchTerm);
+        if (viewMode === "conversation") {
+          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+        } else {
+          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+        }
         fetchTrainedRules();
       } else {
         toast({
@@ -811,7 +920,25 @@ export default function AIQueryAuditPage() {
           title: "🎉 Verified & Trained Successfully!",
           description: `"${record.userQuery.slice(0, 45)}..." is now saved as Golden Rule in AI memory.`,
         });
-        fetchAuditLogs(pagination.page, statusFilter, searchTerm);
+        if (record.conversationId) {
+          setSessionQueriesCache((prev) => {
+            const currentQueries = prev[record.conversationId!] || [];
+            return {
+              ...prev,
+              [record.conversationId!]: currentQueries.map((l) =>
+                l.UTD === record.UTD ? { ...l, statusCode: "SUCCESS" } : l
+              ),
+            };
+          });
+        }
+        setLogs((prev) =>
+          prev.map((l) => (l.UTD === record.UTD ? { ...l, statusCode: "SUCCESS" } : l))
+        );
+        if (viewMode === "conversation") {
+          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+        } else {
+          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+        }
         fetchTrainedRules();
       }
     } catch (err: any) {
@@ -855,6 +982,25 @@ export default function AIQueryAuditPage() {
         });
 
         // 0ms instant optimistic UI state update
+        if (rejectModalRecord.conversationId) {
+          setSessionQueriesCache((prev) => {
+            const currentQueries = prev[rejectModalRecord.conversationId!] || [];
+            return {
+              ...prev,
+              [rejectModalRecord.conversationId!]: currentQueries.map((l) =>
+                l.UTD === rejectModalRecord.UTD
+                  ? {
+                      ...l,
+                      statusCode: "FAILED",
+                      errorMessage: trimmedRemark
+                        ? `Marked as FAILED via user feedback: ${trimmedRemark}`
+                        : "Marked as FAILED via user feedback",
+                    }
+                  : l
+              ),
+            };
+          });
+        }
         setLogs((prev) =>
           prev.map((l) =>
             l.UTD === rejectModalRecord.UTD
@@ -871,7 +1017,11 @@ export default function AIQueryAuditPage() {
 
         setRejectModalRecord(null);
         setRejectRemark("");
-        fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+        if (viewMode === "conversation") {
+          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+        } else {
+          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+        }
       } else {
         toast({
           title: "Action Failed",
@@ -891,7 +1041,21 @@ export default function AIQueryAuditPage() {
   };
 
   const handleExportCSV = () => {
-    if (!logs.length) return;
+    const recordsToExport =
+      viewMode === "conversation"
+        ? activeSession?.queries?.length
+          ? activeSession.queries
+          : Object.values(sessionQueriesCache).flat()
+        : logs;
+
+    if (!recordsToExport.length) {
+      toast({
+        title: "No Data to Export",
+        description: "There are no query logs available to export.",
+        variant: "destructive",
+      });
+      return;
+    }
     const headers = [
       "UTD",
       "Date Time",
@@ -908,7 +1072,7 @@ export default function AIQueryAuditPage() {
       "Status",
     ];
 
-    const rows = logs.map((l) => [
+    const rows = recordsToExport.map((l) => [
       l.UTD,
       `"${formatAuditDateTime(l.createdAt).full}"`,
       `"${l.userId || ""}"`,
@@ -1012,22 +1176,15 @@ export default function AIQueryAuditPage() {
                 {trainedRules.length}
               </span>
             </button>
-         
-
           </div>
 
-
-
-
-
-        <div className="flex justify-end items-center gap-4 w-full ">
-            {activeTab === "audit" && (
+          {activeTab === "audit" && (
             <>
               {/* View Mode Toggle: Conversation vs Flat Table */}
               <div className="flex justify-end items-center bg-[#f1f5f9] dark:bg-[#0f172a] p-0.5 rounded-lg border border-[#e2e8f0] dark:border-[#334155] shrink-0 flex-nowrap">
                 <button
                   type="button"
-                  onClick={() => setViewMode("conversation")}
+                  onClick={() => handleViewModeChange("conversation")}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                     viewMode === "conversation"
                       ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
@@ -1040,7 +1197,7 @@ export default function AIQueryAuditPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode("table")}
+                  onClick={() => handleViewModeChange("table")}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-lg font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                     viewMode === "table"
                       ? "bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shadow-xs"
@@ -1091,37 +1248,31 @@ export default function AIQueryAuditPage() {
               </div>
             </>
           )}
-        <div className="flex gap-2 items-center">
-          
-         
-         
 
-          
+          <div className="flex gap-2 items-center">
+            {/* Refresh Action */}
+            <Button
+              onClick={handleRefresh}
+              variant="input"
+              size="lg"
+              disabled={isLoading}
+              title="Refresh logs"
+              className="h-12 w-8 p-0 border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold shrink-0 shadow-xs cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
 
-          {/* Refresh Action */}
-          <Button
-            onClick={() => fetchAuditLogs(pagination.page, statusFilter, searchTerm)}
-            variant="input"
-            size="lg"
-            disabled={isLoading}
-            title="Refresh logs"
-            className="h-12 w-8 p-0 border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white font-bold shrink-0 shadow-xs cursor-pointer"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          </Button>
-
-          {/* Export CSV Action */}
-          <Button
-            onClick={handleExportCSV}
-            variant="outline"
-            size="sm"
-            title="Export CSV"
-            className="h-8 w-8 p-0 border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shrink-0 shadow-xs cursor-pointer"
-          >
-            <Download className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        </div>
+            {/* Export CSV Action */}
+            <Button
+              onClick={handleExportCSV}
+              variant="outline"
+              size="sm"
+              title="Export CSV"
+              className="h-8 w-8 p-0 border-[#e2e8f0] dark:border-[#334155] bg-white dark:bg-[#1e293b] text-[#193A69] dark:text-white shrink-0 shadow-xs cursor-pointer"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -1282,7 +1433,7 @@ export default function AIQueryAuditPage() {
                   <div className="text-base font-bold text-[#1e293b] dark:text-white">Loading conversations...</div>
                   <p className="text-lg text-[#94a3b8] mt-1">Grouping telemetry queries by conversation sessions</p>
                 </div>
-              ) : conversationGroups.length === 0 ? (
+              ) : sessions.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] rounded-xl p-16 text-center text-[#64748b] dark:text-[#94a3b8] shadow-xs">
                   <MessageSquare className="h-10 w-10 text-[#94a3b8] mx-auto mb-3 opacity-60" />
                   <div className="text-base font-bold text-[#193A69] dark:text-white">No Conversations Found</div>
@@ -1305,11 +1456,11 @@ export default function AIQueryAuditPage() {
                                 Sessions
                               </h3>
                               <span className="text-lg font-bold px-1.5 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#1e3a8a]/60 text-[#1d4ed8] dark:text-[#93c5fd]">
-                                {conversationGroups.length}
+                                {sessionPagination.totalRecords || sessions.length}
                               </span>
                             </div>
                             <span className="text-lg text-[#64748b] dark:text-[#94a3b8]">
-                              {logs.length} / {pagination.totalRecords || logs.length} turns loaded
+                              {sessions.length} sessions loaded
                             </span>
                           </div>
                         </div>
@@ -1317,7 +1468,7 @@ export default function AIQueryAuditPage() {
                         {/* Quick reload button */}
                         <button
                           type="button"
-                          onClick={() => fetchAuditLogs(1, statusFilter, searchTerm, false)}
+                          onClick={handleRefresh}
                           title="Reload latest sessions"
                           disabled={isLoading || isLoadingMore}
                           className="p-1.5 text-slate-500 hover:text-[#2563eb] dark:text-slate-400 dark:hover:text-[#93c5fd] hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 disabled:opacity-50"
@@ -1356,7 +1507,7 @@ export default function AIQueryAuditPage() {
                             : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                             }`}
                         >
-                          All ({conversationGroups.length})
+                          All ({sessions.length})
                         </button>
                         <button
                           type="button"
@@ -1366,7 +1517,7 @@ export default function AIQueryAuditPage() {
                             : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                             }`}
                         >
-                          ✓ OK ({conversationGroups.filter((g) => g.failedCount === 0).length})
+                          ✓ OK ({sessions.filter((g) => g.failedCount === 0).length})
                         </button>
                         <button
                           type="button"
@@ -1376,7 +1527,7 @@ export default function AIQueryAuditPage() {
                             : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                             }`}
                         >
-                          ⚠ Issues ({conversationGroups.filter((g) => g.failedCount > 0).length})
+                          ⚠ Issues ({sessions.filter((g) => g.failedCount > 0).length})
                         </button>
                       </div>
                     </div>
@@ -1406,7 +1557,7 @@ export default function AIQueryAuditPage() {
                           const dt = formatAuditDateTime(group.latestCreatedAt);
                           const allOk = group.failedCount === 0;
                           const isDirect = group.conversationId.startsWith("direct_");
-                          const firstQueryText = group.queries[0]?.userQuery || "";
+                          const firstQueryText = group.queries[0]?.userQuery || (group as any).firstQuery || "";
 
                           return (
                             <button
@@ -1431,7 +1582,10 @@ export default function AIQueryAuditPage() {
                                     {group.title}
                                   </span>
                                 </div>
-                                <span className="shrink-0 mt-0.5">
+                                <span className="shrink-0 mt-0.5 flex items-center gap-1.5">
+                                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                    {group.totalQueries} {group.totalQueries === 1 ? "turn" : "turns"}
+                                  </span>
                                   {allOk ? (
                                     <span
                                       className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block shadow-xs ring-2 ring-emerald-500/20"
@@ -1469,7 +1623,7 @@ export default function AIQueryAuditPage() {
                                 </span>
                                 <span className="shrink-0 flex items-center gap-1">
                                   <Clock className="h-2.5 w-2.5 opacity-70" />
-                                  <span>{dt.time}</span>
+                                  <span>{dt.time || dt.date}</span>
                                 </span>
                               </div>
                             </button>
@@ -1489,7 +1643,7 @@ export default function AIQueryAuditPage() {
                       <div ref={sentinelRef} className="h-2 w-full" />
 
                       {/* Manual fallback button if user reaches bottom */}
-                      {!isLoadingMore && pagination.page < pagination.totalPages && (
+                      {!isLoadingMore && sessionPagination.page < sessionPagination.totalPages && (
                         <button
                           type="button"
                           onClick={() => handleLoadMore()}
@@ -1497,14 +1651,14 @@ export default function AIQueryAuditPage() {
                           className="w-full py-2 px-3 text-lg font-semibold text-slate-600 hover:text-[#2563eb] dark:text-slate-400 dark:hover:text-[#93c5fd] hover:bg-[#eff6ff]/50 dark:hover:bg-slate-800 rounded-xl transition-all border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5"
                         >
                           <ChevronDown className="h-3.5 w-3.5" />
-                          <span>Load More Sessions ({logs.length} of {pagination.totalRecords})</span>
+                          <span>Load More Sessions ({sessions.length} of {sessionPagination.totalRecords})</span>
                         </button>
                       )}
 
                       {/* End of results message */}
-                      {!isLoadingMore && pagination.page >= pagination.totalPages && logs.length > 0 && (
+                      {!isLoadingMore && sessionPagination.page >= sessionPagination.totalPages && sessions.length > 0 && (
                         <div className="py-2.5 text-center text-lg text-slate-400 dark:text-slate-500 font-medium">
-                          ✓ All {conversationGroups.length} sessions loaded ({pagination.totalRecords} queries)
+                          ✓ All {sessionPagination.totalRecords || sessions.length} sessions loaded
                         </div>
                       )}
                     </div>
@@ -1621,7 +1775,24 @@ export default function AIQueryAuditPage() {
                             <span className="font-normal text-lg text-[#94a3b8]">Chronological Sequence</span>
                           </div>
 
-                          {activeSession.queries.map((q, turnIdx) => {
+                          {isLoadingSessionQueries ? (
+                            <div className="flex-1 flex flex-col items-center justify-center py-20 text-center text-[#64748b] dark:text-[#94a3b8]">
+                              <RefreshCw className="h-8 w-8 animate-spin text-[#193A69] dark:text-[#60a5fa] mx-auto mb-3" />
+                              <div className="text-base font-bold text-[#1e293b] dark:text-white">
+                                Loading all questions in this session...
+                              </div>
+                              <p className="text-lg text-[#94a3b8] mt-1">Retrieving complete chronological question flow</p>
+                            </div>
+                          ) : activeSession.queries.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center py-20 text-center text-[#64748b] dark:text-[#94a3b8]">
+                              <MessageSquare className="h-8 w-8 text-[#94a3b8] mx-auto mb-3 opacity-60" />
+                              <div className="text-base font-bold text-[#193A69] dark:text-white">
+                                No questions recorded in this session
+                              </div>
+                              <p className="text-lg text-[#94a3b8] mt-1">Try selecting another session or refreshing.</p>
+                            </div>
+                          ) : (
+                            activeSession.queries.map((q, turnIdx) => {
                             const qSuccess = q.statusCode === "SUCCESS";
                             const qDt = formatAuditDateTime(q.createdAt);
                             const cleanQ = (q.userQuery || "").toLowerCase().trim().replace(/[?!.,;:]/g, "");
@@ -1873,7 +2044,8 @@ export default function AIQueryAuditPage() {
                                 </div>
                               </div>
                             );
-                          })}
+                          })
+                          )}
                         </div>
                       </>
                     ) : (

@@ -524,4 +524,31 @@ export const treeData = [
       },
     ]
   },
+    {
+    title: "Attendance Policy",
+    url: "/autovyn/Attendance_policy",
+    ShortCut: "alt+m",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "16",
+    children: [
+      {
+        title: "Attendance Policy |",
+        key: "16.1",
+        url: "/autovyn/Attendance_policy",
+        children: [
+          {
+            title: "Attendance Policy | ",
+            key: "16.1.1",
+            url: "/autovyn/Attendance_policy",
+          },
+
+
+        ],
+      },
+    ]
+  },
 ];
