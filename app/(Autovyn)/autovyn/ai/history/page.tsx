@@ -239,6 +239,7 @@ export default function AIQueryAuditPage() {
   const [trainModalOpen, setTrainModalOpen] = useState<boolean>(false);
   const [isTraining, setIsTraining] = useState<boolean>(false);
   const [verifyingUtd, setVerifyingUtd] = useState<number | null>(null);
+  const [recentlyTrainedUtd, setRecentlyTrainedUtd] = useState<number | null>(null);
   const [trainRecord, setTrainRecord] = useState<AuditLogRecord | null>(null);
   const [editingRuleUtd, setEditingRuleUtd] = useState<number | null>(null);
   const [trainActionType, setTrainActionType] = useState<"GOLDEN" | "CORRECTION" | "RULE" | "HELPFUL">("GOLDEN");
@@ -287,10 +288,10 @@ export default function AIQueryAuditPage() {
   }, [user]);
 
   const fetchAuditLogs = useCallback(
-    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm, isAppend = false) => {
+    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm, isAppend = false, isSilent = false) => {
       if (isAppend) {
         setIsLoadingMore(true);
-      } else {
+      } else if (!isSilent) {
         setIsLoading(true);
       }
       try {
@@ -312,6 +313,11 @@ export default function AIQueryAuditPage() {
               const newUnique = incoming.filter((l) => !existingUtds.has(l.UTD));
               return [...prev, ...newUnique];
             });
+          } else if (isSilent) {
+            setLogs((prev) => {
+              const incomingMap = new Map(incoming.map((l) => [l.UTD, l]));
+              return prev.map((oldLog) => incomingMap.get(oldLog.UTD) || oldLog);
+            });
           } else {
             setLogs(incoming);
           }
@@ -323,7 +329,7 @@ export default function AIQueryAuditPage() {
       } finally {
         if (isAppend) {
           setIsLoadingMore(false);
-        } else {
+        } else if (!isSilent) {
           setIsLoading(false);
         }
       }
@@ -357,10 +363,10 @@ export default function AIQueryAuditPage() {
 
   // ── FETCH SESSION-WISE SUMMARIES ──
   const fetchSessions = useCallback(
-    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm, isAppend = false) => {
+    async (pageNumber = 1, currentStatus = statusFilter, currentSearch = searchTerm, isAppend = false, isSilent = false) => {
       if (isAppend) {
         setIsLoadingMore(true);
-      } else {
+      } else if (!isSilent) {
         setIsLoading(true);
       }
       try {
@@ -399,6 +405,15 @@ export default function AIQueryAuditPage() {
               const newUnique = incoming.filter((g) => !existingIds.has(g.conversationId));
               return [...prev, ...newUnique];
             });
+          } else if (isSilent) {
+            // SILENT UPDATE: Update session counts in-place without wiping out previous pages or jumping selection!
+            setSessions((prev) => {
+              const incomingMap = new Map(incoming.map((s) => [s.conversationId, s]));
+              return prev.map((oldSession) => {
+                const updated = incomingMap.get(oldSession.conversationId);
+                return updated ? { ...oldSession, ...updated, queries: oldSession.queries } : oldSession;
+              });
+            });
           } else {
             setSessions(incoming);
             if (incoming.length > 0) {
@@ -421,7 +436,7 @@ export default function AIQueryAuditPage() {
       } finally {
         if (isAppend) {
           setIsLoadingMore(false);
-        } else {
+        } else if (!isSilent) {
           setIsLoading(false);
         }
       }
@@ -852,6 +867,14 @@ export default function AIQueryAuditPage() {
           title: "🎉 AI Model Trained Successfully!",
           description: "Golden query and correction rules saved. In-memory caches purged for instant learning.",
         });
+
+        const targetUtd = trainRecord?.UTD || editingRuleUtd || null;
+        if (targetUtd) {
+          setRecentlyTrainedUtd(Number(targetUtd));
+          setTimeout(() => setRecentlyTrainedUtd(null), 8000);
+        }
+
+        // 1. Instantly update the question inside the session queries cache
         if (trainRecord?.conversationId) {
           setSessionQueriesCache((prev) => {
             const currentQueries = prev[trainRecord.conversationId!] || [];
@@ -862,12 +885,34 @@ export default function AIQueryAuditPage() {
               ),
             };
           });
+          // 2. Instantly update session counts in sidebar without moving or reordering
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.conversationId === trainRecord.conversationId
+                ? {
+                    ...s,
+                    successCount: s.successCount + 1,
+                    failedCount: Math.max(0, s.failedCount - 1),
+                  }
+                : s
+            )
+          );
         }
+
+        // 3. Instantly update flat table logs
+        setLogs((prev) =>
+          prev.map((l) =>
+            l.UTD === trainRecord?.UTD ? { ...l, generatedSql: trainSql, statusCode: "SUCCESS" } : l
+          )
+        );
+
         setTrainModalOpen(false);
+
+        // 4. Silent background refresh (NO LOADING SPINNERS, NO DOM UNMOUNT, NO SCROLL JUMP)
         if (viewMode === "conversation") {
-          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false, true);
         } else {
-          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false, true);
         }
         fetchTrainedRules();
       } else {
@@ -920,6 +965,10 @@ export default function AIQueryAuditPage() {
           title: "🎉 Verified & Trained Successfully!",
           description: `"${record.userQuery.slice(0, 45)}..." is now saved as Golden Rule in AI memory.`,
         });
+
+        setRecentlyTrainedUtd(Number(record.UTD));
+        setTimeout(() => setRecentlyTrainedUtd(null), 8000);
+
         if (record.conversationId) {
           setSessionQueriesCache((prev) => {
             const currentQueries = prev[record.conversationId!] || [];
@@ -930,14 +979,25 @@ export default function AIQueryAuditPage() {
               ),
             };
           });
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.conversationId === record.conversationId
+                ? {
+                    ...s,
+                    successCount: s.successCount + 1,
+                    failedCount: Math.max(0, s.failedCount - 1),
+                  }
+                : s
+            )
+          );
         }
         setLogs((prev) =>
           prev.map((l) => (l.UTD === record.UTD ? { ...l, statusCode: "SUCCESS" } : l))
         );
         if (viewMode === "conversation") {
-          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false, true);
         } else {
-          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false, true);
         }
         fetchTrainedRules();
       }
@@ -981,7 +1041,6 @@ export default function AIQueryAuditPage() {
           description: `Query #${rejectModalRecord.UTD} marked as FAILED with developer remark. Added to Issues list.`,
         });
 
-        // 0ms instant optimistic UI state update
         if (rejectModalRecord.conversationId) {
           setSessionQueriesCache((prev) => {
             const currentQueries = prev[rejectModalRecord.conversationId!] || [];
@@ -1000,6 +1059,17 @@ export default function AIQueryAuditPage() {
               ),
             };
           });
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.conversationId === rejectModalRecord.conversationId
+                ? {
+                    ...s,
+                    failedCount: s.failedCount + 1,
+                    successCount: Math.max(0, s.successCount - 1),
+                  }
+                : s
+            )
+          );
         }
         setLogs((prev) =>
           prev.map((l) =>
@@ -1015,12 +1085,16 @@ export default function AIQueryAuditPage() {
           )
         );
 
+        const targetUtd = rejectModalRecord.UTD;
+        setRecentlyTrainedUtd(Number(targetUtd));
+        setTimeout(() => setRecentlyTrainedUtd(null), 8000);
+
         setRejectModalRecord(null);
         setRejectRemark("");
         if (viewMode === "conversation") {
-          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false);
+          fetchSessions(sessionPagination.page, statusFilter, searchTerm, false, true);
         } else {
-          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false);
+          fetchAuditLogs(pagination.page, statusFilter, searchTerm, false, true);
         }
       } else {
         toast({
@@ -1797,10 +1871,14 @@ export default function AIQueryAuditPage() {
                             const qDt = formatAuditDateTime(q.createdAt);
                             const cleanQ = (q.userQuery || "").toLowerCase().trim().replace(/[?!.,;:]/g, "");
                             const isTurnTrained = trainedQuestionsSet.has(cleanQ);
+                            const isJustUpdated = recentlyTrainedUtd === q.UTD;
                             return (
                               <div
                                 key={q.UTD}
-                                className={`bg-white dark:bg-[#1e293b] border rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-shadow space-y-3 ${isTurnTrained
+                                id={`query-card-${q.UTD}`}
+                                className={`bg-white dark:bg-[#1e293b] border rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all duration-300 space-y-3 ${isJustUpdated
+                                  ? "border-emerald-500 ring-2 ring-emerald-500/50 bg-emerald-50/25 dark:bg-emerald-950/20"
+                                  : isTurnTrained
                                   ? "border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/15"
                                   : !qSuccess || q.rowsReturned === 0 || q.rowsReturned === null
                                     ? "border-rose-200 dark:border-rose-900/50"
@@ -1811,7 +1889,7 @@ export default function AIQueryAuditPage() {
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[#f1f5f9] dark:border-[#334155]/60">
                                   <div className="flex items-start gap-3 flex-1 min-w-0">
                                     {/* Question Badge e.g. Q1, Q2 */}
-                                    <span className={`px-2.5 py-1 rounded-lg text-white font-mono font-bold text-lg shrink-0 shadow-2xs ${isTurnTrained
+                                    <span className={`px-2.5 py-1 rounded-lg text-white font-mono font-bold text-lg shrink-0 shadow-2xs ${isJustUpdated || isTurnTrained
                                       ? "bg-emerald-600 dark:bg-emerald-700"
                                       : !qSuccess || q.rowsReturned === 0 || q.rowsReturned === null
                                         ? "bg-rose-600 dark:bg-rose-700"
@@ -1821,9 +1899,17 @@ export default function AIQueryAuditPage() {
                                     </span>
 
                                     <div className="flex-1 min-w-0">
-                                      <p className="font-bold text-lg sm:text-base text-[#193A69] dark:text-white break-words">
-                                        {q.userQuery}
-                                      </p>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="font-bold text-lg sm:text-base text-[#193A69] dark:text-white break-words">
+                                          {q.userQuery}
+                                        </p>
+                                        {isJustUpdated && (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-200 animate-pulse border border-emerald-300 dark:border-emerald-700">
+                                            <CheckCircle2 className="h-3 w-3" />
+                                            Just Solved & Saved
+                                          </span>
+                                        )}
+                                      </div>
                                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                         {/* Intent */}
                                         <span className="px-2 py-0.5 rounded text-lg font-bold bg-[#f1f5f9] dark:bg-[#334155] text-[#475569] dark:text-[#cbd5e1]">
@@ -2132,11 +2218,17 @@ export default function AIQueryAuditPage() {
                             const isSuccess = log.statusCode === "SUCCESS";
                             const cleanQ = (log.userQuery || "").toLowerCase().trim().replace(/[?!.,;:]/g, "");
                             const isLogTrained = trainedQuestionsSet.has(cleanQ);
+                            const isJustUpdated = recentlyTrainedUtd === log.UTD;
                             return (
                               <tr
                                 key={log.UTD}
+                                id={`log-row-${log.UTD}`}
                                 onDoubleClick={() => handleOpenTrainModal(log)}
-                                className="hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40 transition-colors cursor-pointer group"
+                                className={`transition-all duration-300 cursor-pointer group ${
+                                  isJustUpdated
+                                    ? "bg-emerald-50/80 dark:bg-emerald-950/40 ring-1 ring-emerald-500/50"
+                                    : "hover:bg-[#f8fafc] dark:hover:bg-[#0f172a]/40"
+                                }`}
                                 title="Double-click to Train AI with this Query"
                               >
                                 <td className="py-3.5 px-4 font-bold text-[#193A69] dark:text-white max-w-sm">

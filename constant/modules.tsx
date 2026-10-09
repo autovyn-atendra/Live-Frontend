@@ -82,7 +82,7 @@ export const treeData = [
             title: "Employee Face Data |",
             key: "9.1.4",
             url: "/autovyn/employee-master/face_data"
-          },  
+          },
           {
             title: "Employee Master Data Import |",
             key: "9.1.5",
@@ -524,7 +524,7 @@ export const treeData = [
       },
     ]
   },
-    {
+  {
     title: "Attendance Policy",
     url: "/autovyn/Attendance_policy",
     ShortCut: "alt+m",
@@ -544,6 +544,33 @@ export const treeData = [
             title: "Attendance Policy | ",
             key: "16.1.1",
             url: "/autovyn/Attendance_policy",
+          },
+
+
+        ],
+      },
+    ]
+  },
+  {
+    title: "CEO HRMS Dashboard",
+    url: "/autovyn/CEO_HRMS_Dashboard",
+    ShortCut: "alt+m",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "17",
+    children: [
+      {
+        title: "CEO HRMS Dashboard |",
+        key: "17.1",
+        url: "/autovyn/CEO_HRMS_Dashboard",
+        children: [
+          {
+            title: "CEO HRMS Dashboard | ",
+            key: "17.1.1",
+            url: "/autovyn/CEO_HRMS_Dashboard",
           },
 
 
