@@ -7,7 +7,7 @@ import {
   Settings, Clock, FileText, Eye, Plus, Edit, Trash2,
   ToggleLeft, ToggleRight, FileSpreadsheet, Search, Download, Check, X,
   CheckCircle, XCircle, Clock8, Award, AlertOctagon,
-  CalendarDays, MapPin, ChevronDown, ChevronUp, Lightbulb,AlertCircle
+  CalendarDays, MapPin, ChevronDown, ChevronUp, Lightbulb, AlertCircle
 } from "lucide-react";
 import Ainput from "@/components/atoms/Input";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
@@ -35,8 +35,8 @@ type StatusMasterData = {
   Allow_Days: string;
   Priority_Code: string;
   Region: string;
-  HALF: string | null;
-  HALF_VAL: string | null;
+  PresentValue: number | string | null;
+  AbsentValue: number | string | null;
   WEF: string;
   ABSENT: string | null;
 };
@@ -129,29 +129,36 @@ export default function AttendancePolicySetup() {
   const [editingPolicy, setEditingPolicy] = useState<string | null>(null);
   const [policyTableData, setPolicyTableData] = useState<PolicyTableData[]>([]);
   const [policyLogs, setPolicyLogs] = useState<any[]>([]);
-// Update the state initialization
-const [hardcodedPolicies, setHardcodedPolicies] = useState<HardcodedPolicy[]>([]);
-const [loadingPolicies, setLoadingPolicies] = useState(false);
+  // Update the state initialization
+  const [hardcodedPolicies, setHardcodedPolicies] = useState<HardcodedPolicy[]>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+  const [policyConflict, setPolicyConflict] = useState<{
+    exists: boolean;
+    message: string;
+    conflictingLocations: string[];
+    conflicts: any[];
+  } | null>(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
 
-// Add a function to fetch predefined policies
-const fetchPredefinedPolicies = async () => {
-  if (!user?.Comp_Code) return;
-  setLoadingPolicies(true);
-  try {
-    const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_URL}/admin/getPredefinedPolicies`,
-      {},
-      { headers: { compcode: user.Comp_Code, name: user.name } }
-    );
-    if (response.data.success) {
-      setHardcodedPolicies(response.data.data || []);
+  // Add a function to fetch predefined policies
+  const fetchPredefinedPolicies = async () => {
+    if (!user?.Comp_Code) return;
+    setLoadingPolicies(true);
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_URL}/admin/getPredefinedPolicies`,
+        {},
+        { headers: { compcode: user.Comp_Code, name: user.name } }
+      );
+      if (response.data.success) {
+        setHardcodedPolicies(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching predefined policies:", error);
+    } finally {
+      setLoadingPolicies(false);
     }
-  } catch (error) {
-    console.error("Error fetching predefined policies:", error);
-  } finally {
-    setLoadingPolicies(false);
-  }
-};
+  };
 
 
 
@@ -203,44 +210,44 @@ const fetchPredefinedPolicies = async () => {
     allowFaceRecognition: false,
     attendanceSourcePriority: "",
 
-   statusRules: [
-  {
-    Desc: "P",
-    Early_Go: "",
-    Late_Come: "",
-    Allow_Days: "",
-    Priority_Code: "",
-    Region: "",
-    HALF: null,
-    HALF_VAL: null,
-    WEF: "",
-    ABSENT: null,
-  },
-  {
-    Desc: "HLF",
-    Early_Go: "",
-    Late_Come: "",
-    Allow_Days: "",
-    Priority_Code: "",
-    Region: "",
-    HALF: null,
-    HALF_VAL: null,
-    WEF: "",
-    ABSENT: null,
-  }
-]
+    statusRules: [
+      {
+        Desc: "P",
+        Early_Go: "",
+        Late_Come: "",
+        Allow_Days: "",
+        Priority_Code: "",
+        Region: "",
+        PresentValue: 1.0,
+        AbsentValue: 0.0,
+        WEF: "",
+        ABSENT: null,
+      },
+      {
+        Desc: "HLF",
+        Early_Go: "",
+        Late_Come: "",
+        Allow_Days: "",
+        Priority_Code: "",
+        Region: "",
+        PresentValue: 0.5,
+        AbsentValue: 0.5,
+        WEF: "",
+        ABSENT: null,
+      }
+    ]
   });
 
- const tabs = [
-  { id: "basic", label: "Basic", icon: Settings, proTip: "Define policy name, dates, and basic settings", color: "text-primary" },
-  { id: "statusrules", label: "Status Rules", icon: FileText, proTip: "Configure attendance status rules with Early/Late values", color: "text-[#67E8F9]" },
-  { id: "hardcodedpolicies", label: "Predefined Rules", icon: FileText, proTip: "Enable/disable Predefined Rules", color: "text-yellow" }, // NEW
-  { id: "shift", label: "Shift & Working Hours", icon: Clock8, proTip: "Configure shift, working hours and breaks", color: "text-yellow" },
-  { id: "overtime", label: "Overtime & Comp Off", icon: Award, proTip: "Set overtime rates and compensatory off rules", color: "text-green" },
-  { id: "misspunch", label: "Missing Punch", icon: AlertOctagon, proTip: "Define missing punch and regularization rules", color: "text-[#F472B6]" },
-  { id: "weeklyoff", label: "Weekly Off & Holidays", icon: CalendarDays, proTip: "Configure weekly off, holidays and sandwich policy", color: "text-[#34D399]" },
-  { id: "geofencing", label: "Geofencing & Devices", icon: MapPin, proTip: "Set GPS location and device restrictions", color: "text-[#D8B4FE]" },
-];
+  const tabs = [
+    { id: "basic", label: "Basic", icon: Settings, proTip: "Define policy name, dates, and basic settings", color: "text-primary" },
+    { id: "statusrules", label: "Status Rules", icon: FileText, proTip: "Configure attendance status rules with Early/Late values", color: "text-[#67E8F9]" },
+    { id: "hardcodedpolicies", label: "Predefined Rules", icon: FileText, proTip: "Enable/disable Predefined Rules", color: "text-yellow" }, // NEW
+    { id: "shift", label: "Shift & Working Hours", icon: Clock8, proTip: "Configure shift, working hours and breaks", color: "text-yellow" },
+    { id: "overtime", label: "Overtime & Comp Off", icon: Award, proTip: "Set overtime rates and compensatory off rules", color: "text-green" },
+    { id: "misspunch", label: "Missing Punch", icon: AlertOctagon, proTip: "Define missing punch and regularization rules", color: "text-[#F472B6]" },
+    { id: "weeklyoff", label: "Weekly Off & Holidays", icon: CalendarDays, proTip: "Configure weekly off, holidays and sandwich policy", color: "text-[#34D399]" },
+    { id: "geofencing", label: "Geofencing & Devices", icon: MapPin, proTip: "Set GPS location and device restrictions", color: "text-[#D8B4FE]" },
+  ];
 
   const proTips: Record<string, { title: string; tips: string[] }> = {
     basic: {
@@ -261,13 +268,13 @@ const fetchPredefinedPolicies = async () => {
       ]
     },
     hardcodedpolicies: {
-  title: "Predefined Rules",
-  tips: [
-    "📋 Toggle ON/OFF to enable/disable each policy",
-    "📝 Each policy represents a specific attendance rule",
-    "🔧 Enable only the policies that apply to your organization"
-  ]
-},
+      title: "Predefined Rules",
+      tips: [
+        "📋 Toggle ON/OFF to enable/disable each policy",
+        "📝 Each policy represents a specific attendance rule",
+        "🔧 Enable only the policies that apply to your organization"
+      ]
+    },
     shift: {
       title: "Shift & Working Hours",
       tips: [
@@ -279,7 +286,7 @@ const fetchPredefinedPolicies = async () => {
     overtime: {
       title: "Overtime & Comp Off",
       tips: [
-        
+
         "📅 Configure comp off validity (e.g., 60 days)",
         "⚖️ Set daily and monthly overtime limits"
       ]
@@ -317,20 +324,20 @@ const fetchPredefinedPolicies = async () => {
     fetchPredefinedPolicies();
   }, []);
 
- const fetchShifts = async () => {
-  if (!user?.Comp_Code) return;
-  try {
-    const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_URL}/admin/getShifts`,
-      {},
-      { headers: { compcode: user.Comp_Code, name: user.name } }
-    );
-    if (response.data.success) {
-      setShifts(response.data.data || []);
-      setRegions(response.data.regions || []);
-    }
-  } catch (error) { console.error("Error fetching data:", error); }
-};
+  const fetchShifts = async () => {
+    if (!user?.Comp_Code) return;
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_URL}/admin/getShifts`,
+        {},
+        { headers: { compcode: user.Comp_Code, name: user.name } }
+      );
+      if (response.data.success) {
+        setShifts(response.data.data || []);
+        setRegions(response.data.regions || []);
+      }
+    } catch (error) { console.error("Error fetching data:", error); }
+  };
 
   const fetchLocations = async () => {
     if (!user?.Comp_Code) return;
@@ -365,24 +372,52 @@ const fetchPredefinedPolicies = async () => {
     finally { setLoading(false); }
   };
 
-  const fetchPolicyById = async (policyId: string) => {
-    const result = await Swal.fire({
-      icon: "info",
-      title: "Edit Policy",
-      text: "Are you sure you want to edit this policy?",
-      confirmButtonText: "Yes, Edit",
-      cancelButtonText: "Cancel",
-      showCancelButton: true,
-      confirmButtonColor: '#3B82F6',
-      cancelButtonColor: '#6B7280',
-    });
-    if (!result.isConfirmed) return;
+  useEffect(() => {
+    if (view !== "form") {
+      setPolicyConflict(null);
+      return;
+    }
+    // Only check conflict when BOTH location AND employee type are selected
+    if (!formData.location || formData.location.length === 0 || !formData.employeeTypes || formData.employeeTypes.length === 0) {
+      setPolicyConflict(null);
+      return;
+    }
 
-    setView("form");
-    setEditingPolicy(policyId);
-    setExpandedTab("basic");
-    setLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        setCheckingConflict(true);
+        const res = await axios.post(
+          `${process.env.NEXT_PUBLIC_URL}/admin/checkPolicyExists`,
+          {
+            locations: formData.location,
+            employeeTypes: formData.employeeTypes,
+            policyId: editingPolicy || null,
+          },
+          { headers: { compcode: user?.Comp_Code, name: user?.name } }
+        );
+        if (res.data && res.data.success) {
+          if (res.data.exists) {
+            setPolicyConflict({
+              exists: true,
+              message: res.data.message,
+              conflictingLocations: res.data.conflictingLocations || [],
+              conflicts: res.data.conflicts || [],
+            });
+          } else {
+            setPolicyConflict(null);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check policy conflict", err);
+      } finally {
+        setCheckingConflict(false);
+      }
+    }, 200);
 
+    return () => clearTimeout(timer);
+  }, [formData.location, formData.employeeTypes, editingPolicy, view, user?.Comp_Code]);
+
+  const loadPolicyData = async (policyId: string) => {
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_URL}/admin/getAttendancePolicyById`,
@@ -474,8 +509,8 @@ const fetchPredefinedPolicies = async () => {
               Allow_Days: "",
               Priority_Code: "",
               Region: "",
-              HALF: null,
-              HALF_VAL: null,
+              PresentValue: 1.0,
+              AbsentValue: 0.0,
               WEF: new Date().toISOString().split('T')[0],
               ABSENT: null,
             },
@@ -486,18 +521,66 @@ const fetchPredefinedPolicies = async () => {
               Allow_Days: "",
               Priority_Code: "",
               Region: "",
-              HALF: null,
-              HALF_VAL: null,
+              PresentValue: 0.5,
+              AbsentValue: 0.5,
               WEF: new Date().toISOString().split('T')[0],
               ABSENT: null,
             }
           ]
         });
+
+        if (policy.predefinedRules && Array.isArray(policy.predefinedRules)) {
+          const enabledNames = new Set(
+            policy.predefinedRules.map((r: any) => typeof r === 'string' ? r : (r.POLICY_NAME || r.UTD))
+          );
+          setHardcodedPolicies(prev =>
+            prev.map(p => ({
+              ...p,
+              IS_ENABLED: enabledNames.has(p.POLICY_NAME) || enabledNames.has(p.UTD)
+            }))
+          );
+        }
+
+        return true;
+      } else {
+        Swal.fire({ icon: 'error', title: 'Error!', text: response.data.message || 'Failed to load policy details' });
+        return false;
       }
     } catch (error) {
       console.error("Error fetching policy:", error);
       Swal.fire({ icon: 'error', title: 'Error!', text: 'Failed to load policy details' });
-    } finally { setLoading(false); }
+      return false;
+    }
+  };
+
+  const viewPolicy = async (policyId: string) => {
+    setLoading(true);
+    const success = await loadPolicyData(policyId);
+    setLoading(false);
+    if (success) {
+      setShowPreviewModal(true);
+    }
+  };
+
+  const fetchPolicyById = async (policyId: string) => {
+    const result = await Swal.fire({
+      icon: "info",
+      title: "Edit Policy",
+      text: "Are you sure you want to edit this policy?",
+      confirmButtonText: "Yes, Edit",
+      cancelButtonText: "Cancel",
+      showCancelButton: true,
+      confirmButtonColor: '#3B82F6',
+      cancelButtonColor: '#6B7280',
+    });
+    if (!result.isConfirmed) return;
+
+    setView("form");
+    setEditingPolicy(policyId);
+    setExpandedTab("basic");
+    setLoading(true);
+    await loadPolicyData(policyId);
+    setLoading(false);
   };
 
   const deletePolicy = async (policyId: string, policyName: string) => {
@@ -552,30 +635,30 @@ const fetchPredefinedPolicies = async () => {
     } finally { setLoading(false); }
   };
   // Validate unique priority codes
-const validateUniquePriority = () => {
-  const priorityCodes = formData.statusRules
-    .filter(
-      rule =>
-        rule.Priority_Code !== null &&
-        rule.Priority_Code !== undefined &&
-        String(rule.Priority_Code).trim() !== ''
-    )
-    .map(rule => String(rule.Priority_Code));
+  const validateUniquePriority = () => {
+    const priorityCodes = formData.statusRules
+      .filter(
+        rule =>
+          rule.Priority_Code !== null &&
+          rule.Priority_Code !== undefined &&
+          String(rule.Priority_Code).trim() !== ''
+      )
+      .map(rule => String(rule.Priority_Code));
 
-  const uniquePriorities = new Set(priorityCodes);
+    const uniquePriorities = new Set(priorityCodes);
 
-  if (priorityCodes.length !== uniquePriorities.size) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Duplicate Priority!',
-      text: 'Each status rule must have a unique Priority Code.',
-      confirmButtonColor: '#EF4444',
-    });
-    return false;
-  }
+    if (priorityCodes.length !== uniquePriorities.size) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Duplicate Priority!',
+        text: 'Each status rule must have a unique Priority Code.',
+        confirmButtonColor: '#EF4444',
+      });
+      return false;
+    }
 
-  return true;
-};
+    return true;
+  };
 
   const saveAttendancePolicy = async () => {
     const requiredFields = [
@@ -597,6 +680,15 @@ const validateUniquePriority = () => {
       return;
     }
 
+    if (policyConflict?.exists) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Policy Already Exists!',
+        text: policyConflict.message,
+      });
+      return;
+    }
+
     // Validate status rules have at least P and HLF
     const hasP = formData.statusRules.some(r => r.Desc === 'P');
     const hasHLF = formData.statusRules.some(r => r.Desc === 'HLF');
@@ -605,28 +697,28 @@ const validateUniquePriority = () => {
       return;
     }
     if (!validateUniquePriority()) {
-    return;
-  }
+      return;
+    }
 
     setLoading(true);
 
     try {
       const selectedPolicies = hardcodedPolicies
-      .filter(policy => policy.IS_ENABLED)
-      .map(policy => ({
-        UTD: policy.UTD,
-        POLICY_NAME: policy.POLICY_NAME,
-        POLICY_DESC: policy.POLICY_DESC,
-        IS_ENABLED: policy.IS_ENABLED
-      }));
+        .filter(policy => policy.IS_ENABLED)
+        .map(policy => ({
+          UTD: policy.UTD,
+          POLICY_NAME: policy.POLICY_NAME,
+          POLICY_DESC: policy.POLICY_DESC,
+          IS_ENABLED: policy.IS_ENABLED
+        }));
       const payload = {
-  formData: {
-    ...formData,
-    predefinedRules: selectedPolicies,
-    UTD: editingPolicy || undefined,
-  },
-  policyId: editingPolicy || undefined,
-};
+        formData: {
+          ...formData,
+          predefinedRules: selectedPolicies,
+          UTD: editingPolicy || undefined,
+        },
+        policyId: editingPolicy || undefined,
+      };
 
       const url = editingPolicy
         ? `${process.env.NEXT_PUBLIC_URL}/admin/updateAttendancePolicy`
@@ -718,8 +810,8 @@ const validateUniquePriority = () => {
           Allow_Days: "",
           Priority_Code: "",
           Region: "",
-          HALF: null,
-          HALF_VAL: null,
+          PresentValue: 1.0,
+          AbsentValue: 0.0,
           WEF: new Date().toISOString().split('T')[0],
           ABSENT: null,
         },
@@ -730,8 +822,8 @@ const validateUniquePriority = () => {
           Allow_Days: "",
           Priority_Code: "",
           Region: "",
-          HALF: null,
-          HALF_VAL: null,
+          PresentValue: 0.5,
+          AbsentValue: 0.5,
           WEF: new Date().toISOString().split('T')[0],
           ABSENT: null,
         }
@@ -740,26 +832,26 @@ const validateUniquePriority = () => {
   };
 
   // Status Rules Functions
-const addStatusRule = () => {
-  setFormData({
-    ...formData,
-    statusRules: [
-      ...formData.statusRules,
-      {
-        Desc: "",
-        Early_Go: "",
-        Late_Come: "",
-        Allow_Days: "",
-        Priority_Code: "",
-        Region: "",
-        HALF: null,
-        HALF_VAL: null,
-        WEF: new Date().toISOString().split('T')[0],
-        ABSENT: null,
-      }
-    ]
-  });
-};
+  const addStatusRule = () => {
+    setFormData({
+      ...formData,
+      statusRules: [
+        ...formData.statusRules,
+        {
+          Desc: "",
+          Early_Go: "",
+          Late_Come: "",
+          Allow_Days: "",
+          Priority_Code: "",
+          Region: "",
+          PresentValue: "",
+          AbsentValue: "",
+          WEF: new Date().toISOString().split('T')[0],
+          ABSENT: null,
+        }
+      ]
+    });
+  };
 
   const removeStatusRule = (index: number) => {
     const rule = formData.statusRules[index];
@@ -784,7 +876,7 @@ const addStatusRule = () => {
   const renderToggle = (value: boolean, onChange: () => void) => {
     return (
       <button onClick={onChange} className="focus:outline-none transition-all hover:scale-105">
-        {value ? <ToggleRight className="w-10 h-10 text-primary" /> : <ToggleLeft className="w-10 h-10 text-gray-300 dark:text-gray-600" />}
+        {value ? <ToggleRight className="w-10 h-10 text-primary" /> : <ToggleLeft className="w-10 h-10 text-[#D1D5DB] dark:text-[#4B5563]" />}
       </button>
     );
   };
@@ -823,8 +915,8 @@ const addStatusRule = () => {
     // Create status rules preview
     const statusRulesPreview: Record<string, string> = {};
     formData.statusRules.forEach((rule, index) => {
-      statusRulesPreview[`Rule ${index + 1}`] = 
-        `${rule.Desc}: Early=${rule.Early_Go || '0'}min, Late=${rule.Late_Come || '0'}min, Priority=${rule.Priority_Code || 'N/A'}, Days=${rule.Allow_Days || 'N/A'}`;
+      statusRulesPreview[`Rule ${index + 1}`] =
+        `${rule.Desc}: Early=${rule.Early_Go || '0'}m, Late=${rule.Late_Come || '0'}m, Present=${rule.PresentValue ?? 'N/A'}, Absent=${rule.AbsentValue ?? 'N/A'}, Priority=${rule.Priority_Code || 'N/A'}, Days=${rule.Allow_Days || 'N/A'}`;
     });
 
     return {
@@ -929,11 +1021,11 @@ const addStatusRule = () => {
                 redlabel="*"
               />
             </div>
-<div>
+            <div>
               <label className="block text-sm font-bold text-header dark:text-white mb-2 uppercase">Select Shift <span className="text-red-500">*</span></label>
-              <select 
-                value={formData.shiftCode} 
-                onChange={(e) => setFormData({ ...formData, shiftCode: e.target.value })} 
+              <select
+                value={formData.shiftCode}
+                onChange={(e) => setFormData({ ...formData, shiftCode: e.target.value })}
                 className={inputClass}
               >
                 <option value="">Select Shift</option>
@@ -968,15 +1060,21 @@ const addStatusRule = () => {
               </div>
               <div className="border border-borderColor dark:border-borderColor-dark rounded-lg p-2 max-h-48 overflow-y-auto">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {locations.map((loc) => (
-                    <label key={loc.value} className={`flex items-center gap-2 p-2 bg-off dark:bg-dark border-2 rounded-md cursor-pointer hover:border-primary transition-all ${formData.location.includes(loc.value) ? 'border-primary bg-primary/5' : 'border-borderColor dark:border-borderColor-dark'}`}>
-                      <input type="checkbox" checked={formData.location.includes(loc.value)} onChange={() => {
-                        if (formData.location.includes(loc.value)) setFormData({ ...formData, location: formData.location.filter(v => v !== loc.value) });
-                        else setFormData({ ...formData, location: [...formData.location, loc.value] });
-                      }} className="w-4 h-4 accent-primary cursor-pointer flex-shrink-0" />
-                      <span className="text-sm font-semibold text-black dark:text-white truncate">{loc.label}</span>
-                    </label>
-                  ))}
+                  {locations.map((loc) => {
+                    const isConflicting = policyConflict?.conflictingLocations?.includes(loc.value);
+                    return (
+                      <label key={loc.value} className={`flex items-center gap-2 p-2 bg-off dark:bg-dark border-2 rounded-md cursor-pointer hover:border-primary transition-all ${formData.location.includes(loc.value) ? (isConflicting ? 'border-[#EF4444] bg-[#EF4444]/10' : 'border-primary bg-primary/5') : 'border-borderColor dark:border-borderColor-dark'}`}>
+                        <input type="checkbox" checked={formData.location.includes(loc.value)} onChange={() => {
+                          if (formData.location.includes(loc.value)) setFormData({ ...formData, location: formData.location.filter(v => v !== loc.value) });
+                          else setFormData({ ...formData, location: [...formData.location, loc.value] });
+                        }} className="w-4 h-4 accent-primary cursor-pointer flex-shrink-0" />
+                        <span className="text-sm font-semibold text-black dark:text-white truncate">{loc.label}</span>
+                        {isConflicting && formData.location.includes(loc.value) && (
+                          <span className="text-[10px] bg-[#EF4444]/20 text-[#DC2626] dark:text-[#F87171] px-1.5 py-0.5 rounded font-bold uppercase ml-auto flex-shrink-0">Exists</span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -996,10 +1094,39 @@ const addStatusRule = () => {
                   </label>
                 ))}
               </div>
-             
+
+              {policyConflict?.exists && (
+                <div className="mt-4 p-4 bg-gradient-to-r from-[#EF4444]/15 via-[#EF4444]/10 to-transparent border-l-4 border-[#EF4444] rounded-r-xl flex items-start gap-3.5 shadow-sm animate-fadeIn">
+                  <div className="p-2 bg-[#EF4444]/20 text-[#DC2626] dark:text-[#F87171] rounded-lg flex-shrink-0 mt-0.5">
+                    <AlertOctagon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-bold uppercase text-lg tracking-wider text-[#DC2626] dark:text-[#F87171]">
+                        Conflict Detected · Save Disabled
+                      </span>
+                      {policyConflict.conflicts?.[0]?.policyId && (
+                        <button
+                          type="button"
+                          onClick={() => fetchPolicyById(String(policyConflict.conflicts[0].policyId))}
+                          className="text-lg bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold px-2.5 py-1 rounded transition-colors"
+                        >
+                          Edit Existing Policy
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-base font-semibold text-header dark:text-white mt-1">
+                      {policyConflict.message}
+                    </div>
+                    <div className="text-base text-header/70 dark:text-white/70 mt-1">
+                      Only one active policy is permitted for the same Location and Employee Type combination. Please select a different Employee Type or edit the existing policy.
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-         
+
           </div>
         );
 
@@ -1009,228 +1136,231 @@ const addStatusRule = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-header dark:text-white uppercase tracking-wider">Status Rules</h3>
               <Button onClick={addStatusRule} variant="save" className="text-white flex items-center gap-2">
-                <Plus className="w-4 h-4" /> 
+                <Plus className="w-4 h-4" />
               </Button>
             </div>
 
             <div className="overflow-x-auto border border-borderColor dark:border-borderColor-dark rounded-lg">
               <table className="w-full">
-               <thead>
-  <tr className="bg-off dark:bg-dark/50 border-b border-borderColor dark:border-borderColor-dark">
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">#</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Desc</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Early Go </th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Late Come </th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Allow Days</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">HALF</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">HALF_VAL</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Priority</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Region</th>
-    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Actions</th>
-  </tr>
-</thead>
-               <tbody className="divide-y divide-borderColor dark:divide-borderColor-dark">
-  {formData.statusRules.map((rule, index) => (
-    <tr key={index} className="hover:bg-off/50 dark:hover:bg-dark/30 transition-colors">
-      <td className="px-4 py-2 text-sm text-gray-500">{index + 1}</td>
-      
-      {/* Desc */}
-      <td className="px-4 py-2">
-        {(rule.Desc === 'P' || rule.Desc === 'HLF') && formData.statusRules.length <= 2 ? (
-          <span className="font-bold text-primary">{rule.Desc}</span>
-        ) : (
-          <input
-            type="text"
-            value={rule.Desc || ''}
-            onChange={(e) => updateStatusRule(index, 'Desc', e.target.value.toUpperCase())}
-            className={`${inputClass} w-20`}
-            placeholder="e.g., L"
-            maxLength={5}
-          />
-        )}
-      </td>
-      
-      {/* Early_Go */}
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={rule.Early_Go || ''}
-          onChange={(e) => updateStatusRule(index, 'Early_Go', e.target.value)}
-          className={`${inputClass} w-20`}
-          
-          min="0"
-        />
-      </td>
-      
-      {/* Late_Come */}
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={rule.Late_Come || ''}
-          onChange={(e) => updateStatusRule(index, 'Late_Come', e.target.value)}
-          className={`${inputClass} w-20`}
-          
-          min="0"
-        />
-      </td>
-      
-      {/* Allow_Days */}
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={rule.Allow_Days || ''}
-          onChange={(e) => updateStatusRule(index, 'Allow_Days', e.target.value)}
-          className={`${inputClass} w-20`}
-          
-          min="0"
-        />
-      </td>
-      
-      {/* HALF - NEW COLUMN */}
-      <td className="px-4 py-2">
-        <input
-          type="text"
-          value={rule.HALF || ''}
-          onChange={(e) => updateStatusRule(index, 'HALF', e.target.value.toUpperCase())}
-          className={`${inputClass} w-20`}
-         
-          maxLength={5}
-        />
-      </td>
-      
-      {/* HALF_VAL - NEW COLUMN */}
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={rule.HALF_VAL || ''}
-          onChange={(e) => updateStatusRule(index, 'HALF_VAL', e.target.value)}
-          className={`${inputClass} w-20`}
-          
-          min="0"
-        />
-      </td>
-      
-      {/* Priority_Code */}
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={rule.Priority_Code || ''}
-          onChange={(e) => updateStatusRule(index, 'Priority_Code', e.target.value)}
-          className={`${inputClass} w-16`}
-          
-          min="0"
-        />
-      </td>
-      
-      {/* Region */}
-      <td className="px-4 py-2">
-        <select
-          value={rule.Region || ''}
-          onChange={(e) => updateStatusRule(index, 'Region', e.target.value)}
-          className={`${inputClass} w-24`}
-        >
-          <option value="">Select</option>
-          {regions.map((region) => (
-            <option key={region.Misc_Code} value={region.Misc_Code}>
-              {region.MISC_NAME}
-            </option>
-          ))}
-        </select>
-      </td>
-      
-      {/* Actions */}
-      <td className="px-4 py-2">
-        {(rule.Desc !== 'P' && rule.Desc !== 'HLF') && (
-          <button
-            onClick={() => removeStatusRule(index)}
-            className="p-1.5 hover:bg-exit/10 rounded-lg text-exit transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
-        {(rule.Desc === 'P' || rule.Desc === 'HLF') && (
-          <span className="text-xs text-gray-400">Required</span>
-        )}
-      </td>
-    </tr>
-  ))}
-</tbody>
+                <thead>
+                  <tr className="bg-off dark:bg-dark/50 border-b border-borderColor dark:border-borderColor-dark">
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">#</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Desc</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Early Go </th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Late Come </th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Allow Days</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Present Value</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Absent Value</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Priority</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Region</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-borderColor dark:divide-borderColor-dark">
+                  {formData.statusRules.map((rule, index) => (
+                    <tr key={index} className="hover:bg-off/50 dark:hover:bg-dark/30 transition-colors">
+                      <td className="px-4 py-2 text-sm text-[#6B7280]">{index + 1}</td>
+
+                      {/* Desc */}
+                      <td className="px-4 py-2">
+                        {(rule.Desc === 'P' || rule.Desc === 'HLF') && formData.statusRules.length <= 2 ? (
+                          <span className="font-bold text-primary">{rule.Desc}</span>
+                        ) : (
+                          <input
+                            type="text"
+                            value={rule.Desc || ''}
+                            onChange={(e) => updateStatusRule(index, 'Desc', e.target.value.toUpperCase())}
+                            className={`${inputClass} w-20`}
+                            placeholder="e.g., L"
+                            maxLength={5}
+                          />
+                        )}
+                      </td>
+
+                      {/* Early_Go */}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          value={rule.Early_Go || ''}
+                          onChange={(e) => updateStatusRule(index, 'Early_Go', e.target.value)}
+                          className={`${inputClass} w-20`}
+
+                          min="0"
+                        />
+                      </td>
+
+                      {/* Late_Come */}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          value={rule.Late_Come || ''}
+                          onChange={(e) => updateStatusRule(index, 'Late_Come', e.target.value)}
+                          className={`${inputClass} w-20`}
+
+                          min="0"
+                        />
+                      </td>
+
+                      {/* Allow_Days */}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          value={rule.Allow_Days || ''}
+                          onChange={(e) => updateStatusRule(index, 'Allow_Days', e.target.value)}
+                          className={`${inputClass} w-20`}
+
+                          min="0"
+                        />
+                      </td>
+
+                      {/* PresentValue */}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={rule.PresentValue ?? ''}
+                          onChange={(e) => updateStatusRule(index, 'PresentValue', e.target.value === '' ? null : e.target.value)}
+                          className={`${inputClass} w-24`}
+                          placeholder="e.g. 1.0"
+                        />
+                      </td>
+
+                      {/* AbsentValue */}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={rule.AbsentValue ?? ''}
+                          onChange={(e) => updateStatusRule(index, 'AbsentValue', e.target.value === '' ? null : e.target.value)}
+                          className={`${inputClass} w-24`}
+                          placeholder="e.g. 0.0"
+                        />
+                      </td>
+
+                      {/* Priority_Code */}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          value={rule.Priority_Code || ''}
+                          onChange={(e) => updateStatusRule(index, 'Priority_Code', e.target.value)}
+                          className={`${inputClass} w-16`}
+
+                          min="0"
+                        />
+                      </td>
+
+                      {/* Region */}
+                      <td className="px-4 py-2">
+                        <select
+                          value={rule.Region || ''}
+                          onChange={(e) => updateStatusRule(index, 'Region', e.target.value)}
+                          className={`${inputClass} w-24`}
+                        >
+                          <option value="">Select</option>
+                          {regions.map((region) => (
+                            <option key={region.Misc_Code} value={region.Misc_Code}>
+                              {region.MISC_NAME}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-2">
+                        {(rule.Desc !== 'P' && rule.Desc !== 'HLF') && (
+                          <button
+                            onClick={() => removeStatusRule(index)}
+                            className="p-1.5 hover:bg-exit/10 rounded-lg text-exit transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {(rule.Desc === 'P' || rule.Desc === 'HLF') && (
+                          <span className="text-xs text-[#9CA3AF]">Required</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </div>
         );
 
 
-    case "hardcodedpolicies":
-  return (
-    <div className="space-y-6 animate-fadeIn">
-      
+      case "hardcodedpolicies":
+        return (
+          <div className="space-y-6 animate-fadeIn">
 
-      
-        <div className="overflow-x-auto border border-borderColor dark:border-borderColor-dark rounded-lg">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-off dark:bg-dark/50 border-b border-borderColor dark:border-borderColor-dark">
-                <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">UTD</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Policy Name</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Description</th>
-                
-                <th className="px-4 py-3 text-center text-sm font-bold text-header dark:text-white uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-borderColor dark:divide-borderColor-dark">
-              {hardcodedPolicies.map((policy) => (
-                <tr 
-                  key={policy.UTD} 
-                  className={`hover:bg-off/50 dark:hover:bg-dark/30 transition-colors ${
-                    policy.IS_ENABLED ? 'bg-primary/5' : ''
-                  }`}
-                >
-                  <td className="px-4 py-3 text-sm font-mono text-gray-500">
-                    {policy.UTD}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-bold text-header dark:text-white">
-                      {policy.POLICY_NAME}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-body-color">
-                      {policy.POLICY_DESC}
-                    </span>
-                  </td>
-                 
-                  <td className="px-4 py-3 text-center">
-                    {renderToggle(
-                      policy.IS_ENABLED,
-                      () => {
-                        setHardcodedPolicies(prev =>
-                          prev.map(p =>
-                            p.UTD === policy.UTD 
-                              ? { ...p, IS_ENABLED: !p.IS_ENABLED } 
-                              : p
-                          )
-                        );
-                      }
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      
 
- 
-    </div>
-  );
+
+            <div className="overflow-x-auto border border-borderColor dark:border-borderColor-dark rounded-lg">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-off dark:bg-dark/50 border-b border-borderColor dark:border-borderColor-dark">
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">UTD</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Policy Name</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-header dark:text-white uppercase">Description</th>
+
+                    <th className="px-4 py-3 text-center text-sm font-bold text-header dark:text-white uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-borderColor dark:divide-borderColor-dark">
+                  {hardcodedPolicies.map((policy) => (
+                    <tr
+                      key={policy.UTD}
+                      className={`hover:bg-off/50 dark:hover:bg-dark/30 transition-colors ${policy.IS_ENABLED ? 'bg-primary/5' : ''
+                        }`}
+                    >
+                      <td className="px-4 py-3 text-sm font-mono text-[#6B7280]">
+                        {policy.UTD}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-bold text-header dark:text-white">
+                          {policy.POLICY_NAME}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-body-color">
+                          {policy.POLICY_DESC}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        {renderToggle(
+                          policy.IS_ENABLED,
+                          () => {
+                            setHardcodedPolicies(prev =>
+                              prev.map(p =>
+                                p.UTD === policy.UTD
+                                  ? { ...p, IS_ENABLED: !p.IS_ENABLED }
+                                  : p
+                              )
+                            );
+                          }
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+
+
+          </div>
+        );
       case "shift":
         return (
           <div className="space-y-6 animate-fadeIn">
-       
+
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   
+
               <div>
                 <label className="block text-sm font-bold text-header dark:text-white mb-2 uppercase">Shift Type</label>
                 <select value={formData.shiftType} onChange={(e) => setFormData({ ...formData, shiftType: e.target.value })} className={inputClass}>
@@ -1240,9 +1370,9 @@ const addStatusRule = () => {
                   <option value="rotational">Rotational Shift</option>
                 </select>
               </div>
-            <Ainput title="Working Hours" type="text" name="workingHours" value={formData.workingHours} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })} className="mt-2" />
+              <Ainput title="Working Hours" type="text" name="workingHours" value={formData.workingHours} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })} className="mt-2" />
 
-            
+
             </div>
 
 
@@ -1274,7 +1404,7 @@ const addStatusRule = () => {
             {formData.overtimeAllowed && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                   <Ainput title="Max Overtime Per Day (Hours)" type="number" name="maxOvertimePerDay" value={formData.maxOvertimePerDay} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })} placeholder="e.g., 4" />
                   <Ainput title="Max Overtime Per Month (Hours)" type="number" name="maxOvertimePerMonth" value={formData.maxOvertimePerMonth} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })} placeholder="e.g., 40" />
                 </div>
@@ -1316,9 +1446,9 @@ const addStatusRule = () => {
 
               {formData.regularizationAllowed && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                  <Ainput title="Regularization Period (Days)" type="number" name="regularizationPeriod" value={formData.regularizationPeriod} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })}  />
+                  <Ainput title="Regularization Period (Days)" type="number" name="regularizationPeriod" value={formData.regularizationPeriod} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })} />
                   <Ainput title="Max Days to Regularize" type="number" name="regularizationMaxDays" value={formData.regularizationMaxDays} handleInputChange={(name, value) => setFormData({ ...formData, [name]: value })} />
-                 
+
                 </div>
               )}
             </div>
@@ -1458,6 +1588,44 @@ const addStatusRule = () => {
     }
   };
 
+  const renderPreviewModal = () => {
+    if (!showPreviewModal) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white dark:bg-dark rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-primary/20 flex flex-col">
+          <div className="bg-gradient-to-r from-header to-header/80 dark:from-dark dark:to-dark/60 px-6 py-4 flex justify-between items-center border-b border-borderColor dark:border-borderColor-dark">
+            <div>
+              <h2 className="text-2xl font-bold text-white uppercase tracking-wider">Policy Preview</h2>
+              <p className="text-white/70 text-sm">Review all configuration details</p>
+            </div>
+            <button onClick={() => setShowPreviewModal(false)} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="p-6 overflow-y-auto flex-1 max-h-[calc(90vh-140px)]">
+            {Object.entries(getPreviewData()).map(([section, data]) => (
+              <div key={section} className="mb-6 last:mb-0">
+                <h3 className="text-lg font-bold text-header dark:text-white mb-3 uppercase tracking-wider border-b border-borderColor dark:border-borderColor-dark pb-2">{section}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.entries(data).map(([label, value]) => (
+                    <div key={label} className="flex justify-between items-center p-2 bg-off/50 dark:bg-dark/30 rounded-lg border border-borderColor/30 dark:border-borderColor-dark/30">
+                      <span className="text-sm font-semibold text-[#4B5563] dark:text-[#9CA3AF]">{label}:</span>
+                      <span className="text-sm font-medium text-black dark:text-white text-right">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-6 py-3 border-t border-borderColor dark:border-borderColor-dark bg-off/50 dark:bg-dark/30 flex justify-end">
+            <Button variant="outline" onClick={() => setShowPreviewModal(false)}>Close</Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // List View
   if (view === "list") {
     const filteredPolicies = policyTableData.filter(policy =>
@@ -1477,7 +1645,7 @@ const addStatusRule = () => {
               </div>
             </div>
             <div className="flex gap-3">
-              <Button onClick={() => { setView("form"); setExpandedTab("basic"); }} variant="update" className="text-white flex items-center gap-2 font-bold uppercase text-lg py-3 px-6">
+              <Button onClick={() => { setView("form"); setEditingPolicy(null); resetForm(); setExpandedTab("basic"); }} variant="update" className="text-white flex items-center gap-2 font-bold uppercase text-lg py-3 px-6">
                 + CREATE POLICY
               </Button>
               <Button variant="print" onClick={() => window.history.back()} className="flex items-center gap-2 font-bold text-base">BACK</Button>
@@ -1493,8 +1661,8 @@ const addStatusRule = () => {
               </h3>
               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                 <div className="relative flex-1 sm:flex-none">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="text" placeholder="Search policies..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 border border-borderColor dark:border-borderColor-dark rounded-lg bg-gray-50 dark:bg-dark/50 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-64 transition-all" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
+                  <input type="text" placeholder="Search policies..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 border border-borderColor dark:border-borderColor-dark rounded-lg bg-[#F9FAFB] dark:bg-dark/50 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-64 transition-all" />
                 </div>
               </div>
             </div>
@@ -1527,8 +1695,9 @@ const addStatusRule = () => {
                           <td className="px-6 py-4">{getStatusBadge(policy.status)}</td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-3">
-                              <button onClick={() => fetchPolicyById(policy.id)} className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors"><Edit className="w-6 h-6" /></button>
-                              <button onClick={() => deletePolicy(policy.id, policy.policyName)} className="p-2 hover:bg-exit/10 rounded-lg text-exit transition-colors"><Trash2 className="w-6 h-6" /></button>
+                              <button onClick={() => viewPolicy(policy.id)} title="View Policy" className="p-2 hover:bg-blue-500/10 rounded-lg text-blue-500 transition-colors"><Eye className="w-6 h-6" /></button>
+                              <button onClick={() => fetchPolicyById(policy.id)} title="Edit Policy" className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors"><Edit className="w-6 h-6" /></button>
+                              <button onClick={() => deletePolicy(policy.id, policy.policyName)} title="Delete Policy" className="p-2 hover:bg-exit/10 rounded-lg text-exit transition-colors"><Trash2 className="w-6 h-6" /></button>
                             </div>
                           </td>
                         </tr>
@@ -1538,11 +1707,14 @@ const addStatusRule = () => {
                 </table>
               </div>
             )}
-            <div className="flex justify-between items-center p-4 border-t border-borderColor dark:border-borderColor-dark text-xs text-gray-400">
+            <div className="flex justify-between items-center p-4 border-t border-borderColor dark:border-borderColor-dark text-xs text-[#9CA3AF]">
               <span>Showing {filteredPolicies.length} of {policyTableData.length} policies</span>
             </div>
           </div>
         </div>
+
+        {/* Preview Modal */}
+        {renderPreviewModal()}
       </div>
     );
   }
@@ -1566,8 +1738,19 @@ const addStatusRule = () => {
               </Button>
             )} */}
             <Button variant="outline" onClick={() => setShowPreviewModal(true)}><Eye className="w-4 h-4" /></Button>
-            <Button variant="update" onClick={saveAttendancePolicy} disabled={loading}>
-              {loading ? 'Saving...' : (editingPolicy ? 'Update Policy' : 'Save Policy')}
+            <Button
+              variant="update"
+              onClick={saveAttendancePolicy}
+              disabled={loading || checkingConflict || Boolean(policyConflict?.exists)}
+              className={policyConflict?.exists ? "opacity-50 cursor-not-allowed bg-gray-500 hover:bg-gray-500 text-white" : ""}
+            >
+              {loading
+                ? 'Saving...'
+                : checkingConflict
+                ? 'Checking...'
+                : policyConflict?.exists
+                ? 'Already Exists (Disabled)'
+                : (editingPolicy ? 'Update Policy' : 'Save Policy')}
             </Button>
             <Button onClick={() => { setView("list"); setEditingPolicy(null); resetForm(); }} variant="print">CLOSE</Button>
           </div>
@@ -1609,11 +1792,11 @@ const addStatusRule = () => {
                       </div>
                       <div className="text-left">
                         <span className={`text-xl font-bold text-header`}>{tab.label}</span>
-                        <p className="text-xs text-gray-400 mt-0.5">{tab.proTip}</p>
+                        <p className="text-xs text-[#9CA3AF] mt-0.5">{tab.proTip}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      {isExpanded ? <ChevronUp className={`w-5 h-5 text-header`} /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                      {isExpanded ? <ChevronUp className={`w-5 h-5 text-header`} /> : <ChevronDown className="w-5 h-5 text-[#9CA3AF]" />}
                     </div>
                   </button>
 
@@ -1625,7 +1808,7 @@ const addStatusRule = () => {
                           <div className={`bg-gradient-to-br from-[#f8f9fc] to-white dark:from-dark/40 dark:to-dark/20 rounded border border-borderColor dark:border-borderColor-dark shadow-lg hover:shadow-xl transition-shadow duration-300 p-4 sticky top-4 h-fit`}>
                             <div className="flex items-start gap-2 mb-4">
                               <div className="relative flex-shrink-0"><div className={`relative p-1.5`}><Lightbulb className="w-6 h-6 text-yellow" strokeWidth={2.5} /></div></div>
-                              <div><h3 className="text-xl font-bold text-header tracking-tight">Pro Tips</h3><p className="text-[10px] text-body-color dark:text-gray-400 font-medium tracking-wider uppercase">Best Practices</p></div>
+                              <div><h3 className="text-xl font-bold text-header tracking-tight">Pro Tips</h3><p className="text-[10px] text-body-color dark:text-[#9CA3AF] font-medium tracking-wider uppercase">Best Practices</p></div>
                             </div>
                             <div className="space-y-3">
                               <div className="flex items-center gap-2">
@@ -1636,8 +1819,8 @@ const addStatusRule = () => {
                               <ul className="space-y-2">
                                 {proTips[tab.id]?.tips.map((tip, index) => (
                                   <li key={index} className={`group relative flex items-start gap-2 p-2.5 rounded-lg bg-white/60 dark:bg-dark/30 border border-borderColor/30 dark:border-borderColor-dark/30 hover:${tab.color.replace('text-', 'border-')}/50 dark:hover:${tab.color.replace('text-', 'border-')}/20 transition-all duration-300 hover:shadow-md hover:scale-[1.02]`}>
-                                    
-                                    <p className="text-[14px] text-gray-700 dark:text-gray-300 leading-relaxed flex-1">{tip}</p>
+
+                                    <p className="text-[14px] text-[#374151] dark:text-[#D1D5DB] leading-relaxed flex-1">{tip}</p>
                                   </li>
                                 ))}
                               </ul>
@@ -1654,31 +1837,7 @@ const addStatusRule = () => {
           </div>
 
           {/* Preview Modal */}
-          {showPreviewModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-dark rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-primary/20">
-                <div className="bg-gradient-to-r from-header to-header/80 dark:from-dark dark:to-dark/60 px-6 py-4 flex justify-between items-center border-b border-borderColor dark:border-borderColor-dark">
-                  <div><h2 className="text-2xl font-bold text-white uppercase tracking-wider">Policy Preview</h2><p className="text-white/70 text-sm">Review all configuration details</p></div>
-                  <button onClick={() => setShowPreviewModal(false)} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors"><X className="w-6 h-6" /></button>
-                </div>
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                  {Object.entries(getPreviewData()).map(([section, data]) => (
-                    <div key={section} className="mb-6 last:mb-0">
-                      <h3 className="text-lg font-bold text-header dark:text-white mb-3 uppercase tracking-wider border-b border-borderColor dark:border-borderColor-dark pb-2">{section}</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Object.entries(data).map(([label, value]) => (
-                          <div key={label} className="flex justify-between items-center p-2 bg-off/50 dark:bg-dark/30 rounded-lg border border-borderColor/30 dark:border-borderColor-dark/30">
-                            <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{label}:</span>
-                            <span className="text-sm font-medium text-black dark:text-white text-right">{String(value)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {renderPreviewModal()}
 
           {/* Log Modal */}
           {showLogModal && (
@@ -1690,7 +1849,7 @@ const addStatusRule = () => {
                 </div>
                 <div className="overflow-auto flex-1 p-6">
                   {policyLogs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12"><FileText className="w-12 h-12 text-gray-300 mb-4" /><p className="text-gray-500 dark:text-gray-400 text-lg">No history available</p></div>
+                    <div className="flex flex-col items-center justify-center py-12"><FileText className="w-12 h-12 text-[#D1D5DB] mb-4" /><p className="text-[#6B7280] dark:text-[#9CA3AF] text-lg">No history available</p></div>
                   ) : (
                     <div className="space-y-4">
                       {policyLogs.map((log, index) => (
@@ -1709,7 +1868,7 @@ const addStatusRule = () => {
                                 <tbody>
                                   {Object.entries(log.changes).map(([field, values]: any, rowIndex) => (
                                     <tr key={rowIndex} className="border-b border-borderColor/30 dark:border-borderColor-dark/30 hover:bg-primary/5 transition-colors">
-                                      <td className="px-3 py-3"><span className="font-semibold text-black text-lg dark:text-white bg-gray-100 dark:bg-dark/50 px-2 py-1 rounded inline-block">{field}</span></td>
+                                      <td className="px-3 py-3"><span className="font-semibold text-black text-lg dark:text-white bg-[#F3F4F6] dark:bg-dark/50 px-2 py-1 rounded inline-block">{field}</span></td>
                                       <td className="px-3 py-3"><span className="text-exit font-bold text-lg bg-exit/10 px-2 py-1 rounded block max-w-xs truncate">{String(values.old)}</span></td>
                                       <td className="px-3 py-3"><span className="text-green font-bold text-lg bg-green/10 px-2 py-1 rounded block max-w-xs truncate">{String(values.new)}</span></td>
                                     </tr>
@@ -1717,14 +1876,14 @@ const addStatusRule = () => {
                                 </tbody>
                               </table>
                             </div>
-                          ) : <p className="text-gray-500 dark:text-gray-400 text-sm italic">No changes recorded</p>}
+                          ) : <p className="text-[#6B7280] dark:text-[#9CA3AF] text-sm italic">No changes recorded</p>}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
                 <div className="px-6 py-4 border-t border-borderColor dark:border-borderColor-dark bg-off dark:bg-dark/30 flex justify-between items-center">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total revisions: <span className="font-bold text-primary">{policyLogs.length}</span></p>
+                  <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">Total revisions: <span className="font-bold text-primary">{policyLogs.length}</span></p>
                   <Button variant="outline" onClick={() => setShowLogModal(false)}>Close</Button>
                 </div>
               </div>

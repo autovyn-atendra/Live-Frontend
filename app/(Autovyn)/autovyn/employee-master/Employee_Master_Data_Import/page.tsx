@@ -182,6 +182,18 @@ const Approver2 = ({ isDialogMode = false }: Approver2Props) => {
       showSideAlert("Please select an Excel file first", "warning");
       return;
     }
+
+    const branchVal = user?.branch;
+    const branchParts = String(branchVal ?? "")
+      .split(",")
+      .map((b) => b.trim())
+      .filter(Boolean);
+
+    if (branchParts.length > 1 || (Array.isArray(branchVal) && branchVal.length > 1)) {
+      showSideAlert("Select only one branch", "error");
+      return;
+    }
+
     try {
       setTabledata([])
       setisLoadingonpage(true);
