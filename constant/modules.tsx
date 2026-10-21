@@ -578,4 +578,31 @@ export const treeData = [
       },
     ]
   },
+  {
+    title: "Dealer",
+    url: "/autovyn/dealer",
+    ShortCut: "alt+d",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "18",
+    children: [
+      {
+        title: "Dealer |",
+        key: "18.1",
+        url: "/autovyn/dealer",
+        children: [
+          {
+            title: "Dealer List | ",
+            key: "18.1.1",
+            url: "/autovyn/dealer",
+          },
+
+
+        ],
+      },
+    ]
+  },
 ];
