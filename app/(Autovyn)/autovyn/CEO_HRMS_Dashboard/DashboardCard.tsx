@@ -10,6 +10,8 @@ interface DashboardCardProps {
         colorClass?: string;
     };
     subtitle?: string;
+    hoverInfo?: string;
+    hoverItems?: { label: string; value: string | number }[];
     type?: "gross" | "deduction" | "net" | "avg";
     onClick?: () => void;
 }
@@ -19,6 +21,8 @@ export default function DashboardCard({
     value,
     trend,
     subtitle,
+    hoverInfo,
+    hoverItems,
     type,
     onClick
 }: DashboardCardProps) {
@@ -79,12 +83,39 @@ export default function DashboardCard({
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl ${iconCfg.bg} ${iconCfg.color} transition-transform group-hover:scale-105`}>
                     {iconCfg.icon}
                 </div>
+                {hoverItems && hoverItems.length > 0 ? (
+                    <div className="opacity-0 group-hover:opacity-100 transition-all duration-200 text-right z-10">
+                        <div className="inline-flex flex-col gap-1 px-3 py-1.5 rounded-xl bg-[#0F172A]/95 dark:bg-[#1E293B] text-white border border-[#334155]/80 shadow-md text-[11px] backdrop-blur-xs">
+                            {hoverItems.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between gap-2.5">
+                                    <span className="text-[#CBD5E1] dark:text-[#94A3B8] font-medium">{item.label}:</span>
+                                    <span className="font-bold text-[#34D399]">
+                                        {typeof item.value === "number" ? `₹${item.value.toLocaleString("en-IN")}` : item.value}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : hoverInfo ? (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-[#EEF2FF] dark:bg-[#1E1B4B]/70 text-[#4338CA] dark:text-[#A5B4FC] border border-[#C7D2FE]/80 dark:border-[#3730A3]/80 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-2xs">
+                        {hoverInfo}
+                    </span>
+                ) : null}
             </div>
 
-            <div className="mt-4">
-                <p className="text-[15px] font-semibold text-[#64748B] dark:text-[#94A3B8]">
-                    {title}
-                </p>
+            <div 
+                className="mt-4" 
+                title={
+                    hoverItems && hoverItems.length > 0
+                        ? hoverItems.map(h => `${h.label}: ${typeof h.value === "number" ? `₹${h.value.toLocaleString("en-IN")}` : h.value}`).join(" | ")
+                        : (hoverInfo ? `${title} · ${hoverInfo}` : undefined)
+                }
+            >
+                <div className="flex items-center justify-between">
+                    <p className="text-[15px] font-semibold text-[#64748B] dark:text-[#94A3B8]">
+                        {title}
+                    </p>
+                </div>
                 <p className="text-3xl sm:text-4xl font-extrabold text-[#0F172A] dark:text-white mt-1 tracking-tight">
                     {formattedValue}
                 </p>

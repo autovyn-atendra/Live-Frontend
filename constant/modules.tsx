@@ -605,4 +605,31 @@ export const treeData = [
       },
     ]
   },
+  {
+    title: "Vehicle GPS Tracking",
+    url: "/autovyn/Vehiclegpstracking",
+    ShortCut: "alt+G",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "19",
+    children: [
+      {
+        title: "Vehicle GPS Tracking |",
+        key: "19.1",
+        url: "/autovyn/Vehiclegpstracking",
+        children: [
+          {
+            title: "Vehicle GPS Tracking   | ",
+            key: "19.1.1",
+            url: "/autovyn/Vehiclegpstracking",
+          },
+
+
+        ],
+      },
+    ]
+  },
 ];

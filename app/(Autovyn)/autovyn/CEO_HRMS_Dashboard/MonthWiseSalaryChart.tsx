@@ -8,6 +8,7 @@ import { saveAs } from 'file-saver';
 export interface MonthSalaryItem {
     month: string;
     gross: number;
+    grossEarn?: number;
     deductions: number;
     netPay: number;
 }
@@ -50,9 +51,9 @@ export default function MonthWiseSalaryChart({
     const exportToExcel = async () => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Month-wise Salary");
-        worksheet.addRow(["Month", "Gross Salary (₹)", "Deductions (₹)", "Net Pay (₹)"]);
+        worksheet.addRow(["Month", "Gross Salary (₹)", "Earned Gross (₹)", "Deductions (₹)", "Net Pay (₹)"]);
         chartData.forEach(d => {
-            worksheet.addRow([d.month, d.gross, d.deductions, d.netPay]);
+            worksheet.addRow([d.month, d.gross, d.grossEarn || 0, d.deductions, d.netPay]);
         });
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -247,6 +248,7 @@ export default function MonthWiseSalaryChart({
                                 <tr>
                                     <th className="px-3.5 py-2.5">Month</th>
                                     <th className="px-3.5 py-2.5 text-[#4F46E5]">Gross (₹)</th>
+                                    <th className="px-3.5 py-2.5 text-[#06B6D4]">Earned (₹)</th>
                                     <th className="px-3.5 py-2.5 text-[#F43F5E]">Deductions (₹)</th>
                                     <th className="px-3.5 py-2.5 text-[#10B981]">Net Pay (₹)</th>
                                 </tr>
@@ -256,6 +258,7 @@ export default function MonthWiseSalaryChart({
                                     <tr key={i} className="hover:bg-[#F8FAFC]/50 dark:hover:bg-[#1E293B]/40">
                                         <td className="px-3.5 py-2.5 font-medium">{row.month}</td>
                                         <td className="px-3.5 py-2.5 text-[#4F46E5] font-semibold">₹{row.gross.toLocaleString('en-IN')}</td>
+                                        <td className="px-3.5 py-2.5 text-[#06B6D4] font-medium">₹{(row.grossEarn || 0).toLocaleString('en-IN')}</td>
                                         <td className="px-3.5 py-2.5 text-[#F43F5E]">₹{row.deductions.toLocaleString('en-IN')}</td>
                                         <td className="px-3.5 py-2.5 text-[#10B981] font-bold">₹{row.netPay.toLocaleString('en-IN')}</td>
                                     </tr>

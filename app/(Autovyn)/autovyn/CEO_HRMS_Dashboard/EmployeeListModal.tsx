@@ -94,6 +94,7 @@ export default function EmployeeListModal({
                                                     <span>📁 {emp.employeeCode || emp.EMPCODE || 'N/A'}</span>
                                                     <span>💼 {emp.designation || 'N/A'}</span>
                                                     {emp.department && <span>🏢 {emp.department}</span>}
+                                                    {emp.absent_days !== undefined && <span className="text-red-500 font-semibold">🚨 {emp.absent_days} Days Absent</span>}
                                                     {emp.status && <span>🏷️ {emp.status}</span>}
                                                 </div>
                                             </div>

@@ -50,6 +50,17 @@ const getDefaultPreviousMonthRange = () => {
     return { startDate, endDate };
 };
 
+const getDefaultSalaryMonthYear = () => {
+    const now = new Date();
+    let m = now.getMonth(); // 0-indexed: in October (month 10), getMonth() returns 9 (September)
+    let y = now.getFullYear();
+    if (m === 0) {
+        m = 12;
+        y -= 1;
+    }
+    return { month: m, year: y };
+};
+
 const formatDateDisplay = (dateStr: string) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
@@ -57,6 +68,23 @@ const formatDateDisplay = (dateStr: string) => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 };
+
+const MONTH_OPTIONS = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+];
+
+const YEAR_OPTIONS = [2027, 2026, 2025, 2024, 2023];
 
 const formatDateToDDMMYYYY = (isoDate: string) => {
     if (!isoDate) return "";
@@ -117,26 +145,55 @@ export default function CEODashboard() {
         }
     }, [selectedDate]);
 
-    // Branch Filter (Handles comma-separated string e.g. "1,2,3,4", array, or single branch)
+    // Collect all authorized branches from both user.branch and user.multi
     const userBranches = useMemo(() => {
-        if (!user?.branch) return [];
-        if (Array.isArray(user.branch)) return user.branch.map(String).map(s => s.trim()).filter(Boolean);
-        return String(user.branch).split(",").map(s => s.trim()).filter(Boolean);
-    }, [user?.branch]);
+        const rawValues: any[] = [];
+        if (user?.branch) rawValues.push(user.branch);
+        if (user?.multi) rawValues.push(user.multi);
+
+        const branchSet = new Set<string>();
+        rawValues.forEach((val) => {
+            if (Array.isArray(val)) {
+                val.map(String).map(s => s.trim()).filter(Boolean).forEach(b => branchSet.add(b));
+            } else if (typeof val === "string" || typeof val === "number") {
+                String(val).split(",").map(s => s.trim()).filter(Boolean).forEach(b => branchSet.add(b));
+            }
+        });
+        return Array.from(branchSet);
+    }, [user?.branch, user?.multi]);
 
     const [selectedBranch, setSelectedBranch] = useState<string>("");
+
+    const getDefaultBranch = () => {
+        if (user?.branch) {
+            const s = String(user.branch).trim();
+            if (!s.includes(",") && !Array.isArray(user.branch) && s !== "" && s !== "0") {
+                return s;
+            }
+        }
+        return "";
+    };
+
+    // Initialize selectedBranch:
+    // If logged in with a single branch (e.g. 1), default to that single branch;
+    // If logged in with multi-branch, default to "" (All Branches)
+    useEffect(() => {
+        setSelectedBranch(getDefaultBranch());
+    }, [user?.branch]);
 
     const activeBranchParam = useMemo(() => {
         if (selectedBranch) return selectedBranch;
         if (userBranches.length > 0) return userBranches.join(",");
+        if (user?.branch) return String(user.branch);
         return "";
-    }, [selectedBranch, userBranches]);
+    }, [selectedBranch, userBranches, user?.branch]);
 
     const activeBranchArray = useMemo(() => {
         if (selectedBranch) return [selectedBranch];
         if (userBranches.length > 0) return userBranches;
+        if (user?.branch) return String(user.branch).split(",").map(s => s.trim()).filter(Boolean);
         return [];
-    }, [selectedBranch, userBranches]);
+    }, [selectedBranch, userBranches, user?.branch]);
 
     const [selectedShift, setSelectedShift] = useState<string>("");
     const [rangeMonths, setRangeMonths] = useState<number>(6);
@@ -148,13 +205,19 @@ export default function CEODashboard() {
     const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
     const [deptStats, setDeptStats] = useState<any[]>([]);
     const [graphData, setGraphData] = useState<any[]>([]);
+    const [rangeStats, setRangeStats] = useState<any>(null);
     const [overallEmployees, setOverallEmployees] = useState<{ all: any[]; present: any[]; absent: any[] }>({
         all: [],
         present: [],
         absent: []
     });
+    const [todaySummary, setTodaySummary] = useState<{
+        todayAbsent: number;
+        todayPresent: number;
+        todayWO: number;
+    } | null>(null);
 
-    // Attendance Date Range Filter (Default: Current Month - 1st to Current Day)
+    // Attendance Date Range Filter (Default: Current Month 1st to Yesterday - 1 day before today)
     const [attendanceStartDate, setAttendanceStartDate] = useState<string>(() => {
         const today = new Date();
         const y = today.getFullYear();
@@ -162,16 +225,43 @@ export default function CEODashboard() {
         return `${y}-${m}-01`;
     });
     const [attendanceEndDate, setAttendanceEndDate] = useState<string>(() => {
-        const today = new Date();
-        return today.toISOString().split("T")[0];
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        return d.toISOString().split("T")[0];
     });
     const [attendancePreset, setAttendancePreset] = useState<"today" | "thisMonth" | "last7Days" | "custom">("thisMonth");
 
-    // Salary Data & Date Range Filter (Default: 1 month prior to current month, e.g. Sep 1 to Sep 30)
-    const defaultSalaryRange = useMemo(() => getDefaultPreviousMonthRange(), []);
-    const [salaryStartDate, setSalaryStartDate] = useState<string>(defaultSalaryRange.startDate);
-    const [salaryEndDate, setSalaryEndDate] = useState<string>(defaultSalaryRange.endDate);
+    // Salary Data & Month-wise Filter (Default: month prior to current month)
+    const defSalaryMY = useMemo(() => getDefaultSalaryMonthYear(), []);
+    const [salaryMonth, setSalaryMonth] = useState<number>(() => defSalaryMY.month);
+    const [salaryYear, setSalaryYear] = useState<number>(() => defSalaryMY.year);
+
+    const quickMonths = useMemo(() => {
+        const list = [];
+        let m = defSalaryMY.month;
+        let y = defSalaryMY.year;
+        for (let i = 0; i < 4; i++) {
+            list.push({ month: m, year: y });
+            m--;
+            if (m === 0) {
+                m = 12;
+                y--;
+            }
+        }
+        return list;
+    }, [defSalaryMY]);
+
+    const salaryStartDate = useMemo(() => {
+        return `${salaryYear}-${String(salaryMonth).padStart(2, "0")}-01`;
+    }, [salaryYear, salaryMonth]);
+
+    const salaryEndDate = useMemo(() => {
+        const lastDay = new Date(salaryYear, salaryMonth, 0).getDate();
+        return `${salaryYear}-${String(salaryMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    }, [salaryYear, salaryMonth]);
+
     const [salaryData, setSalaryData] = useState<any>(null);
+    const [salaryCardsData, setSalaryCardsData] = useState<any>(null);
     const [selectedDept, setSelectedDept] = useState<any>(null);
 
     // Modals
@@ -200,7 +290,7 @@ export default function CEODashboard() {
     const fetchDashboardData = async () => {
         try {
             const res = await axios.post(
-                `${process.env.NEXT_PUBLIC_URL}/employee/getDashboardData`,
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getDashboardData`,
                 {
                     range: rangeMonths,
                     location: "",
@@ -232,7 +322,7 @@ export default function CEODashboard() {
         setIsLoading(true);
         try {
             const res = await axios.post(
-                `${process.env.NEXT_PUBLIC_URL}/hrmsreport/getDashboardData`,
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getAttendanceDashboardData`,
                 {
                     selectedDate: toDate || selectedDate,
                     from_date: fromDate,
@@ -240,6 +330,7 @@ export default function CEODashboard() {
                     Loc_code: activeBranchArray,
                     login_loc: activeBranchParam,
                     dept_code: deptCode,
+                    shift: selectedShift,
                     shiftstarttime: selectedShift,
                 },
                 {
@@ -255,9 +346,12 @@ export default function CEODashboard() {
                 if (res.data.result.deptStats) setDeptStats(res.data.result.deptStats);
                 if (res.data.result.shifts) {
                     setFormattedShifts(res.data.result.shifts.map((s: any) => ({
-                        value: String(s.SHIFTSTARTTIME),
-                        label: `${convertTo12HourFormat(s.SHIFTSTARTTIME)} - ${convertTo12HourFormat(s.SHIFTENDTIME)}`
+                        value: String(s.Misc_Code ?? s.SHIFTSTARTTIME ?? ""),
+                        label: s.ShiftTitle || (s.Misc_Name ? `${s.Misc_Name} (${s.Misc_Add1 || ''} - ${s.Misc_Add2 || ''})` : `${convertTo12HourFormat(s.SHIFTSTARTTIME)} - ${convertTo12HourFormat(s.SHIFTENDTIME)}`)
                     })));
+                }
+                if (res.data.result.rangeStats) {
+                    setRangeStats(res.data.result.rangeStats);
                 }
                 if (res.data.result.employees) {
                     setOverallEmployees(res.data.result.employees);
@@ -272,39 +366,40 @@ export default function CEODashboard() {
 
     const selectAttendancePreset = (preset: "today" | "thisMonth" | "last7Days") => {
         const today = new Date();
-        const todayStr = today.toISOString().split("T")[0];
-        let start = todayStr;
-        let end = todayStr;
+        const yday = new Date(today);
+        yday.setDate(today.getDate() - 1);
+        const ydayStr = yday.toISOString().split("T")[0];
+
+        let start = ydayStr;
+        let end = ydayStr;
 
         if (preset === "today") {
-            start = todayStr;
-            end = todayStr;
+            start = ydayStr;
+            end = ydayStr;
         } else if (preset === "thisMonth") {
             const y = today.getFullYear();
             const m = String(today.getMonth() + 1).padStart(2, "0");
             start = `${y}-${m}-01`;
-            end = todayStr;
+            end = ydayStr;
         } else if (preset === "last7Days") {
-            const d7 = new Date();
-            d7.setDate(today.getDate() - 6);
+            const d7 = new Date(yday);
+            d7.setDate(yday.getDate() - 6);
             start = d7.toISOString().split("T")[0];
-            end = todayStr;
+            end = ydayStr;
         }
 
         setAttendancePreset(preset);
         setAttendanceStartDate(start);
         setAttendanceEndDate(end);
         setSelectedDate(end);
-        fetchAttendanceData(selectedDept?.DEPT_CODE || "", start, end);
     };
 
     const handleAttendanceDateChange = (start: string, end: string) => {
         setAttendanceStartDate(start);
         setAttendanceEndDate(end);
         setAttendancePreset("custom");
-        if (start && end) {
+        if (end) {
             setSelectedDate(end);
-            fetchAttendanceData(selectedDept?.DEPT_CODE || "", start, end);
         }
     };
 
@@ -312,12 +407,13 @@ export default function CEODashboard() {
     const fetchAttendanceStatus = async () => {
         try {
             const res = await axios.post(
-                `${process.env.NEXT_PUBLIC_URL}/hrmsreport/getAttendanceStatusDashboard`,
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getAttendanceStatusDashboard`,
                 {
                     selectedDate: selectedDate,
                     Loc_code: activeBranchArray,
                     login_loc: activeBranchParam,
                     dept_code: selectedDept?.DEPT_CODE || "",
+                    shift: selectedShift || "",
                     shiftstarttime: selectedShift || ""
                 },
                 {
@@ -341,24 +437,14 @@ export default function CEODashboard() {
         try {
             // Salary targets 1 month prior to selected date / current month
             const dateObj = selectedDate ? new Date(selectedDate) : new Date();
-            const currYear = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
-            const currMonth = isNaN(dateObj.getMonth()) ? new Date().getMonth() + 1 : dateObj.getMonth() + 1;
-
-            let targetYear = currYear;
-            let targetMonth = currMonth - 1;
-            if (targetMonth < 1) {
-                targetMonth = 12;
-                targetYear = currYear - 1;
-            }
-
             const res = await axios.post(
-                `${process.env.NEXT_PUBLIC_URL}/employee/getCeoSalaryDashboard`,
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getCeoSalaryDashboard`,
                 {
                     loc_code: activeBranchParam,
                     login_loc: activeBranchParam,
                     range: rangeMonths,
-                    month: targetMonth,
-                    year: targetYear,
+                    month: salaryMonth,
+                    year: salaryYear,
                     from_date: salaryStartDate,
                     to_date: salaryEndDate,
                     dept_code: selectedDept?.DEPT_CODE || (typeof selectedDept === "string" ? selectedDept : "")
@@ -386,12 +472,15 @@ export default function CEODashboard() {
         setListModal({ open: true, title, subtitle, loading: true, data: [] });
         try {
             const res = await axios.post(
-                `${process.env.NEXT_PUBLIC_URL}/employee/getEmployeesByType`,
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getEmployeesByType`,
                 {
                     type,
                     value,
                     login_loc: activeBranchParam,
-                    loc_code: activeBranchParam
+                    loc_code: activeBranchParam,
+                    selectedDate: selectedDate || attendanceEndDate,
+                    from_date: attendanceStartDate,
+                    to_date: attendanceEndDate
                 },
                 {
                     headers: {
@@ -418,7 +507,7 @@ export default function CEODashboard() {
         setProfileModal({ open: true, data: null, loading: true });
         try {
             const res = await axios.post(
-                `${process.env.NEXT_PUBLIC_URL}/employee/getEmployeeDetails`,
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getEmployeeDetails`,
                 {
                     empcode,
                     login_loc: activeBranchParam,
@@ -440,17 +529,143 @@ export default function CEODashboard() {
         }
     };
 
-    // Master Refresh
-    const loadAllData = () => {
-        fetchDashboardData();
-        fetchAttendanceData();
-        fetchAttendanceStatus();
-        fetchSalaryData();
+    // 5. Dedicated Single API: Today Attendance Summary (Absent, Present, WO)
+    const fetchTodayAttendanceSummary = async () => {
+        if (!user?.Comp_Code) return;
+        try {
+            const res = await axios.post(
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getTodayAttendanceSummary`,
+                {
+                    selectedDate: selectedDate || attendanceEndDate,
+                    Loc_code: activeBranchArray,
+                    login_loc: activeBranchParam,
+                    loc_code: activeBranchParam,
+                    shift: selectedShift || "",
+                    shiftstarttime: selectedShift || ""
+                },
+                {
+                    headers: {
+                        compcode: user?.Comp_Code,
+                        name: user?.name
+                    }
+                }
+            );
+            if (res.data?.success && res.data?.data) {
+                setTodaySummary(res.data.data);
+            }
+        } catch (err) {
+            console.error("fetchTodayAttendanceSummary error:", err);
+        }
     };
 
+    // 6. Dedicated Single API: Salary Cards Summary (Gross, EarnGross, Deductions, NetPay)
+    const fetchSalaryCardsSummary = async () => {
+        if (!user?.Comp_Code) return;
+        try {
+            const res = await axios.post(
+                `${process.env.NEXT_PUBLIC_URL}/dashboards/getSalaryCardsSummary`,
+                {
+                    month: salaryMonth,
+                    year: salaryYear,
+                    from_date: salaryStartDate,
+                    to_date: salaryEndDate,
+                    login_loc: activeBranchParam,
+                    loc_code: activeBranchParam,
+                    Loc_code: activeBranchArray
+                },
+                {
+                    headers: {
+                        compcode: user?.Comp_Code,
+                        name: user?.name
+                    }
+                }
+            );
+            if (res.data?.success && res.data?.data) {
+                setSalaryCardsData(res.data.data);
+            }
+        } catch (err) {
+            console.error("fetchSalaryCardsSummary error:", err);
+        }
+    };
+
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    // Master Refresh: Reset all filters to default and trigger live reload
+    const loadAllData = () => {
+        if (!user?.Comp_Code) return;
+
+        const defBranch = getDefaultBranch();
+        const todayDate = getCurrentDate();
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, "0");
+        const defStart = `${y}-${m}-01`;
+        const yday = new Date(today);
+        yday.setDate(today.getDate() - 1);
+        const defEnd = yday.toISOString().split("T")[0];
+        const defSalary = getDefaultSalaryMonthYear();
+
+        // Reset all filters to default values
+        setSelectedBranch(defBranch);
+        setSelectedDate(todayDate);
+        setDateText(formatDateToDDMMYYYY(todayDate));
+        setAttendanceStartDate(defStart);
+        setAttendanceEndDate(defEnd);
+        setAttendancePreset("thisMonth");
+        setSelectedShift("");
+        setSelectedDept(null);
+        setRangeMonths(6);
+        setSalaryMonth(defSalary.month);
+        setSalaryYear(defSalary.year);
+        setGlobalView("charts");
+
+        // Bump refresh trigger to guarantee all API calls execute with fresh defaults
+        setRefreshTrigger((prev) => prev + 1);
+    };
+
+    const userCompCode = user?.Comp_Code;
+
+    // 1. Headcount & Overview Stats
     useEffect(() => {
-        loadAllData();
-    }, [selectedDate, selectedShift, rangeMonths, selectedBranch, selectedDept, salaryStartDate, salaryEndDate, attendanceStartDate, attendanceEndDate]);
+        if (userCompCode) {
+            fetchDashboardData();
+        }
+    }, [userCompCode, activeBranchParam, rangeMonths, refreshTrigger]);
+
+    // 2. Today Attendance Summary (Dedicated Single API)
+    useEffect(() => {
+        if (userCompCode) {
+            fetchTodayAttendanceSummary();
+        }
+    }, [userCompCode, activeBranchParam, selectedDate, attendanceEndDate, selectedShift, refreshTrigger]);
+
+    // 3. Multi-day Attendance Graph & Shifts
+    useEffect(() => {
+        if (userCompCode) {
+            fetchAttendanceData(selectedDept?.DEPT_CODE || "", attendanceStartDate, attendanceEndDate);
+        }
+    }, [userCompCode, activeBranchParam, attendanceStartDate, attendanceEndDate, selectedShift, selectedDept?.DEPT_CODE, refreshTrigger]);
+
+    // 4. Attendance Status Breakdown & Location Stats
+    useEffect(() => {
+        if (userCompCode) {
+            fetchAttendanceStatus();
+        }
+    }, [userCompCode, activeBranchParam, selectedDate, selectedShift, selectedDept?.DEPT_CODE, refreshTrigger]);
+
+    // 5. Salary Cards Summary (Dedicated Single API)
+    useEffect(() => {
+        if (userCompCode) {
+            fetchSalaryCardsSummary();
+        }
+    }, [userCompCode, activeBranchParam, salaryMonth, salaryYear, refreshTrigger]);
+
+    // 6. Salary Dashboard (Charts & Details)
+    useEffect(() => {
+        if (userCompCode) {
+            fetchSalaryData();
+        }
+    }, [userCompCode, activeBranchParam, salaryMonth, salaryYear, rangeMonths, selectedDept?.DEPT_CODE, refreshTrigger]);
 
     // ============ STAT METRICS CALCULATION (Real Backend Data) ============
     const activeEmployeesCount = dashboardData?.stats?.activeEmployees ?? 0;
@@ -468,59 +683,32 @@ export default function CEODashboard() {
     const attendancePct = totalToday > 0 ? ((presentCount / totalToday) * 100).toFixed(1) : "0.0";
     const latePct = presentCount > 0 ? ((lateCount / presentCount) * 100).toFixed(1) : "0.0";
 
-    // Salary Metrics (Real Backend Data)
-    const grossSalary = Number(salaryData?.SalaryCards?.GrossSalary || 0);
-    const deductions = Number(salaryData?.SalaryCards?.DeductionAmount || 0);
-    const netPay = Number(salaryData?.SalaryCards?.NetPay || 0);
-    const salaryEmpCount = Number(salaryData?.SalaryCards?.EmpCount || 0);
-    const avgGross = Number(salaryData?.SalaryCards?.AvgGross || (salaryEmpCount > 0 ? Math.round(grossSalary / salaryEmpCount) : 0));
-    const deductionPct = grossSalary > 0 ? ((deductions / grossSalary) * 100).toFixed(1) : "0.0";
+    // Salary Metrics (Real Backend Data from dedicated API)
+    const grossSalary = Number(salaryCardsData?.GrossSalary ?? salaryData?.SalaryCards?.GrossSalary ?? 0);
+    const grossEarn = Number(salaryCardsData?.GrossEarn ?? salaryData?.SalaryCards?.GrossEarn ?? 0);
+    const deductions = Number(salaryCardsData?.DeductionAmount ?? salaryData?.SalaryCards?.DeductionAmount ?? 0);
+    const netPay = Number(salaryCardsData?.NetPay ?? salaryData?.SalaryCards?.NetPay ?? 0);
+    const salaryEmpCount = Number(salaryCardsData?.EmpCount ?? salaryData?.SalaryCards?.EmpCount ?? 0);
+    const avgGross = Number(salaryCardsData?.AvgGross ?? salaryData?.SalaryCards?.AvgGross ?? (salaryEmpCount > 0 ? Math.round(grossSalary / salaryEmpCount) : 0));
+    const grossDiffText = salaryCardsData?.grossDiffText ?? salaryData?.SalaryCards?.grossDiffText;
+    const netDiffText = salaryCardsData?.netDiffText ?? salaryData?.SalaryCards?.netDiffText;
+    const deductionPct = salaryCardsData?.deductionPct ?? (grossSalary > 0 ? `${((deductions / grossSalary) * 100).toFixed(1)}% of gross` : "0.0% of gross");
 
 
-    // Active salary display period based on date range
+    // Active salary display period based on month & year
     const salaryDisplayPeriod = useMemo(() => {
         const monthsFull = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
         const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-        if (salaryStartDate && salaryEndDate) {
-            const [sY, sM] = salaryStartDate.split("-").map(Number);
-            const [eY, eM] = salaryEndDate.split("-").map(Number);
-            if (sY && sM && eY && eM) {
-                if (sY === eY && sM === eM) {
-                    return {
-                        full: `${monthsFull[sM - 1]} ${sY}`,
-                        short: `${monthsShort[sM - 1]} ${sY}`,
-                        month: sM,
-                        year: sY
-                    };
-                }
-                return {
-                    full: `${monthsShort[sM - 1].toUpperCase()} ${sY} - ${monthsShort[eM - 1].toUpperCase()} ${eY}`,
-                    short: `${monthsShort[sM - 1]} - ${monthsShort[eM - 1]} '${String(eY).slice(2)}`,
-                    month: eM,
-                    year: eY
-                };
-            }
-        }
-
-        if (salaryData?.period?.month && salaryData?.period?.year) {
-            const m = Number(salaryData.period.month) - 1;
-            const y = Number(salaryData.period.year);
-            return {
-                full: `${monthsFull[m]} ${y}`,
-                short: `${monthsShort[m]} ${y}`,
-                month: m + 1,
-                year: y
-            };
-        }
-
+        const m = salaryMonth - 1;
+        const y = salaryYear;
         return {
-            full: "SEPTEMBER 2026",
-            short: "Sep 2026",
-            month: 9,
-            year: 2026
+            full: `${monthsFull[m] || ''} ${y}`,
+            short: `${monthsShort[m] || ''} ${y}`,
+            month: salaryMonth,
+            year: salaryYear
         };
-    }, [salaryStartDate, salaryEndDate, salaryData?.period]);
+    }, [salaryMonth, salaryYear]);
 
     // Drilldown click handlers for Stat Cards
     const handleActiveClick = () => fetchEmployeesByType('active', null, 'Active Employees', `Active: ${activeEmployeesCount} employees`);
@@ -542,38 +730,21 @@ export default function CEODashboard() {
         });
     };
     const handlePresentClick = () => {
-        const mapped = (overallEmployees.present || []).map(e => ({
-            name: e.EMP_NAME,
-            EMPCODE: e.EMP_CODE,
-            designation: e.DESIGNATION,
-            department: e.DEPARTMENT,
-            status: e.PUNCH_SUBSTATUS || e.PUNCH_STATUS || "PRESENT",
-            _raw: e
-        }));
-        setListModal({
-            open: true,
-            title: "Present Employees",
-            subtitle: `Present: ${mapped.length || presentCount} employees`,
-            data: mapped,
-            loading: false
-        });
+        fetchEmployeesByType(
+            'present',
+            null,
+            'Present Employees Today',
+            `Date: ${formatDateDisplay(selectedDate || attendanceEndDate)} · Total Present: ${todaySummary?.todayPresent ?? rangeStats?.todayPresent ?? presentCount} employees`
+        );
     };
+
     const handleAbsentClick = () => {
-        const mapped = (overallEmployees.absent || []).map(e => ({
-            name: e.EMP_NAME,
-            EMPCODE: e.EMP_CODE,
-            designation: e.DESIGNATION,
-            department: e.DEPARTMENT,
-            status: "ABSENT",
-            _raw: e
-        }));
-        setListModal({
-            open: true,
-            title: "Absent Employees",
-            subtitle: `Absent: ${mapped.length || absentCount} employees`,
-            data: mapped,
-            loading: false
-        });
+        fetchEmployeesByType(
+            'absent',
+            null,
+            'Absent Employees Today',
+            `Date: ${formatDateDisplay(selectedDate || attendanceEndDate)} · Total Absent: ${todaySummary?.todayAbsent ?? rangeStats?.todayAbsent ?? absentCount} employees`
+        );
     };
     const handleLateClick = () => {
         const lateList = (attendanceStatus?.employees || [])
@@ -649,17 +820,7 @@ export default function CEODashboard() {
 
                 </div>
 
-                {/* Right: Branch Info + Profile Pill */}
-                <div className="flex items-center gap-3 self-end sm:self-auto">
-                    <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[15px] font-medium text-[#334155] dark:text-[#CBD5E1] shadow-2xs">
-                        <span className="text-[#10B981]">📍</span>
-                        <span>Branch: {selectedBranch ? `Branch ${selectedBranch}` : (userBranches.length > 0 ? userBranches.join(", ") : "All")}</span>
-                    </div>
-
-                    <div className="w-9 h-9 rounded-full bg-[#4F46E5] text-white font-bold text-[15px] flex items-center justify-center shadow-xs">
-                        {user?.name ? user.name.slice(0, 2).toUpperCase() : "AK"}
-                    </div>
-                </div>
+              
             </div>
 
             {/* Dashboard Title & Filter Controls Header */}
@@ -669,7 +830,7 @@ export default function CEODashboard() {
                         CEO HRMS Dashboard
                     </h1>
                     <p className="text-[15px] sm:text-[16px] text-[#64748B] dark:text-[#94A3B8] mt-1">
-                        As of {formatDateDisplay(selectedDate)} · {activeEmployeesCount} employees across {dashboardData?.stats?.locations || 4} locations
+                        As of {formatDateDisplay(selectedDate)} · {activeEmployeesCount} employees across {dashboardData?.stats?.locations || userBranches.length || 4} locations
                     </p>
                 </div>
 
@@ -683,7 +844,7 @@ export default function CEODashboard() {
                                 onChange={(e) => setSelectedBranch(e.target.value)}
                                 className="h-10 pl-3.5 pr-8 py-2 text-[15px] font-semibold rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#1E293B] dark:text-[#E2E8F0] outline-none focus:ring-2 focus:ring-[#4F46E5] shadow-2xs cursor-pointer appearance-none"
                             >
-                                <option value="">All Branches</option>
+                                <option value="">All Branches ({userBranches.length})</option>
                                 {userBranches.map((b) => (
                                     <option key={b} value={b}>
                                         Branch {b}
@@ -700,6 +861,7 @@ export default function CEODashboard() {
                         <input
                             type="text"
                             placeholder="DD/MM/YYYY"
+                            readOnly
                             value={dateText}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -762,25 +924,7 @@ export default function CEODashboard() {
                         </select>
                     </div>
 
-                    {/* 1 to 12 Months Range Dropdown */}
-                    <div className="relative flex items-center">
-                        <select
-                            value={rangeMonths}
-                            onChange={(e) => setRangeMonths(Number(e.target.value))}
-                            className="h-10 pl-3.5 pr-8 py-2 text-[15px] font-semibold rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#1E293B] dark:text-[#E2E8F0] outline-none focus:ring-2 focus:ring-[#4F46E5] shadow-2xs cursor-pointer appearance-none"
-                        >
-                            <option value={1}>Current month (Week-wise)</option>
-                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
-                                <option key={num} value={num}>
-                                    {num} months previous
-                                </option>
-                            ))}
-                        </select>
-                        <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#64748B] dark:text-[#94A3B8] text-xs">
-                            ▼
-                        </div>
-                    </div>
-
+                    
                     {/* Charts / Tables Global Toggle */}
                     <div className="flex bg-[#F1F5F9] dark:bg-[#1E293B] p-1 rounded-lg border border-[#E2E8F0]/80 dark:border-[#334155] text-[15px]">
                         <button
@@ -859,7 +1003,7 @@ export default function CEODashboard() {
                                 : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
                         }`}
                     >
-                        Today
+                        Yesterday
                     </button>
                     <button
                         type="button"
@@ -914,29 +1058,66 @@ export default function CEODashboard() {
                     onClick={handleDepartmentsClick}
                 />
 
-                {/* 3. Present today */}
+                {/* 3. Present */}
                 <StatCard
-                    title="Present today"
-                    value={presentCount}
+                    title="Present (Today)"
+                    value={todaySummary?.todayPresent ?? rangeStats?.todayPresent ?? presentCount}
                     icon={<span className="text-xl">👤</span>}
                     iconBg="bg-[#ECFDF5] dark:bg-[#1E293B]/40"
                     iconColor="text-[#10B981] dark:text-[#34D399]"
                     trend={{
-                        text: `${attendancePct}% attendance`,
+                        text: attendanceStartDate !== attendanceEndDate && rangeStats?.uniqueRangePresent
+                            ? `${rangeStats.uniqueRangePresent} unique in range`
+                            : `${attendancePct}% attendance`,
                         isPositive: true,
                         colorClass: "text-[#10B981] font-bold"
                     }}
                     onClick={handlePresentClick}
                 />
 
-                {/* 4. Absent today */}
+                {/* 4. Absent */}
                 <StatCard
-                    title="Absent today"
-                    value={absentCount}
+                    title="Absent (Today)"
+                    value={todaySummary?.todayAbsent ?? rangeStats?.todayAbsent ?? absentCount}
                     icon={<span className="text-xl">📋</span>}
                     iconBg="bg-[#FEF2F2] dark:bg-[#1E293B]/40"
                     iconColor="text-[#EF4444] dark:text-[#F87171]"
-                    subtitle={<span>{onLeaveCount} on leave · {weeklyOffCount} weekly off</span>}
+                    subtitle={
+                        <span>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    fetchEmployeesByType(
+                                        'weekly_off',
+                                        null,
+                                        'Weekly Off Employees',
+                                        `Date: ${formatDateDisplay(selectedDate || attendanceEndDate)} · Total Weekly Off: ${todaySummary?.todayWO ?? rangeStats?.todayWO ?? summary?.weeklyOff ?? 276} employees`
+                                    );
+                                }}
+                                className="hover:underline font-semibold text-[#64748B] dark:text-[#CBD5E1]"
+                            >
+                                {todaySummary?.todayWO ?? rangeStats?.todayWO ?? summary?.weeklyOff ?? 276} weekly off
+                            </button>
+                            {attendanceStartDate !== attendanceEndDate && rangeStats?.uniqueRangeAbsent ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        fetchEmployeesByType(
+                                            'range_absent_unique',
+                                            null,
+                                            'Unique Absent Employees (Date Range)',
+                                            `Range: ${formatDateDisplay(attendanceStartDate)} to ${formatDateDisplay(attendanceEndDate)} · Unique Employees: ${rangeStats.uniqueRangeAbsent}`
+                                        );
+                                    }}
+                                    className="hover:underline text-xs text-[#EF4444] dark:text-[#F87171] ml-1.5"
+                                >
+                                    · ({rangeStats.uniqueRangeAbsent} in range)
+                                </button>
+                            ) : null}
+                        </span>
+                    }
                     onClick={handleAbsentClick}
                 />
 
@@ -1004,39 +1185,105 @@ export default function CEODashboard() {
                 </span>
                 <div className="h-px bg-[#E2E8F0] dark:bg-[#1E293B] flex-1" />
             </div>
-            {/* Payroll Date Range Selector */}
-            <div className="flex flex-wrap items-end gap-3 my-4 bg-white dark:bg-[#1E293B] p-3 rounded-xl border border-[#E2E8F0]/80 dark:border-[#334155]/80 shadow-xs max-w-2xl">
-                <div className="w-48">
-                    <Ainput 
-                        title="From Date"
-                        type="date"
-                        name="salary_from_date"
-                        value={salaryStartDate}
-                        handleInputChange={(_name: string, val: string) => setSalaryStartDate(val)}
-                        redlabel=""
-                    />
+            {/* Payroll Month & Year Selector (Month-wise Filter) */}
+            <div className="flex flex-wrap items-end justify-between gap-3 my-4 bg-white dark:bg-[#1E293B] p-3.5 rounded-xl border border-[#E2E8F0]/80 dark:border-[#334155]/80 shadow-xs">
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Month Dropdown */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[12px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                            Salary Month
+                        </label>
+                        <select
+                            value={salaryMonth}
+                            onChange={(e) => setSalaryMonth(Number(e.target.value))}
+                            className="h-10 px-3.5 py-1.5 rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-[#1E293B] dark:text-[#F1F5F9] font-semibold text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4338CA] transition-all shadow-2xs cursor-pointer min-w-[140px]"
+                        >
+                            {MONTH_OPTIONS.map((m) => (
+                                <option key={m.value} value={m.value}>
+                                    {m.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Year Dropdown */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[12px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                            Salary Year
+                        </label>
+                        <select
+                            value={salaryYear}
+                            onChange={(e) => setSalaryYear(Number(e.target.value))}
+                            className="h-10 px-3.5 py-1.5 rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-[#1E293B] dark:text-[#F1F5F9] font-semibold text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4338CA] transition-all shadow-2xs cursor-pointer min-w-[100px]"
+                        >
+                            {YEAR_OPTIONS.map((y) => (
+                                <option key={y} value={y}>
+                                    {y}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Prev / Next Month Steppers */}
+                    <div className="flex items-center gap-1.5 pt-5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (salaryMonth === 1) {
+                                    setSalaryMonth(12);
+                                    setSalaryYear((prev) => prev - 1);
+                                } else {
+                                    setSalaryMonth((prev) => prev - 1);
+                                }
+                            }}
+                            title="Previous Month"
+                            className="h-10 px-3 flex items-center justify-center rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#0F172A] text-[#334155] dark:text-[#E2E8F0] hover:bg-[#E2E8F0] dark:hover:bg-[#1E293B] text-[13px] font-semibold transition-all shadow-2xs"
+                        >
+                            ← Prev
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (salaryMonth === 12) {
+                                    setSalaryMonth(1);
+                                    setSalaryYear((prev) => prev + 1);
+                                } else {
+                                    setSalaryMonth((prev) => prev + 1);
+                                }
+                            }}
+                            title="Next Month"
+                            className="h-10 px-3 flex items-center justify-center rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#0F172A] text-[#334155] dark:text-[#E2E8F0] hover:bg-[#E2E8F0] dark:hover:bg-[#1E293B] text-[13px] font-semibold transition-all shadow-2xs"
+                        >
+                            Next →
+                        </button>
+                    </div>
                 </div>
-                <div className="w-48">
-                    <Ainput 
-                        title="To Date"
-                        type="date"
-                        name="salary_to_date"
-                        value={salaryEndDate}
-                        handleInputChange={(_name: string, val: string) => setSalaryEndDate(val)}
-                        redlabel=""
-                    />
+
+                {/* Quick Selection Pills */}
+                <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
+                    <span className="text-[12px] font-medium text-[#94A3B8] mr-1 hidden md:inline">Quick:</span>
+                    {quickMonths.map((q) => {
+                        const mLabel = MONTH_OPTIONS.find((m) => m.value === q.month)?.label;
+                        const isSelected = salaryMonth === q.month && salaryYear === q.year;
+                        return (
+                            <button
+                                key={`${q.year}_${q.month}`}
+                                type="button"
+                                onClick={() => {
+                                    setSalaryMonth(q.month);
+                                    setSalaryYear(q.year);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all ${
+                                    isSelected
+                                        ? "bg-[#4338CA] text-white shadow-xs"
+                                        : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
+                                }`}
+                            >
+                                {mLabel} {q.year}
+                            </button>
+                        );
+                    })}
                 </div>
-                {(salaryStartDate !== defaultSalaryRange.startDate || salaryEndDate !== defaultSalaryRange.endDate) && (
-                    <button
-                        onClick={() => {
-                            setSalaryStartDate(defaultSalaryRange.startDate);
-                            setSalaryEndDate(defaultSalaryRange.endDate);
-                        }}
-                        className="mb-1 px-3 py-1.5 text-[14px] text-[#4338CA] hover:text-[#3730A3] dark:text-[#818CF8] font-semibold underline transition-all"
-                    >
-                        Reset to Last Month
-                    </button>
-                )}
             </div>
 
             {/* Row 3: 4 Payroll Metric Cards */}
@@ -1046,10 +1293,14 @@ export default function CEODashboard() {
                     title="Gross salary"
                     value={grossSalary}
                     type="gross"
-                    trend={salaryData?.SalaryCards?.grossDiffText ? {
-                        text: `↗ ${salaryData.SalaryCards.grossDiffText}`,
-                        isPositive: true,
-                        colorClass: "text-emerald-600 font-semibold"
+                    hoverItems={[
+                        { label: "Gross", value: `₹${grossSalary.toLocaleString("en-IN")}` },
+                        { label: "Earned", value: `₹${grossEarn.toLocaleString("en-IN")}` }
+                    ]}
+                    trend={grossDiffText ? {
+                        text: `↗ ${grossDiffText}`,
+                        isPositive: !grossDiffText.includes("-"),
+                        colorClass: "text-[#059669] font-semibold"
                     } : undefined}
                 />
 
@@ -1058,7 +1309,7 @@ export default function CEODashboard() {
                     title="Deductions"
                     value={deductions}
                     type="deduction"
-                    subtitle={`${deductionPct}% of gross`}
+                    subtitle={deductionPct}
                 />
 
                 {/* 3. Net Pay */}
@@ -1066,10 +1317,10 @@ export default function CEODashboard() {
                     title="Net pay"
                     value={netPay}
                     type="net"
-                    trend={salaryData?.SalaryCards?.netDiffText ? {
-                        text: `↗ ${salaryData.SalaryCards.netDiffText}`,
-                        isPositive: true,
-                        colorClass: "text-emerald-600 font-semibold"
+                    trend={netDiffText ? {
+                        text: `↗ ${netDiffText}`,
+                        isPositive: !netDiffText.includes("-"),
+                        colorClass: "text-[#059669] font-semibold"
                     } : undefined}
                 />
 
@@ -1078,6 +1329,10 @@ export default function CEODashboard() {
                     title="Avg gross per employee"
                     value={avgGross}
                     type="avg"
+                    hoverItems={salaryCardsData?.AvgGrossEarn ? [
+                        { label: "Avg Gross", value: `₹${avgGross.toLocaleString("en-IN")}` },
+                        { label: "Avg Earned", value: `₹${Number(salaryCardsData.AvgGrossEarn).toLocaleString("en-IN")}` }
+                    ] : undefined}
                     subtitle={`${salaryEmpCount > 0 ? salaryEmpCount.toLocaleString("en-IN") : 0} on payroll`}
                 />
             </div>
