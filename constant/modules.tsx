@@ -632,4 +632,100 @@ export const treeData = [
       },
     ]
   },
+  {
+    title: "CO Approval",
+    url: "/autovyn/CO_Approver_Grid",
+    ShortCut: "alt+C",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "20",
+    children: [
+      {
+        title: "CO Approver Grid |",
+        key: "20.1",
+        url: "/autovyn/CO_Approver_Grid",
+        children: [
+          {
+            title: "CO Approver Grid   | ",
+            key: "20.1.1",
+            url: "/autovyn/CO_Approver_Grid",
+          },
+
+
+        ],
+      },
+      {
+        title: "CO Request Page|",
+        key: "20.2",
+        url: "/autovyn/CO_Request_Page",
+        children: [
+          {
+            title: "CO Request Page   | ",
+            key: "20.2.1",
+            url: "/autovyn/CO_Request_Page",
+          },
+
+
+        ],
+      },
+      {
+        title: "CO Request Approval|",
+        key: "20.3",
+        url: "/autovyn/CO_Request_Approval",
+        children: [
+          {
+            title: "CO Request Approval   | ",
+            key: "20.3.1",
+            url: "/autovyn/CO_Request_Approval",
+          },
+
+
+        ],
+      },
+    ]
+  },
+
+
+  {
+    title: "Salary",
+    url: "/autovyn/admin",
+    ShortCut: "alt+u",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "21",
+    children: [
+      {
+        title: "Salary Calculation By location|",
+        key: "21.1",
+        url: "/autovyn/Salary_Calculation_By_location",
+        children: [
+          {
+            title: "Salary Calculation By location | ",
+            key: "21.1.1",
+            url: "/autovyn/Salary_Calculation_By_location",
+          }
+
+        ],
+      },
+      {
+        title: "Salary Lock|",
+        key: "21.2",
+        url: "/autovyn/Salary_Lock",
+        children: [
+          {
+            title: "Salary Lock | ",
+            key: "21.2.1",
+            url: "/autovyn/Salary_Lock",
+          }
+
+        ],
+      },
+    ]
+  },
 ];

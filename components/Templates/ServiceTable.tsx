@@ -96,7 +96,7 @@ const globalFilterFunction = (rows: any[], columnIds: string[], filterValue: str
 // COMPONENT
 // ============================================================
 
-const DataTable = ({
+const ServiceTabel = ({
   columns,
   data = [],
   onRowDoubleClick,
@@ -193,8 +193,14 @@ const DataTable = ({
       },
       globalFilter: globalFilterFunction,
       manualPagination: serverMode, // server pagination mode
-      pageCount: serverMode ? serverPagination?.totalPages || 0 : undefined,
-      autoResetPage: !serverMode, // avoid auto reset when server-controlled
+      ...(serverMode ? { pageCount: serverPagination?.totalPages || 0 } : {}),
+      autoResetPage: false, // keep page index when navigating
+      autoResetExpanded: false,
+      autoResetGroupBy: false,
+      autoResetSelectedRows: false,
+      autoResetSortBy: false,
+      autoResetFilters: false,
+      autoResetRowState: false,
     },
     useGlobalFilter,
     useSortBy,
@@ -271,7 +277,15 @@ const DataTable = ({
   // Excel export: export current filtered dataset (pre-pagination in client mode; in server mode, it's the current page data passed in)
   const onclickExceldownload = () => {
     const exportData = allRows.map((r: any) => r.original);
-    handleExcelDownload(columnsDownload || columns, exportData);
+    const baseCols = columnsDownload || columns;
+    const filteredCols = baseCols.filter(
+      (c: any) =>
+        c.accessor !== "action" &&
+        c.Header !== "Action" &&
+        c.accessor !== "actions" &&
+        c.Header !== "Actions"
+    );
+    handleExcelDownload(filteredCols, exportData);
   };
 
   const handleFilterChange = (accessor: string, value: any) => {
@@ -323,8 +337,8 @@ const DataTable = ({
     const newSelectedRows = selectAll
       ? []
       : base
-          .filter((row: any) => row?.status_appr == null)
-          .map((row: any) => ({ id: row[selectValue], rowData: row }));
+        .filter((row: any) => row?.status_appr == null)
+        .map((row: any) => ({ id: row[selectValue], rowData: row }));
 
     setSelectedRows(newSelectedRows);
     setSelectAll(!selectAll);
@@ -356,7 +370,7 @@ const DataTable = ({
       const curr = serverPagination?.currentPage || 1;
       if (curr > 1) onServerPageChange?.(curr - 1);
     } else {
-      if (canPreviousPage) previousPage();
+      previousPage();
     }
   };
 
@@ -366,7 +380,7 @@ const DataTable = ({
       const tp = serverPagination?.totalPages || 1;
       if (curr < tp) onServerPageChange?.(curr + 1);
     } else {
-      if (canNextPage) nextPage();
+      nextPage();
     }
   };
 
@@ -393,18 +407,24 @@ const DataTable = ({
 
   const totalItemsLabel = serverMode
     ? (typeof serverPagination?.totalRecords === "number"
-        ? serverPagination.totalRecords
-        : allRows.length)
+      ? serverPagination.totalRecords
+      : allRows.length)
     : allRows.length;
 
   return (
     <div className="p-0">
-      <div className="h-10">
-        <div className="flex items-center">
-          <SmallTitle text={title} />
-          <div className="flex gap-3 mt-0 ml-auto">
+      <div className="min-h-10 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          {title ? (
+            <div className="shrink-0">
+              <SmallTitle text={title} />
+            </div>
+          ) : (
+            <div />
+          )}
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto sm:ml-auto">
             <Button
-              className="hidden md:block w-[126px] font-bold bg-[#ecfdf3] text-[#28a745] border-2 border-[#28a745] text-[14px]"
+              className="w-auto sm:w-[126px] font-bold bg-[#ecfdf3] text-[#28a745] border-2 border-[#28a745] text-xs sm:text-[14px] px-2.5 sm:px-3 h-[32px] shrink-0"
               onClick={onclickExceldownload}
               size={"sm"}
               disabled={isLoading}
@@ -419,7 +439,7 @@ const DataTable = ({
             {filterPosition === "FilterData" && (
               <Button
                 onClick={resetAllFilters}
-                className="hidden md:block w-[126px] font-bold border-2 border-header text-header dark:text-white text-[14px]"
+                className="w-auto sm:w-[126px] font-bold border-2 border-header text-header dark:text-white text-xs sm:text-[14px] px-2.5 sm:px-3 h-[32px] shrink-0"
                 size={"sm"}
               >
                 Reset Filters
@@ -427,7 +447,7 @@ const DataTable = ({
             )}
 
             <input
-              className="border border-borderColor dark:border-borderColor-dark h-[30px] px-1.5 w-52 text-black dark:text-white py-1.5 dark:bg-input rounded text-sm shadow focus:outline-none focus:ring ease-linear transition-all duration-150"
+              className="border border-borderColor dark:border-borderColor-dark h-[32px] px-2.5 w-full sm:w-52 text-black dark:text-white py-1 dark:bg-input rounded text-xs sm:text-sm shadow focus:outline-none focus:ring ease-linear transition-all duration-150"
               type="text"
               value={globalFilter || ""}
               onChange={(e) => setGlobalFilter(e.target.value)}
@@ -438,7 +458,7 @@ const DataTable = ({
       </div>
 
       <div
-        className="overflow-y-scroll no-visible-scrollbar"
+        className="overflow-x-auto overflow-y-scroll no-visible-scrollbar w-full"
         style={{ height: uiHeight }}
       >
         <table
@@ -512,9 +532,8 @@ const DataTable = ({
 
           {/* Main table header */}
           <thead
-            className={`sticky ${
-              filterPosition === "FilterData" && enableColumnFilters ? "top-[50px]" : "top-0"
-            }  border border-borderColor dark:border-borderColor-dark h-6 bg-off dark:bg-input text-header dark:text-white `}
+            className={`sticky z-10 ${filterPosition === "FilterData" && enableColumnFilters ? "top-[50px]" : "top-0"
+              }  border border-borderColor dark:border-borderColor-dark h-6 bg-off dark:bg-input text-header dark:text-white `}
             style={{ borderRadius: "5px" }}
           >
             {headerGroups.map((headerGroup: any, headerIndex: number) => (
@@ -541,9 +560,8 @@ const DataTable = ({
                     <th
                       key={accessor}
                       {...column.getHeaderProps(column.getSortByToggleProps())}
-                      className={`border border-borderColor dark:border-borderColor-dark ${headerClassName || size || "text-sm"} ${
-                        column.align === "center" ? "text-center" : "text-left"
-                      } text-left px-2 py-3 whitespace-nowrap`}
+                      className={`border border-borderColor dark:border-borderColor-dark ${headerClassName || size || "text-sm"} ${column.align === "center" ? "text-center" : "text-left"
+                        } text-left px-2 py-3 whitespace-nowrap`}
                     >
                       <div className="flex items-center justify-between">
                         <span
@@ -551,8 +569,8 @@ const DataTable = ({
                             column.HeaderAlign === "center"
                               ? "text-center w-full"
                               : column.HeaderAlign === "right"
-                              ? "text-right w-full"
-                              : "text-left"
+                                ? "text-right w-full"
+                                : "text-left"
                           }
                         >
                           {String(column.render("Header")).toUpperCase()}
@@ -674,11 +692,10 @@ const DataTable = ({
                 <tr
                   key={row.id}
                   {...row.getRowProps()}
-                  className={`cursor-pointer hover:bg-[#8190a8] dark:hover:bg-[#9CA3AF] dark:text-black 
-                    ${
-                      isSelectedselect.some((r) => r.id === rowId)
-                        ? "bg-[#bfdbfe] dark:bg-[#5f679f] hover:bg-[#bfdbfe] dark:hover:bg-[#5f679f]"
-                        : "bg-white dark:bg-primary dark:bg-opacity-10 hover:bg-gray-100 dark:hover:bg-dark-200"
+                  className={`cursor-pointer hover:bg-[#8190a8] dark:hover:bg-[#9CA3AF] dark:text-black
+                    ${isSelectedselect.some((r) => r.id === rowId)
+                      ? "bg-[#bfdbfe] dark:bg-[#5f679f] hover:bg-[#bfdbfe] dark:hover:bg-[#5f679f]"
+                      : "bg-white dark:bg-primary dark:bg-opacity-10 hover:bg-gray-100 dark:hover:bg-dark-200"
                     }`}
                   onClick={() => {
                     if (row?.original?.status_khud_ka == null) {
@@ -707,17 +724,16 @@ const DataTable = ({
                     <td
                       key={cell.column.id}
                       {...cell.getCellProps()}
-                      className={`border border-borderColor dark:border-borderColor-dark px-2 py-[12px] whitespace-nowrap dark:text-white dark:bg-[#15203F] bg-white ${
-                        cell.column.cellAlign === "right"
+                      className={`border border-borderColor dark:border-borderColor-dark px-2 py-[12px] whitespace-nowrap dark:text-white dark:bg-[#15203F] bg-white ${cell.column.cellAlign === "right"
                           ? "text-right"
                           : cell.column.cellAlign === "center"
-                          ? "text-center"
-                          : "text-left"
-                      }`}
+                            ? "text-center"
+                            : "text-left"
+                        }`}
                     >
                       <div title={cell.value} className={`${size || "text-[13px]"}`}>
                         {typeof cell.value === "string" &&
-                        cell.value.length > MAX_CONTENT_LENGTH
+                          cell.value.length > MAX_CONTENT_LENGTH
                           ? truncateText(cell.value)
                           : cell.render("Cell")}
                       </div>
@@ -760,24 +776,39 @@ const DataTable = ({
       )}
 
       {/* Pagination Controls (adaptive) */}
-      <div className="flex flex-wrap justify-between items-center mt-4 px-3 gap-2">
-       
+      <div className="flex flex-col sm:flex-row justify-between items-center mt-4 px-2 sm:px-3 gap-3">
+        <div className="flex items-center justify-between w-full sm:w-auto gap-2 order-2 sm:order-1">
+          <button
+            type="button"
+            onClick={handlePrev}
+            disabled={
+              serverMode
+                ? (serverPagination?.currentPage || 1) <= 1
+                : !canPreviousPage
+            }
+            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-[#3b82f6] text-white rounded disabled:opacity-50 cursor-pointer transition-opacity"
+          >
+            Previous
+          </button>
 
-        <button
-          onClick={handlePrev}
-          disabled={
-            serverMode
-              ? (serverPagination?.currentPage || 1) <= 1
-              : !canPreviousPage
-          }
-          className="px-4 py-2 bg-[#3b82f6] text-white rounded disabled:opacity-50"
-        >
-          Previous
-        </button>
- <div className="flex items-center gap-2">
-          <span className={labelClassName || size || "text-sm"}>Page Size:</span>
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={
+              serverMode
+                ? (serverPagination?.currentPage || 1) >= (serverPagination?.totalPages || 1)
+                : !canNextPage
+            }
+            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-[#3b82f6] text-white rounded disabled:opacity-50 cursor-pointer sm:hidden transition-opacity"
+          >
+            Next
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-2 order-1 sm:order-2 w-full sm:w-auto">
+          <span className={labelClassName || size || "text-xs sm:text-sm"}>Page Size:</span>
           <select
-            className={`h-8 rounded border border-borderColor bg-white px-2 dark:border-borderColor-dark dark:bg-input dark:text-white ${labelClassName || size || "text-sm"}`}
+            className={`h-7 sm:h-8 rounded border border-borderColor bg-white px-2 dark:border-borderColor-dark dark:bg-input dark:text-white ${labelClassName || size || "text-xs sm:text-sm"}`}
             value={serverMode ? serverPagination?.pageSize || pageSize : pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
           >
@@ -787,24 +818,24 @@ const DataTable = ({
               </option>
             ))}
           </select>
-          <span className={`font-semibold ${labelClassName || size || "text-sm"}`}>
-          Page{" "}
-          <strong>
-            {currentPage} of {totalPages}
-          </strong>{" "}
-          ({totalItemsLabel} items)
-        </span>
+          <span className={`font-semibold ${labelClassName || size || "text-xs sm:text-sm"}`}>
+            Page{" "}
+            <strong>
+              {currentPage} of {totalPages}
+            </strong>{" "}
+            ({totalItemsLabel} items)
+          </span>
         </div>
-        
 
         <button
+          type="button"
           onClick={handleNext}
           disabled={
             serverMode
               ? (serverPagination?.currentPage || 1) >= (serverPagination?.totalPages || 1)
               : !canNextPage
           }
-          className="px-4 py-2 bg-[#3b82f6] text-white rounded disabled:opacity-50"
+          className="hidden sm:inline-block px-4 py-2 text-sm bg-[#3b82f6] text-white rounded disabled:opacity-50 cursor-pointer order-3 transition-opacity"
         >
           Next
         </button>
@@ -813,4 +844,4 @@ const DataTable = ({
   );
 };
 
-export default DataTable;
+export default ServiceTabel;
