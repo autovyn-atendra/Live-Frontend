@@ -157,7 +157,17 @@ export default function Index() {
     }
   };
 
-  const handleComp_Code = (e) => setCompCode(e.target.value);
+  const handleComp_Code = (e: any) => {
+    setCompCode(e.target.value);
+    setValue("comp_code", e.target.value);
+  };
+
+  const handleComp_Blur = (e: any) => {
+    const val = e.target.value?.trim();
+    if (val && val.length >= 4) {
+      fetchYear(val);
+    }
+  };
 
   const fetchYear = async (year) => {
     setYearData([]);
@@ -317,6 +327,7 @@ export default function Index() {
                           className="border-0 px-1.5 py-1.5 text-[#686262] dark:bg-white bg rounded text-base font-semibold shadow focus:outline-none focus:ring w-full ease-linear transition-all duration-150"
                           {...register("comp_code", { required: true })}
                           onChange={handleComp_Code}
+                          onBlur={handleComp_Blur}
                         />
                         {errors.comp_code?.type == "required" && (
                           <p className="text-xs uppercase font-bold mb-1 text-exit">Company Code Required</p>
