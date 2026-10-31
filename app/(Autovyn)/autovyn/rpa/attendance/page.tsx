@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useCurrentUser } from "@/app/hooks/use-current-user";
 import { Button } from "@/components/ui/button";
 import Swal from "sweetalert2";
@@ -17,7 +18,8 @@ import {
   X,
   FileSpreadsheet,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Smartphone
 } from "lucide-react";
 
 interface ProgressEventData {
@@ -362,6 +364,37 @@ export default function RpaAttendancePage() {
             </span>
             <span className="text-xm text-[#6ee7b7] block mt-1 font-mono">devs.autovyn.com</span>
           </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-[#ffffff]/15">
+          <div className="px-4 py-2 text-xs font-bold rounded-xl bg-[#ffffff] text-[#1e3a8a] shadow-sm flex items-center gap-1.5">
+            📊 Attendance Report RPA
+          </div>
+          <Link
+            href="/autovyn/rpa/whatsapp"
+            className="px-4 py-2 text-xs font-semibold rounded-xl text-[#bfdbfe] hover:text-[#ffffff] hover:bg-[#ffffff]/10 transition-all flex items-center gap-1.5"
+          >
+            <Smartphone size={14} /> 📱 WhatsApp &amp; DMS Hub
+          </Link>
+          <Link
+            href="/autovyn/rpa/outlook"
+            className="px-4 py-2 text-xs font-semibold rounded-xl text-[#bfdbfe] hover:text-[#ffffff] hover:bg-[#ffffff]/10 transition-all flex items-center gap-1.5"
+          >
+            📧 Email OTP RPA
+          </Link>
+          <Link
+            href="/autovyn/rpa/vynfinance"
+            className="px-4 py-2 text-xs font-semibold rounded-xl text-[#bfdbfe] hover:text-[#ffffff] hover:bg-[#ffffff]/10 transition-all flex items-center gap-1.5"
+          >
+            🖥️ VYNFINANCE RPA
+          </Link>
+          <Link
+            href="/autovyn/rpa/ai-vision"
+            className="px-4 py-2 text-xs font-semibold rounded-xl text-[#bfdbfe] hover:text-[#ffffff] hover:bg-[#ffffff]/10 transition-all flex items-center gap-1.5"
+          >
+            ✨ AI Vision Odometer
+          </Link>
         </div>
       </div>
 

@@ -82,21 +82,21 @@ export default function DepartmentsTodayCard({
     };
 
     return (
-        <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-[#E2E8F0]/80 dark:border-[#1E293B] p-5 shadow-xs flex flex-col justify-between h-full">
+        <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-[#E2E8F0]/80 dark:border-[#1E293B] p-3.5 sm:p-5 shadow-xs flex flex-col justify-between h-full">
             {/* Header */}
             <div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-lg font-bold text-[#0F172A] dark:text-white">
+                        <h2 className="text-base sm:text-lg font-bold text-[#0F172A] dark:text-white">
                             Departments today
                         </h2>
-                        <p className="text-[15px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+                        <p className="text-xs sm:text-[14px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
                             {calcPresent} in · {calcAbsent} out of {calcTotal}
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2.5 self-start sm:self-auto">
-                        <div className="flex bg-[#F1F5F9] dark:bg-[#1E293B] p-1 rounded-lg border border-[#E2E8F0]/80 dark:border-[#334155]/80 text-[15px]">
+                    <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+                        <div className="flex bg-[#F1F5F9] dark:bg-[#1E293B] p-1 rounded-lg border border-[#E2E8F0]/80 dark:border-[#334155]/80 text-[13px] sm:text-[14px]">
                             <button
                                 onClick={() => setViewMode("chart")}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
@@ -154,18 +154,18 @@ export default function DepartmentsTodayCard({
                                     } ${isSelected ? "ring-2 ring-[#4F46E5] bg-[#EEF2FF]" : ""}`}
                                 >
                                     {/* Top labels */}
-                                    <div className="flex items-center justify-between text-[15px] font-medium mb-1.5">
-                                        <span className="text-[#1E293B] dark:text-[#E2E8F0] font-semibold group-hover:text-[#4F46E5] transition-colors">
+                                    <div className="flex items-center justify-between text-xs sm:text-[14px] font-medium mb-1.5 gap-2">
+                                        <span className="text-[#1E293B] dark:text-[#E2E8F0] font-semibold group-hover:text-[#4F46E5] transition-colors truncate max-w-[130px] sm:max-w-[220px]">
                                             {item.department}
                                         </span>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-[#10B981] font-semibold">
+                                        <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-[14px] shrink-0">
+                                            <span className="text-[#10B981] font-semibold whitespace-nowrap">
                                                 {item.inCount} in
                                             </span>
-                                            <span className="text-[#EF4444] font-semibold">
+                                            <span className="text-[#EF4444] font-semibold whitespace-nowrap">
                                                 {item.outCount} out
                                             </span>
-                                            <span className="text-[#94A3B8] font-medium w-6 text-right">
+                                            <span className="text-[#94A3B8] font-medium min-w-[24px] text-right">
                                                 {item.total}
                                             </span>
                                         </div>

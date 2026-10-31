@@ -1,11 +1,12 @@
 "use client";
 
 import { useCurrentUser } from "@/app/hooks/use-current-user";
+import { useSession } from "next-auth/react";
 import HashloaderComponent from "@/components/Templates/hashloader";
 import { Button } from "@/components/ui/button";
 import CustomSelectSearch from "@/components/atoms/Select";
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import Image from "next/image";
 import {
@@ -67,7 +68,37 @@ type RowLoading = Partial<Record<StageKey, boolean>>;
 type StatusFilter = "all" | "complete" | "progress" | "notstarted";
 
 export default function BranchProcessControl() {
-  const user = useCurrentUser();
+  const { data: session } = useSession();
+  const currentUser = useCurrentUser();
+  const user: any = session?.user || currentUser;
+
+  const compCode = useMemo(() => {
+    return (
+      user?.Comp_Code ||
+      user?.compcode ||
+      user?.CompCode ||
+      (typeof window !== "undefined" ? localStorage.getItem("compCode") : null) ||
+      ""
+    );
+  }, [user]);
+
+  const empCode = useMemo(() => {
+    return (
+      user?.EMPCODE ??
+      user?.empcode ??
+      user?.emp_code ??
+      ""
+    );
+  }, [user]);
+
+  const userName = useMemo(() => {
+    return (
+      user?.name ||
+      user?.username ||
+      (typeof window !== "undefined" ? localStorage.getItem("username") : null) ||
+      ""
+    );
+  }, [user]);
 
   const [isBootLoading, setIsBootLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
@@ -90,6 +121,27 @@ export default function BranchProcessControl() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("all");
+
+  const branchListRef = useRef<HTMLDivElement>(null);
+
+  const handleKpiFilterClick = (filter: StatusFilter) => {
+    setStatusFilter((prev) => (filter !== "all" && prev === filter ? "all" : filter));
+    setTimeout(() => {
+      branchListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  const branchOptions = useMemo(() => {
+    const list = [{ label: "All Branches", value: "all" }];
+    locationData.forEach((loc) => {
+      list.push({
+        label: `${loc.label} (#${loc.value})`,
+        value: String(loc.value),
+      });
+    });
+    return list;
+  }, [locationData]);
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => ({
     label: new Date(2000, i, 1).toLocaleString("en-US", { month: "long" }),
@@ -113,47 +165,47 @@ export default function BranchProcessControl() {
     bgTint: string;
     borderTint: string;
   }[] = [
-    {
-      key: "attendanceCalc",
-      label: "Attendance Calculation",
-      short: "Calculate Attendance",
-      stepNum: 1,
-      icon: Calculator,
-      accent: "#f97316",
-      bgTint: "bg-[#fff7ed] dark:bg-[#431407]/20",
-      borderTint: "border-[#fed7aa] dark:border-[#7c2d12]/40",
-    },
-    {
-      key: "attendanceLock",
-      label: "Attendance Lock",
-      short: "Lock Attendance",
-      stepNum: 2,
-      icon: Lock,
-      accent: "#3b82f6",
-      bgTint: "bg-[#eff6ff] dark:bg-[#172554]/20",
-      borderTint: "border-[#bfdbfe] dark:border-[#1e3a8a]/40",
-    },
-    {
-      key: "salaryRun",
-      label: "Salary Run",
-      short: "Execute Salary",
-      stepNum: 3,
-      icon: Coins,
-      accent: "#10b981",
-      bgTint: "bg-[#ecfdf5] dark:bg-[#022c22]/20",
-      borderTint: "border-[#a7f3d0] dark:border-[#064e3b]/40",
-    },
-    {
-      key: "salaryLock",
-      label: "Salary Lock",
-      short: "Lock Salary",
-      stepNum: 4,
-      icon: ShieldCheck,
-      accent: "#ef4444",
-      bgTint: "bg-[#fff1f2] dark:bg-[#4c0519]/20",
-      borderTint: "border-[#fecdd3] dark:border-[#881337]/40",
-    },
-  ];
+      {
+        key: "attendanceCalc",
+        label: "Attendance Calculation",
+        short: "Calculate Attendance",
+        stepNum: 1,
+        icon: Calculator,
+        accent: "#f97316",
+        bgTint: "bg-[#fff7ed] dark:bg-[#431407]/20",
+        borderTint: "border-[#fed7aa] dark:border-[#7c2d12]/40",
+      },
+      {
+        key: "attendanceLock",
+        label: "Attendance Lock",
+        short: "Lock Attendance",
+        stepNum: 2,
+        icon: Lock,
+        accent: "#3b82f6",
+        bgTint: "bg-[#eff6ff] dark:bg-[#172554]/20",
+        borderTint: "border-[#bfdbfe] dark:border-[#1e3a8a]/40",
+      },
+      {
+        key: "salaryRun",
+        label: "Salary Run",
+        short: "Execute Salary",
+        stepNum: 3,
+        icon: Coins,
+        accent: "#10b981",
+        bgTint: "bg-[#ecfdf5] dark:bg-[#022c22]/20",
+        borderTint: "border-[#a7f3d0] dark:border-[#064e3b]/40",
+      },
+      {
+        key: "salaryLock",
+        label: "Salary Lock",
+        short: "Lock Salary",
+        stepNum: 4,
+        icon: ShieldCheck,
+        accent: "#ef4444",
+        bgTint: "bg-[#fff1f2] dark:bg-[#4c0519]/20",
+        borderTint: "border-[#fecdd3] dark:border-[#881337]/40",
+      },
+    ];
 
   function showToast(message: string, type: "success" | "error" | "warning" | "info") {
     Swal.mixin({
@@ -175,6 +227,26 @@ export default function BranchProcessControl() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const formatDateToDDMMYY = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return "";
+    try {
+      const str = String(dateStr).trim();
+      const match = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (match) {
+        const [, year, month, day] = match;
+        return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year.slice(-2)}`;
+      }
+      const d = new Date(str);
+      if (isNaN(d.getTime())) return str;
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = String(d.getFullYear()).slice(-2);
+      return `${day}/${month}/${year}`;
+    } catch {
+      return String(dateStr);
+    }
+  };
+
   // ==================== UPDATE PROCESS COMPLETION ====================
   const updateProcessCompletion = async (
     locations: number[],
@@ -194,9 +266,10 @@ export default function BranchProcessControl() {
           Is_Completed: isCompleted,
           Lock_Date: lockDateVal || null,
           Remarks: remarks || `${processType} completed successfully`,
-          EMPCODE: user?.EMPCODE,
+          EMPCODE: empCode,
+          compCode: compCode,
         },
-        { headers: { compcode: user?.Comp_Code, name: user?.name } }
+        { headers: { compcode: compCode, name: userName } }
       );
     } catch (error) {
       console.error("Error updating process completion:", error);
@@ -208,6 +281,11 @@ export default function BranchProcessControl() {
       return;
     }
 
+    if (!compCode || !empCode) {
+      console.warn("fetchLocations waiting for credentials:", { compCode, empCode });
+      return;
+    }
+
     setIsBootLoading(true);
     try {
       const res = await axios.post(
@@ -215,14 +293,10 @@ export default function BranchProcessControl() {
         {
           Month: formData.Month,
           Year: formData.Year,
-          EMPCODE: user?.EMPCODE,
+          EMPCODE: empCode,
+          compCode: compCode,
         },
-        {
-          headers: {
-            compcode: user?.Comp_Code,
-            name: user?.name,
-          },
-        }
+        { headers: { compcode: compCode, name: userName } }
       );
 
       if (!res.data?.success || !Array.isArray(res.data?.data)) {
@@ -232,8 +306,10 @@ export default function BranchProcessControl() {
       const locations = res.data.data;
 
       const formattedLocations = locations.map((loc: any) => ({
+        id: loc.id,
         value: Number(loc.id),
         label: loc.name || `Branch - ${loc.id}`,
+        name: loc.name || "",
         Join_Date: loc.joinDate ?? null,
         processes: loc.processes ?? {},
       }));
@@ -280,9 +356,11 @@ export default function BranchProcessControl() {
   };
 
   useEffect(() => {
-    fetchLocations();
+    if (formData.Month && formData.Year && compCode && empCode) {
+      fetchLocations();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.branch, formData.Month, formData.Year]);
+  }, [user?.branch, compCode, empCode, formData.Month, formData.Year]);
 
   const handleCheckboxChange = (value: number) => {
     setSelectedLocations((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
@@ -322,17 +400,40 @@ export default function BranchProcessControl() {
   }, [locationData, statusMap]);
 
   const filteredLocations = useMemo(() => {
+    const rawQuery = searchQuery.trim().toLowerCase();
+    const tokens = rawQuery.split(/\s+/).filter(Boolean);
+
     return locationData.filter((loc) => {
-      if (searchQuery.trim() && !loc.label.toLowerCase().includes(searchQuery.trim().toLowerCase())) {
-        return false;
+      // 1. Branch Dropdown filter
+      if (selectedBranchFilter && selectedBranchFilter !== "all") {
+        if (String(loc.value) !== selectedBranchFilter && String(loc.id) !== selectedBranchFilter) {
+          return false;
+        }
       }
+
+      // 2. Search query filter
+      if (tokens.length > 0) {
+        const idStr = String(loc.value ?? loc.id ?? "").toLowerCase();
+        const labelStr = String(loc.label ?? "").toLowerCase();
+        const nameStr = String(loc.name ?? "").toLowerCase();
+        const combined = `${labelStr} ${nameStr} ${idStr} #${idStr} branch ${idStr} branch-${idStr}`;
+
+        const matchesAll = tokens.every((token) => {
+          const tClean = token.replace(/^#/, "");
+          return combined.includes(token) || (tClean && combined.includes(tClean));
+        });
+
+        if (!matchesAll) return false;
+      }
+
+      // 3. Status filter from KPI cards
       const c = completedStageCount(statusMap[loc.value] || {});
       if (statusFilter === "complete" && c !== 4) return false;
       if (statusFilter === "notstarted" && c !== 0) return false;
       if (statusFilter === "progress" && (c === 0 || c === 4)) return false;
       return true;
     });
-  }, [locationData, statusMap, searchQuery, statusFilter]);
+  }, [locationData, statusMap, searchQuery, statusFilter, selectedBranchFilter]);
 
   const handleSelectAllFiltered = () => {
     const filteredIds = filteredLocations.map((l) => l.value);
@@ -398,8 +499,8 @@ export default function BranchProcessControl() {
               },
               {
                 headers: {
-                  compcode: user?.Comp_Code,
-                  name: user?.name,
+                  compcode: compCode,
+                  name: userName,
                 },
               }
             );
@@ -442,7 +543,8 @@ export default function BranchProcessControl() {
                 Month: formData.Month,
                 Year: formData.Year,
               },
-              { headers: { compcode: user?.Comp_Code, name: user?.name } }
+
+              { headers: { compcode: compCode, name: userName } }
             );
             results.attendanceLock.success.push(locName);
             await updateProcessCompletion(
@@ -468,8 +570,8 @@ export default function BranchProcessControl() {
               },
               {
                 headers: {
-                  compcode: user?.Comp_Code,
-                  name: user?.name,
+                  compcode: compCode,
+                  name: userName,
                 },
               }
             );
@@ -506,7 +608,7 @@ export default function BranchProcessControl() {
                 Month: formData.Month,
                 Year: formData.Year,
               },
-              { headers: { compcode: user?.Comp_Code, name: user?.name } }
+              { headers: { compcode: compCode, name: userName } }
             );
             results.salaryLock.success.push(locName);
             await updateProcessCompletion([locId], "SALARY_LOCK", true, dateToUse, "Salary lock completed");
@@ -583,8 +685,8 @@ export default function BranchProcessControl() {
         },
         {
           headers: {
-            compcode: user?.Comp_Code,
-            name: user?.name,
+            compcode: compCode,
+            name: userName,
           },
         }
       );
@@ -650,7 +752,7 @@ export default function BranchProcessControl() {
           Month: formData.Month,
           Year: formData.Year,
         },
-        { headers: { compcode: user?.Comp_Code, name: user?.name } }
+        { headers: { compcode: compCode, name: userName } }
       );
       await updateProcessCompletion([locId], "ATTENDANCE_LOCK", true, lockDate, "Attendance lock completed");
       showToast("Attendance locked successfully", "success");
@@ -683,8 +785,8 @@ export default function BranchProcessControl() {
         },
         {
           headers: {
-            compcode: user?.Comp_Code,
-            name: user?.name,
+            compcode: compCode,
+            name: userName,
           },
         }
       );
@@ -744,7 +846,7 @@ export default function BranchProcessControl() {
           Month: formData.Month,
           Year: formData.Year,
         },
-        { headers: { compcode: user?.Comp_Code, name: user?.name } }
+        { headers: { compcode: compCode, name: userName } }
       );
       await updateProcessCompletion([locId], "SALARY_LOCK", true, lockDate, "Salary lock completed");
       showToast("Salary locked successfully", "success");
@@ -779,7 +881,7 @@ export default function BranchProcessControl() {
     try {
       const { dateFrom, dateto } = getMonthDateRange(formData.Month, formData.Year);
       const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_URL}/hrmsreport/attendanceReport?compcode=${user?.Comp_Code}`,
+        `${process.env.NEXT_PUBLIC_URL}/hrmsreport/attendanceReport?compcode=${compCode}`,
         {
           dateFrom,
           dateto,
@@ -789,8 +891,8 @@ export default function BranchProcessControl() {
         },
         {
           headers: {
-            compcode: user?.Comp_Code,
-            name: user?.name,
+            compcode: compCode,
+            name: userName,
           },
           responseType: "blob",
         }
@@ -826,7 +928,7 @@ export default function BranchProcessControl() {
     try {
       const { dateFrom, dateto } = getMonthDateRange(formData.Month, formData.Year);
       const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_URL}/hrmsreport/SalaryReport?compcode=${user?.Comp_Code}`,
+        `${process.env.NEXT_PUBLIC_URL}/hrmsreport/SalaryReport?compcode=${compCode}`,
         {
           dateFrom,
           dateto,
@@ -835,8 +937,8 @@ export default function BranchProcessControl() {
         },
         {
           headers: {
-            compcode: user?.Comp_Code,
-            name: user?.name,
+            compcode: compCode,
+            name: userName,
           },
           responseType: "blob",
         }
@@ -877,33 +979,6 @@ export default function BranchProcessControl() {
     setPendingLocationId(null);
     setCurrentProcessType("");
   };
-
-  const filterChips: { key: StatusFilter; label: string; count: number; activeClass: string }[] = [
-    {
-      key: "all",
-      label: "All Branches",
-      count: stats.total,
-      activeClass: "bg-[#0f172a] text-white dark:bg-white dark:text-[#020617] border-transparent shadow-md",
-    },
-    {
-      key: "complete",
-      label: "Fully Completed",
-      count: stats.complete,
-      activeClass: "bg-[#059669] text-white border-transparent shadow-md shadow-[#10b981]/25",
-    },
-    {
-      key: "progress",
-      label: "In Progress",
-      count: stats.inProgress,
-      activeClass: "bg-[#d97706] text-white border-transparent shadow-md shadow-[#f59e0b]/25",
-    },
-    {
-      key: "notstarted",
-      label: "Pending",
-      count: stats.notStarted,
-      activeClass: "bg-[#e11d48] text-white border-transparent shadow-md shadow-[#f43f5e]/25",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-[#f8fafc]/90 dark:bg-[#090d16] text-[#1e293b] dark:text-[#f1f5f9] font-sans antialiased pb-24 text-base">
@@ -948,7 +1023,7 @@ export default function BranchProcessControl() {
                 className="px-5 py-2.5 rounded-xl text-sm sm:text-base font-bold bg-white/10 hover:bg-white/15 text-white border border-white/15 backdrop-blur-sm transition-all duration-200 flex items-center gap-2.5 active:scale-95 shadow-md"
               >
                 <ArrowLeft className="w-5 h-5" />
-                Back 
+                Back
               </button>
             </div>
           </div>
@@ -956,14 +1031,14 @@ export default function BranchProcessControl() {
       </div>
 
       {/* ============================================================== */}
-      {/* 2. DASHBOARD CONTROL BAR (Period, Search & Filter Chips)       */}
+      {/* 2. DASHBOARD CONTROL BAR (Period, Branch Dropdown & Search)    */}
       {/* ============================================================== */}
       <div className=" mx-auto px-4 sm:px-6 lg:px-8 -mt-4 relative z-20">
         <div className="bg-white dark:bg-[#0f172a] rounded-2xl shadow-xl shadow-[#e2e8f0]/60 dark:shadow-black/60 border border-[#e2e8f0] dark:border-[#1e293b] p-5 sm:p-6 backdrop-blur-md">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-            {/* Period selector */}
-            <div className="flex items-center gap-4 shrink-0">
-              <div className="w-52">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            {/* Period and Branch dropdown selectors */}
+            <div className="flex flex-wrap items-end gap-3.5 shrink-0">
+              <div className="w-44">
                 <CustomSelectSearch
                   title={"Month"}
                   name={"Month"}
@@ -975,7 +1050,7 @@ export default function BranchProcessControl() {
                   labelClass="!text-sm !font-black !text-[#1e293b] dark:!text-white mb-1"
                 />
               </div>
-              <div className="w-44">
+              <div className="w-36">
                 <CustomSelectSearch
                   title={"Year"}
                   name={"Year"}
@@ -987,58 +1062,60 @@ export default function BranchProcessControl() {
                   labelClass="!text-sm !font-black !text-[#1e293b] dark:!text-white mb-1"
                 />
               </div>
+
+              {locationData.length > 0 && (
+                <div className="w-56 sm:w-64">
+                  <CustomSelectSearch
+                    title={"Branch"}
+                    name={"BranchFilter"}
+                    selectedValue={selectedBranchFilter}
+                    options={branchOptions}
+                    handleInputChange={(_, val) => setSelectedBranchFilter(val || "all")}
+                    placeholder="All Branches"
+                    className="!h-11 !text-base !rounded-xl !border-[#cbd5e1] dark:!border-[#334155] font-bold"
+                    labelClass="!text-sm !font-black !text-[#1e293b] dark:!text-white mb-1"
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Search and Filters */}
+            {/* Search Bar with dedicated Search Button */}
             {locationData.length > 0 && (
-              <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
-                <div className="relative flex-1 min-w-[240px]">
-                  <Search className="w-5 h-5 text-[#94a3b8] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search branch name or ID…"
-                    className="w-full pl-11 pr-10 py-3 text-base sm:text-lg rounded-xl border border-[#e2e8f0] dark:border-[#1e293b] bg-[#f8fafc] dark:bg-[#020617] focus:bg-white dark:focus:bg-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#f97316]/30 focus:border-[#f97316] transition-all text-[#1e293b] dark:text-white font-medium"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#475569] dark:hover:text-[#f1f5f9] p-1"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  )}
+              <div className="flex items-end gap-2 flex-1 max-w-xl">
+                <div className="relative flex-1">
+                  <label className="text-sm font-black text-[#1e293b] dark:text-white mb-1 block">
+                    Search Branch
+                  </label>
+                  <div className="relative">
+                    <Search className="w-5 h-5 text-[#94a3b8] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search branch name or ID…"
+                      className="w-full pl-11 pr-10 text-base rounded-xl border border-[#cbd5e1] dark:border-[#334155] bg-[#f8fafc] dark:bg-[#020617] focus:bg-white dark:focus:bg-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#f97316]/30 focus:border-[#f97316] transition-all text-[#1e293b] dark:text-white font-medium h-11"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        title="Clear search"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#475569] dark:hover:text-[#f1f5f9] p-1 cursor-pointer transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Filter chips */}
-                <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#f1f5f9] dark:bg-[#020617]/80 rounded-xl border border-[#e2e8f0] dark:border-[#1e293b]">
-                  {filterChips.map((chip) => {
-                    const isActive = statusFilter === chip.key;
-                    return (
-                      <button
-                        key={chip.key}
-                        onClick={() => setStatusFilter(chip.key)}
-                        className={`text-sm sm:text-base font-bold px-4 py-2 rounded-lg transition-all duration-150 flex items-center gap-2 ${
-                          isActive
-                            ? chip.activeClass
-                            : "text-[#475569] dark:text-[#cbd5e1] hover:text-[#0f172a] dark:hover:text-white"
-                        }`}
-                      >
-                        {chip.label}
-                        <span
-                          className={`text-xs sm:text-sm font-black px-2 py-0.5 rounded-full ${
-                            isActive
-                              ? "bg-white/20 text-white"
-                              : "bg-[#e2e8f0] dark:bg-[#1e293b] text-[#334155] dark:text-[#f1f5f9]"
-                          }`}
-                        >
-                          {chip.count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => branchListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="h-11 px-5 rounded-xl bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#c2410c] text-white font-bold text-sm sm:text-base flex items-center gap-2 shadow-md shadow-[#f97316]/20 transition-all active:scale-95 shrink-0"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Search</span>
+                </button>
               </div>
             )}
           </div>
@@ -1073,7 +1150,7 @@ export default function BranchProcessControl() {
           />
         ) : (
           <div className="space-y-6">
-            {/* KPI STAT CARDS + GLOBAL PROGRESS */}
+            {/* KPI STAT CARDS AS INTERACTIVE STATUS FILTERS */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
               <KpiCard
                 title="Total Branches"
@@ -1082,18 +1159,25 @@ export default function BranchProcessControl() {
                 icon={Building2}
                 colorClass="text-[#1e293b] dark:text-white"
                 bgGradient="from-[#64748b]/15 to-[#6366f1]/15"
-                borderColor="border-[#e2e8f0] dark:border-[#1e293b]"
+                borderColor={statusFilter === "all" ? "border-[#6366f1]" : "border-[#e2e8f0] dark:border-[#1e293b]"}
+                isActive={statusFilter === "all"}
+                onClick={() => handleKpiFilterClick("all")}
+                activeRingColor="ring-[#6366f1]"
+                activeBadgeBg="bg-[#6366f1]"
               />
               <KpiCard
                 title="Fully Completed"
                 value={stats.complete}
-                sublabel={`${
-                  stats.total ? Math.round((stats.complete / stats.total) * 100) : 0
-                }% of Total Branches`}
+                sublabel={`${stats.total ? Math.round((stats.complete / stats.total) * 100) : 0
+                  }% of Total Branches`}
                 icon={CheckCircle2}
                 colorClass="text-[#059669] dark:text-[#34d399]"
                 bgGradient="from-[#10b981]/15 to-[#14b8a6]/15"
-                borderColor="border-[#a7f3d0] dark:border-[#064e3b]/40"
+                borderColor={statusFilter === "complete" ? "border-[#10b981]" : "border-[#a7f3d0] dark:border-[#064e3b]/40"}
+                isActive={statusFilter === "complete"}
+                onClick={() => handleKpiFilterClick("complete")}
+                activeRingColor="ring-[#10b981]"
+                activeBadgeBg="bg-[#10b981]"
               />
               <KpiCard
                 title="In Progress"
@@ -1102,7 +1186,11 @@ export default function BranchProcessControl() {
                 icon={Clock}
                 colorClass="text-[#d97706] dark:text-[#fbbf24]"
                 bgGradient="from-[#f59e0b]/15 to-[#f97316]/15"
-                borderColor="border-[#fde68a] dark:border-[#78350f]/40"
+                borderColor={statusFilter === "progress" ? "border-[#f59e0b]" : "border-[#fde68a] dark:border-[#78350f]/40"}
+                isActive={statusFilter === "progress"}
+                onClick={() => handleKpiFilterClick("progress")}
+                activeRingColor="ring-[#f59e0b]"
+                activeBadgeBg="bg-[#f59e0b]"
               />
               <KpiCard
                 title="Not Started"
@@ -1111,7 +1199,11 @@ export default function BranchProcessControl() {
                 icon={AlertTriangle}
                 colorClass="text-[#e11d48] dark:text-[#fb7185]"
                 bgGradient="from-[#f43f5e]/15 to-[#ef4444]/15"
-                borderColor="border-[#fecdd3] dark:border-[#881337]/40"
+                borderColor={statusFilter === "notstarted" ? "border-[#f43f5e]" : "border-[#fecdd3] dark:border-[#881337]/40"}
+                isActive={statusFilter === "notstarted"}
+                onClick={() => handleKpiFilterClick("notstarted")}
+                activeRingColor="ring-[#f43f5e]"
+                activeBadgeBg="bg-[#f43f5e]"
               />
             </div>
 
@@ -1170,7 +1262,10 @@ export default function BranchProcessControl() {
             </div>
 
             {/* BATCH ACTION & SELECTION BAR */}
-            <div className="flex flex-wrap items-center justify-between gap-5 bg-gradient-to-r from-[#0f172a] to-[#1e293b] text-white rounded-2xl p-5 shadow-lg">
+            <div
+              ref={branchListRef}
+              className="flex flex-wrap items-center justify-between gap-5 bg-gradient-to-r from-[#0f172a] to-[#1e293b] text-white rounded-2xl p-5 shadow-lg scroll-mt-6"
+            >
               <label className="flex items-center gap-3.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -1223,6 +1318,19 @@ export default function BranchProcessControl() {
                   <p className="text-sm text-[#94a3b8] mt-1 font-medium">
                     Try resetting the search bar or changing status filter.
                   </p>
+                  {(statusFilter !== "all" || searchQuery || selectedBranchFilter !== "all") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter("all");
+                        setSearchQuery("");
+                        setSelectedBranchFilter("all");
+                      }}
+                      className="mt-4 px-4 py-2 text-sm font-bold rounded-xl bg-[#f8fafc] dark:bg-[#1e293b] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] text-[#1e293b] dark:text-white border border-[#cbd5e1] dark:border-[#334155] transition-all cursor-pointer"
+                    >
+                      Reset All Filters
+                    </button>
+                  )}
                 </div>
               ) : (
                 filteredLocations.map((location) => {
@@ -1238,10 +1346,10 @@ export default function BranchProcessControl() {
                     key === "attendanceCalc"
                       ? st.attendanceCalculated
                       : key === "attendanceLock"
-                      ? st.attendanceLocked
-                      : key === "salaryRun"
-                      ? st.salaryRunDone
-                      : st.salaryLocked;
+                        ? st.attendanceLocked
+                        : key === "salaryRun"
+                          ? st.salaryRunDone
+                          : st.salaryLocked;
 
                   const stageUnlocked = (key: StageKey) => {
                     if (key === "attendanceCalc") return true;
@@ -1260,17 +1368,17 @@ export default function BranchProcessControl() {
                   // Status badge helper
                   const statusConfig = allCompleted
                     ? {
-                        label: "Fully Closed",
-                        badgeClass: "bg-[#ecfdf5] text-[#047857] dark:bg-[#022c22]/40 dark:text-[#6ee7b7] border-[#a7f3d0] dark:border-[#065f46]",
-                        dotClass: "bg-[#10b981]",
-                      }
+                      label: "Fully Closed",
+                      badgeClass: "bg-[#ecfdf5] text-[#047857] dark:bg-[#022c22]/40 dark:text-[#6ee7b7] border-[#a7f3d0] dark:border-[#065f46]",
+                      dotClass: "bg-[#10b981]",
+                    }
                     : notStarted
-                    ? {
+                      ? {
                         label: "Not Started",
                         badgeClass: "bg-[#f1f5f9] text-[#475569] dark:bg-[#1e293b] dark:text-[#cbd5e1] border-[#e2e8f0] dark:border-[#334155]",
                         dotClass: "bg-[#94a3b8]",
                       }
-                    : {
+                      : {
                         label: `In Progress (${doneCount}/4)`,
                         badgeClass: "bg-[#fffbeb] text-[#b45309] dark:bg-[#451a03]/40 dark:text-[#fcd34d] border-[#fde68a] dark:border-[#92400e]",
                         dotClass: "bg-[#f59e0b]",
@@ -1281,13 +1389,12 @@ export default function BranchProcessControl() {
                   return (
                     <div
                       key={location.value}
-                      className={`rounded-2xl bg-white dark:bg-[#0f172a] border transition-all duration-200 overflow-hidden shadow-sm hover:shadow-lg ${
-                        isChecked
-                          ? "border-[#fb923c] dark:border-[#f97316] ring-2 ring-[#fb923c]/25"
-                          : allCompleted
+                      className={`rounded-2xl bg-white dark:bg-[#0f172a] border transition-all duration-200 overflow-hidden shadow-sm hover:shadow-lg ${isChecked
+                        ? "border-[#fb923c] dark:border-[#f97316] ring-2 ring-[#fb923c]/25"
+                        : allCompleted
                           ? "border-[#a7f3d0] dark:border-[#064e3b]/50"
                           : "border-[#e2e8f0] dark:border-[#1e293b]"
-                      }`}
+                        }`}
                     >
                       {/* CARD HEADER */}
                       <div className="p-5 sm:p-6 border-b border-[#f1f5f9] dark:border-[#1e293b]/80 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-[#f8fafc] to-transparent dark:from-[#020617]/50">
@@ -1301,13 +1408,12 @@ export default function BranchProcessControl() {
 
                           {/* Branch Avatar */}
                           <div
-                            className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-base sm:text-lg text-white shrink-0 shadow-md ${
-                              allCompleted
-                                ? "bg-gradient-to-tr from-[#059669] to-[#14b8a6]"
-                                : notStarted
+                            className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-base sm:text-lg text-white shrink-0 shadow-md ${allCompleted
+                              ? "bg-gradient-to-tr from-[#059669] to-[#14b8a6]"
+                              : notStarted
                                 ? "bg-gradient-to-tr from-[#475569] to-[#334155]"
                                 : "bg-gradient-to-tr from-[#f97316] to-[#f59e0b]"
-                            }`}
+                              }`}
                           >
                             {initials}
                           </div>
@@ -1333,7 +1439,7 @@ export default function BranchProcessControl() {
                               {location.Join_Date && (
                                 <span className="text-xs sm:text-sm text-[#64748b] dark:text-[#cbd5e1] font-medium flex items-center gap-1.5">
                                   <Calendar className="w-4 h-4 text-[#94a3b8]" />
-                                  Lock Ref: {location.Join_Date}
+                                  Lock Ref: {formatDateToDDMMYY(location.Join_Date)}
                                 </span>
                               )}
                             </div>
@@ -1348,13 +1454,12 @@ export default function BranchProcessControl() {
                             </span>
                             <div className="w-40 h-3 rounded-full bg-[#f1f5f9] dark:bg-[#1e293b] mt-1.5 overflow-hidden">
                               <div
-                                className={`h-full rounded-full transition-all duration-300 ${
-                                  allCompleted
-                                    ? "bg-[#10b981]"
-                                    : notStarted
+                                className={`h-full rounded-full transition-all duration-300 ${allCompleted
+                                  ? "bg-[#10b981]"
+                                  : notStarted
                                     ? "bg-[#cbd5e1] dark:bg-[#334155]"
                                     : "bg-[#f97316]"
-                                }`}
+                                  }`}
                                 style={{ width: `${(doneCount / 4) * 100}%` }}
                               />
                             </div>
@@ -1390,26 +1495,24 @@ export default function BranchProcessControl() {
                             return (
                               <div
                                 key={stage.key}
-                                className={`relative rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 ${
-                                  isDone
-                                    ? "bg-[#ecfdf5]/60 dark:bg-[#022c22]/20 border-[#a7f3d0] dark:border-[#064e3b]/50"
-                                    : !isUnlocked
+                                className={`relative rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 ${isDone
+                                  ? "bg-[#ecfdf5]/60 dark:bg-[#022c22]/20 border-[#a7f3d0] dark:border-[#064e3b]/50"
+                                  : !isUnlocked
                                     ? "bg-[#f8fafc]/70 dark:bg-[#020617]/40 border-[#e2e8f0]/80 dark:border-[#1e293b]/80 opacity-80"
                                     : "bg-white dark:bg-[#0f172a] border-[#e2e8f0] dark:border-[#1e293b] hover:border-[#cbd5e1] shadow-sm"
-                                }`}
+                                  }`}
                               >
                                 <div>
                                   {/* Step badge & Title */}
                                   <div className="flex items-center justify-between gap-2.5 mb-3">
                                     <div className="flex items-center gap-2.5">
                                       <div
-                                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${
-                                          isDone
-                                            ? "bg-[#059669] text-white"
-                                            : isUnlocked
+                                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${isDone
+                                          ? "bg-[#059669] text-white"
+                                          : isUnlocked
                                             ? "bg-[#f97316] text-white"
                                             : "bg-[#e2e8f0] dark:bg-[#1e293b] text-[#64748b]"
-                                        }`}
+                                          }`}
                                       >
                                         {isDone ? <Check className="w-5 h-5" /> : idx + 1}
                                       </div>
@@ -1446,10 +1549,10 @@ export default function BranchProcessControl() {
                                         <span className="font-black text-[#1e293b] dark:text-white">
                                           {metaDetails?.lockDate
                                             ? (() => {
-                                                const rawDate = String(metaDetails.lockDate).slice(0, 10);
-                                                const [year, month, day] = rawDate.split("-");
-                                                return year && month && day ? `${day}-${month}-${year}` : rawDate;
-                                              })()
+                                              const rawDate = String(metaDetails.lockDate).slice(0, 10);
+                                              const [year, month, day] = rawDate.split("-");
+                                              return year && month && day ? `${day}-${month}-${year}` : rawDate;
+                                            })()
                                             : "Not Locked"}
                                         </span>
                                       </div>
@@ -1490,17 +1593,16 @@ export default function BranchProcessControl() {
                                   <button
                                     onClick={() => stageAction(stage.key)}
                                     disabled={busy || isLoading || (!isUnlocked && !isDone)}
-                                    className={`w-full py-3 px-4 rounded-xl text-sm sm:text-base font-black transition-all duration-150 flex items-center justify-center gap-2 active:scale-95 shadow-sm ${
-                                      isLoading
-                                        ? "bg-[#e2e8f0] dark:bg-[#1e293b] text-[#94a3b8] cursor-not-allowed"
-                                        : isDone
+                                    className={`w-full py-3 px-4 rounded-xl text-sm sm:text-base font-black transition-all duration-150 flex items-center justify-center gap-2 active:scale-95 shadow-sm ${isLoading
+                                      ? "bg-[#e2e8f0] dark:bg-[#1e293b] text-[#94a3b8] cursor-not-allowed"
+                                      : isDone
                                         ? stage.key === "attendanceCalc"
                                           ? "bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#334155] hover:bg-[#f8fafc] text-[#1e293b] dark:text-[#f1f5f9]"
                                           : "bg-[#d1fae5] dark:bg-[#022c22]/60 text-[#065f46] dark:text-[#6ee7b7] cursor-default"
                                         : !isUnlocked
-                                        ? "bg-[#f1f5f9] dark:bg-[#1e293b] text-[#94a3b8] cursor-not-allowed border border-transparent"
-                                        : "bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md shadow-[#f97316]/25"
-                                    }`}
+                                          ? "bg-[#f1f5f9] dark:bg-[#1e293b] text-[#94a3b8] cursor-not-allowed border border-transparent"
+                                          : "bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md shadow-[#f97316]/25"
+                                      }`}
                                   >
                                     {isLoading ? (
                                       <>
@@ -1532,7 +1634,7 @@ export default function BranchProcessControl() {
                                     )}
                                   </button>
 
-                                  
+
 
                                   {/* ATTENDANCE REPORT BUTTON (Shown when Attendance Calc is completed AND no pending rows in Emp_Atnrun) */}
                                   {stage.key === "attendanceCalc" && (isDone || metaDetails?.completionDate) && (
@@ -1685,6 +1787,10 @@ function KpiCard({
   colorClass,
   bgGradient,
   borderColor,
+  isActive = false,
+  onClick,
+  activeRingColor = "ring-[#3b82f6]",
+  activeBadgeBg = "bg-[#3b82f6]",
 }: {
   title: string;
   value: number;
@@ -1693,12 +1799,33 @@ function KpiCard({
   colorClass: string;
   bgGradient: string;
   borderColor: string;
+  isActive?: boolean;
+  onClick?: () => void;
+  activeRingColor?: string;
+  activeBadgeBg?: string;
 }) {
   return (
-    <div
-      className={`rounded-2xl p-5 sm:p-6 bg-white dark:bg-[#0f172a] border ${borderColor} shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-lg`}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left w-full rounded-2xl p-5 sm:p-6 bg-white dark:bg-[#0f172a] border transition-all duration-200 relative overflow-hidden group cursor-pointer ${
+        isActive
+          ? `ring-2 ${activeRingColor} ${borderColor} shadow-lg shadow-black/10 dark:shadow-black/40 scale-[1.01]`
+          : `${borderColor} shadow-sm hover:shadow-md hover:-translate-y-0.5 opacity-90 hover:opacity-100`
+      }`}
     >
-      <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-gradient-to-br ${bgGradient} blur-xl pointer-events-none`} />
+      <div
+        className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-gradient-to-br ${bgGradient} blur-xl pointer-events-none`}
+      />
+
+      {/* Active Filter Indicator Badge */}
+      {/* {isActive && (
+        <span
+          className={`absolute top-2.5 right-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white ${activeBadgeBg} shadow-sm`}
+        >
+          Active
+        </span>
+      )} */}
 
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -1713,11 +1840,17 @@ function KpiCard({
           </span>
         </div>
 
-        <div className="p-3 sm:p-3.5 rounded-2xl bg-[#f8fafc] dark:bg-[#1e293b] text-[#475569] dark:text-[#cbd5e1] border border-[#f1f5f9] dark:border-[#334155]/60 shrink-0 shadow-sm">
+        <div
+          className={`p-3 sm:p-3.5 rounded-2xl shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-sm ${
+            isActive
+              ? "bg-[#f8fafc] dark:bg-[#1e293b] text-[#1e293b] dark:text-white border-2 border-current"
+              : "bg-[#f8fafc] dark:bg-[#1e293b] text-[#475569] dark:text-[#cbd5e1] border border-[#f1f5f9] dark:border-[#334155]/60"
+          }`}
+        >
           <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 

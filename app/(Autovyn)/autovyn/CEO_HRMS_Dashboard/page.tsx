@@ -115,6 +115,7 @@ const parseDDMMYYYYToISO = (val: string) => {
     return "";
 };
 
+
 const formatMonthYear = (dateStr: string) => {
     if (!dateStr) return "SEPTEMBER 2026";
     const d = new Date(dateStr);
@@ -145,55 +146,25 @@ export default function CEODashboard() {
         }
     }, [selectedDate]);
 
-    // Collect all authorized branches from both user.branch and user.multi
-    const userBranches = useMemo(() => {
-        const rawValues: any[] = [];
-        if (user?.branch) rawValues.push(user.branch);
-        if (user?.multi) rawValues.push(user.multi);
-
-        const branchSet = new Set<string>();
-        rawValues.forEach((val) => {
-            if (Array.isArray(val)) {
-                val.map(String).map(s => s.trim()).filter(Boolean).forEach(b => branchSet.add(b));
-            } else if (typeof val === "string" || typeof val === "number") {
-                String(val).split(",").map(s => s.trim()).filter(Boolean).forEach(b => branchSet.add(b));
-            }
-        });
-        return Array.from(branchSet);
-    }, [user?.branch, user?.multi]);
-
-    const [selectedBranch, setSelectedBranch] = useState<string>("");
-
-    const getDefaultBranch = () => {
-        if (user?.branch) {
-            const s = String(user.branch).trim();
-            if (!s.includes(",") && !Array.isArray(user.branch) && s !== "" && s !== "0") {
-                return s;
-            }
-        }
-        return "";
-    };
-
-    // Initialize selectedBranch:
-    // If logged in with a single branch (e.g. 1), default to that single branch;
-    // If logged in with multi-branch, default to "" (All Branches)
-    useEffect(() => {
-        setSelectedBranch(getDefaultBranch());
-    }, [user?.branch]);
-
-    const activeBranchParam = useMemo(() => {
-        if (selectedBranch) return selectedBranch;
-        if (userBranches.length > 0) return userBranches.join(",");
-        if (user?.branch) return String(user.branch);
-        return "";
-    }, [selectedBranch, userBranches, user?.branch]);
+    // Active login branch resolution:
+    // Filter is strictly driven by the active login branch (user?.branch).
+    // It can be a single branch (e.g. 1) or multiple comma-separated branches (e.g. "1,2,3...").
+    const loginBranchStr = useMemo(() => {
+        const b = user?.branch ?? user?.Loc_Code ?? user?.loc_code ?? user?.multi ?? "";
+        return String(b).trim();
+    }, [user?.branch, user?.Loc_Code, user?.loc_code, user?.multi]);
 
     const activeBranchArray = useMemo(() => {
-        if (selectedBranch) return [selectedBranch];
-        if (userBranches.length > 0) return userBranches;
-        if (user?.branch) return String(user.branch).split(",").map(s => s.trim()).filter(Boolean);
-        return [];
-    }, [selectedBranch, userBranches, user?.branch]);
+        if (!loginBranchStr) return [];
+        return loginBranchStr
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+    }, [loginBranchStr]);
+
+    const activeBranchParam = useMemo(() => {
+        return activeBranchArray.join(",");
+    }, [activeBranchArray]);
 
     const [selectedShift, setSelectedShift] = useState<string>("");
     const [rangeMonths, setRangeMonths] = useState<number>(6);
@@ -296,7 +267,8 @@ export default function CEODashboard() {
                     location: "",
                     month: "",
                     login_loc: activeBranchParam,
-                    loc_code: activeBranchParam
+                    loc_code: activeBranchParam,
+                    Loc_code: activeBranchArray
                 },
                 {
                     headers: {
@@ -324,7 +296,7 @@ export default function CEODashboard() {
             const res = await axios.post(
                 `${process.env.NEXT_PUBLIC_URL}/dashboards/getAttendanceDashboardData`,
                 {
-                    selectedDate: toDate || selectedDate,
+                    selectedDate: toDate || attendanceEndDate,
                     from_date: fromDate,
                     to_date: toDate,
                     Loc_code: activeBranchArray,
@@ -391,16 +363,12 @@ export default function CEODashboard() {
         setAttendancePreset(preset);
         setAttendanceStartDate(start);
         setAttendanceEndDate(end);
-        setSelectedDate(end);
     };
 
     const handleAttendanceDateChange = (start: string, end: string) => {
         setAttendanceStartDate(start);
         setAttendanceEndDate(end);
         setAttendancePreset("custom");
-        if (end) {
-            setSelectedDate(end);
-        }
     };
 
     // 3. Fetch Attendance Status Summary & Location Data
@@ -435,13 +403,12 @@ export default function CEODashboard() {
     // 4. Fetch Salary Dashboard Data (Live read-only from SALARYFILE)
     const fetchSalaryData = async () => {
         try {
-            // Salary targets 1 month prior to selected date / current month
-            const dateObj = selectedDate ? new Date(selectedDate) : new Date();
             const res = await axios.post(
                 `${process.env.NEXT_PUBLIC_URL}/dashboards/getCeoSalaryDashboard`,
                 {
                     loc_code: activeBranchParam,
                     login_loc: activeBranchParam,
+                    Loc_code: activeBranchArray,
                     range: rangeMonths,
                     month: salaryMonth,
                     year: salaryYear,
@@ -478,7 +445,7 @@ export default function CEODashboard() {
                     value,
                     login_loc: activeBranchParam,
                     loc_code: activeBranchParam,
-                    selectedDate: selectedDate || attendanceEndDate,
+                    selectedDate: selectedDate || getCurrentDate(),
                     from_date: attendanceStartDate,
                     to_date: attendanceEndDate
                 },
@@ -530,13 +497,14 @@ export default function CEODashboard() {
     };
 
     // 5. Dedicated Single API: Today Attendance Summary (Absent, Present, WO)
-    const fetchTodayAttendanceSummary = async () => {
+    const fetchTodayAttendanceSummary = async (targetDate = selectedDate) => {
         if (!user?.Comp_Code) return;
         try {
+            const dateToUse = targetDate || getCurrentDate();
             const res = await axios.post(
                 `${process.env.NEXT_PUBLIC_URL}/dashboards/getTodayAttendanceSummary`,
                 {
-                    selectedDate: selectedDate || attendanceEndDate,
+                    selectedDate: dateToUse,
                     Loc_code: activeBranchArray,
                     login_loc: activeBranchParam,
                     loc_code: activeBranchParam,
@@ -594,7 +562,6 @@ export default function CEODashboard() {
     const loadAllData = () => {
         if (!user?.Comp_Code) return;
 
-        const defBranch = getDefaultBranch();
         const todayDate = getCurrentDate();
         const today = new Date();
         const y = today.getFullYear();
@@ -606,7 +573,6 @@ export default function CEODashboard() {
         const defSalary = getDefaultSalaryMonthYear();
 
         // Reset all filters to default values
-        setSelectedBranch(defBranch);
         setSelectedDate(todayDate);
         setDateText(formatDateToDDMMYYYY(todayDate));
         setAttendanceStartDate(defStart);
@@ -632,12 +598,12 @@ export default function CEODashboard() {
         }
     }, [userCompCode, activeBranchParam, rangeMonths, refreshTrigger]);
 
-    // 2. Today Attendance Summary (Dedicated Single API)
+    // 2. Today Attendance Summary (Dedicated Single API for Cards)
     useEffect(() => {
         if (userCompCode) {
-            fetchTodayAttendanceSummary();
+            fetchTodayAttendanceSummary(selectedDate);
         }
-    }, [userCompCode, activeBranchParam, selectedDate, attendanceEndDate, selectedShift, refreshTrigger]);
+    }, [userCompCode, activeBranchParam, selectedDate, selectedShift, refreshTrigger]);
 
     // 3. Multi-day Attendance Graph & Shifts
     useEffect(() => {
@@ -651,7 +617,7 @@ export default function CEODashboard() {
         if (userCompCode) {
             fetchAttendanceStatus();
         }
-    }, [userCompCode, activeBranchParam, selectedDate, selectedShift, selectedDept?.DEPT_CODE, refreshTrigger]);
+    }, [userCompCode, activeBranchParam, selectedDate, selectedShift, refreshTrigger]);
 
     // 5. Salary Cards Summary (Dedicated Single API)
     useEffect(() => {
@@ -674,7 +640,7 @@ export default function CEODashboard() {
     const newHiresCount = dashboardData?.stats?.newHires ?? 0;
 
     const summary = attendanceStatus?.summary;
-    const presentCount = summary ? (Number(summary.ontime || 0) + Number(summary.early || 0) + Number(summary.late || 0)) : (overallEmployees.present?.length || 0);
+    const presentCount = summary?.present !== undefined ? Number(summary.present) : (summary ? (Number(summary.ontime || 0) + Number(summary.early || 0) + Number(summary.late || 0)) : (overallEmployees.present?.length || 0));
     const absentCount = summary?.absent ?? (overallEmployees.absent?.length || 0);
     const lateCount = summary?.late ?? 0;
     const onLeaveCount = summary?.onLeave ?? 0;
@@ -733,8 +699,8 @@ export default function CEODashboard() {
         fetchEmployeesByType(
             'present',
             null,
-            'Present Employees Today',
-            `Date: ${formatDateDisplay(selectedDate || attendanceEndDate)} · Total Present: ${todaySummary?.todayPresent ?? rangeStats?.todayPresent ?? presentCount} employees`
+            'Present Employees',
+            `Date: ${formatDateDisplay(selectedDate)} · Total Present: ${todaySummary?.todayPresent ?? presentCount} employees`
         );
     };
 
@@ -742,8 +708,8 @@ export default function CEODashboard() {
         fetchEmployeesByType(
             'absent',
             null,
-            'Absent Employees Today',
-            `Date: ${formatDateDisplay(selectedDate || attendanceEndDate)} · Total Absent: ${todaySummary?.todayAbsent ?? rangeStats?.todayAbsent ?? absentCount} employees`
+            'Absent Employees',
+            `Date: ${formatDateDisplay(selectedDate)} · Total Absent: ${todaySummary?.todayAbsent ?? absentCount} employees`
         );
     };
     const handleLateClick = () => {
@@ -760,7 +726,7 @@ export default function CEODashboard() {
         setListModal({
             open: true,
             title: "Late Coming Employees",
-            subtitle: `Late: ${lateList.length || lateCount} employees today`,
+            subtitle: `Date: ${formatDateDisplay(selectedDate)} · Late: ${lateList.length || lateCount} employees`,
             data: lateList,
             loading: false
         });
@@ -820,7 +786,7 @@ export default function CEODashboard() {
 
                 </div>
 
-              
+
             </div>
 
             {/* Dashboard Title & Filter Controls Header */}
@@ -830,32 +796,14 @@ export default function CEODashboard() {
                         CEO HRMS Dashboard
                     </h1>
                     <p className="text-[15px] sm:text-[16px] text-[#64748B] dark:text-[#94A3B8] mt-1">
-                        As of {formatDateDisplay(selectedDate)} · {activeEmployeesCount} employees across {dashboardData?.stats?.locations || userBranches.length || 4} locations
+                        As of {formatDateDisplay(selectedDate)} · {activeEmployeesCount} employees across {dashboardData?.stats?.locations || activeBranchArray.length || 1} locations
                     </p>
                 </div>
 
                 {/* Filter Controls Row */}
                 <div className="flex flex-wrap items-center gap-3">
-                    {/* Branch Filter Dropdown (Only show when multiple branches exist) */}
-                    {userBranches.length > 1 && (
-                        <div className="relative flex items-center">
-                            <select
-                                value={selectedBranch}
-                                onChange={(e) => setSelectedBranch(e.target.value)}
-                                className="h-10 pl-3.5 pr-8 py-2 text-[15px] font-semibold rounded-lg border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#1E293B] dark:text-[#E2E8F0] outline-none focus:ring-2 focus:ring-[#4F46E5] shadow-2xs cursor-pointer appearance-none"
-                            >
-                                <option value="">All Branches ({userBranches.length})</option>
-                                {userBranches.map((b) => (
-                                    <option key={b} value={b}>
-                                        Branch {b}
-                                    </option>
-                                ))}
-                            </select>
-                            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#64748B] dark:text-[#94A3B8] text-xs">
-                                ▼
-                            </div>
-                        </div>
-                    )}
+                    {/* Active Login Branch Badge (Single or Multiple) */}
+
                     {/* Date Picker (DD/MM/YYYY Format) */}
                     <div className="relative flex items-center">
                         <input
@@ -924,14 +872,14 @@ export default function CEODashboard() {
                         </select>
                     </div>
 
-                    
+
                     {/* Charts / Tables Global Toggle */}
                     <div className="flex bg-[#F1F5F9] dark:bg-[#1E293B] p-1 rounded-lg border border-[#E2E8F0]/80 dark:border-[#334155] text-[15px]">
                         <button
                             onClick={() => setGlobalView("charts")}
                             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md font-medium transition-all ${globalView === "charts"
-                                    ? "bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white shadow-2xs font-semibold"
-                                    : "text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A]"
+                                ? "bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white shadow-2xs font-semibold"
+                                : "text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A]"
                                 }`}
                         >
                             <span>📊</span> Charts
@@ -939,8 +887,8 @@ export default function CEODashboard() {
                         <button
                             onClick={() => setGlobalView("tables")}
                             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md font-medium transition-all ${globalView === "tables"
-                                    ? "bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white shadow-2xs font-semibold"
-                                    : "text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A]"
+                                ? "bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white shadow-2xs font-semibold"
+                                : "text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A]"
                                 }`}
                         >
                             <span>📑</span> Tables
@@ -958,20 +906,78 @@ export default function CEODashboard() {
             </div>
 
             {/* ========================================================================= */}
-            {/* SECTION 1: HEADCOUNT & ATTENDANCE                                         */}
+            {/* SECTION 1: DAILY SUMMARY CARDS (Strictly Filtered by Selected Date)       */}
             {/* ========================================================================= */}
             <div className="flex items-center gap-3 my-5">
                 <span className="text-[15px] font-bold tracking-wider uppercase text-[#64748B] dark:text-[#94A3B8] whitespace-nowrap">
-                    HEADCOUNT & ATTENDANCE · {attendanceStartDate === attendanceEndDate ? formatDateDisplay(attendanceEndDate).toUpperCase() : `${formatDateDisplay(attendanceStartDate).toUpperCase()} TO ${formatDateDisplay(attendanceEndDate).toUpperCase()}`}
+                    DAILY SUMMARY CARDS · {selectedDate === getCurrentDate() ? "TODAY" : formatDateDisplay(selectedDate).toUpperCase()}
                 </span>
                 <div className="h-px bg-[#E2E8F0] dark:bg-[#1E293B] flex-1" />
             </div>
 
+            {/* Row 1: 5 Stat Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 mb-5">
+                {/* 1. Active Employees */}
+                <StatCard
+                    title="Active employees"
+                    value={activeEmployeesCount}
+                    icon={<span className="text-xl">👥</span>}
+                    iconBg="bg-[#EFF6FF] dark:bg-[#1E293B]/40"
+                    iconColor="text-[#2563EB] dark:text-[#60A5FA]"
+                    onClick={handleActiveClick}
+                />
+
+                {/* 2. Departments */}
+                <StatCard
+                    title="Departments"
+                    value={departmentsCount}
+                    icon={<span className="text-xl">🏢</span>}
+                    iconBg="bg-[#FAF5FF] dark:bg-[#1E293B]/40"
+                    iconColor="text-[#9333EA] dark:text-[#C084FC]"
+                    onClick={handleDepartmentsClick}
+                />
+
+                {/* 3. Present */}
+                <StatCard
+                    title={selectedDate === getCurrentDate() ? "Present (Today)" : `Present (${formatDateDisplay(selectedDate)})`}
+                    value={todaySummary?.todayPresent ?? presentCount}
+                    icon={<span className="text-xl">👤</span>}
+                    iconBg="bg-[#ECFDF5] dark:bg-[#1E293B]/40"
+                    iconColor="text-[#10B981] dark:text-[#34D399]"
+                    onClick={handlePresentClick}
+                />
+
+                {/* 4. Absent */}
+                <StatCard
+                    title={selectedDate === getCurrentDate() ? "Absent (Today)" : `Absent (${formatDateDisplay(selectedDate)})`}
+                    value={todaySummary?.todayAbsent ?? absentCount}
+                    icon={<span className="text-xl">📋</span>}
+                    iconBg="bg-[#FEF2F2] dark:bg-[#1E293B]/40"
+                    iconColor="text-[#EF4444] dark:text-[#F87171]"
+                    onClick={handleAbsentClick}
+                />
+            </div>
+
+            {/* Attendance Trend Section Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-8 mb-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <span className="text-[13px] sm:text-[15px] font-bold tracking-wider uppercase text-[#64748B] dark:text-[#94A3B8] break-words">
+                        ATTENDANCE TREND & DETAILS <span className="text-[#CBD5E1] dark:text-[#475569]">·</span>{" "}
+                        <span className="text-[#4338CA] dark:text-[#818CF8]">
+                            {attendanceStartDate === attendanceEndDate
+                                ? formatDateDisplay(attendanceEndDate).toUpperCase()
+                                : `${formatDateDisplay(attendanceStartDate).toUpperCase()} TO ${formatDateDisplay(attendanceEndDate).toUpperCase()}`}
+                        </span>
+                    </span>
+                    <div className="h-px bg-[#E2E8F0] dark:bg-[#1E293B] flex-1 hidden md:block" />
+                </div>
+            </div>
+
             {/* Attendance Date Range Selector & Quick Filter Presets */}
-            <div className="flex flex-wrap items-end justify-between gap-3 my-4 bg-white dark:bg-[#1E293B] p-3 rounded-xl border border-[#E2E8F0]/80 dark:border-[#334155]/80 shadow-xs">
-                <div className="flex flex-wrap items-end gap-3">
-                    <div className="w-44">
-                        <Ainput 
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-3.5 my-4 bg-white dark:bg-[#1E293B] p-3 sm:p-4 rounded-xl border border-[#E2E8F0]/80 dark:border-[#334155]/80 shadow-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full md:w-auto">
+                    <div className="w-full sm:w-44">
+                        <Ainput
                             title="From Date"
                             type="date"
                             name="attendance_from_date"
@@ -980,8 +986,8 @@ export default function CEODashboard() {
                             redlabel=""
                         />
                     </div>
-                    <div className="w-44">
-                        <Ainput 
+                    <div className="w-full sm:w-44">
+                        <Ainput
                             title="To Date"
                             type="date"
                             name="attendance_to_date"
@@ -993,163 +999,56 @@ export default function CEODashboard() {
                 </div>
 
                 {/* Quick Presets */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                     <button
                         type="button"
                         onClick={() => selectAttendancePreset("today")}
-                        className={`px-3.5 py-2 rounded-lg text-[14px] font-semibold transition-all ${
-                            attendancePreset === "today"
-                                ? "bg-[#4338CA] text-white shadow-xs"
-                                : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
-                        }`}
+                        className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-lg text-[13px] sm:text-[14px] font-semibold transition-all text-center ${attendancePreset === "today"
+                            ? "bg-[#4338CA] text-white shadow-xs"
+                            : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
+                            }`}
                     >
                         Yesterday
                     </button>
                     <button
                         type="button"
                         onClick={() => selectAttendancePreset("thisMonth")}
-                        className={`px-3.5 py-2 rounded-lg text-[14px] font-semibold transition-all ${
-                            attendancePreset === "thisMonth"
-                                ? "bg-[#4338CA] text-white shadow-xs"
-                                : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
-                        }`}
+                        className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-lg text-[13px] sm:text-[14px] font-semibold transition-all text-center ${attendancePreset === "thisMonth"
+                            ? "bg-[#4338CA] text-white shadow-xs"
+                            : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
+                            }`}
                     >
                         This Month ({new Date().toLocaleString("en-US", { month: "short" })})
                     </button>
                     <button
                         type="button"
                         onClick={() => selectAttendancePreset("last7Days")}
-                        className={`px-3.5 py-2 rounded-lg text-[14px] font-semibold transition-all ${
-                            attendancePreset === "last7Days"
-                                ? "bg-[#4338CA] text-white shadow-xs"
-                                : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
-                        }`}
+                        className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-lg text-[13px] sm:text-[14px] font-semibold transition-all text-center ${attendancePreset === "last7Days"
+                            ? "bg-[#4338CA] text-white shadow-xs"
+                            : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
+                            }`}
                     >
                         Last 7 Days
                     </button>
                 </div>
             </div>
 
-            {/* Row 1: 5 Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
-                {/* 1. Active Employees */}
-                <StatCard
-                    title="Active employees"
-                    value={activeEmployeesCount}
-                    icon={<span className="text-xl">👥</span>}
-                    iconBg="bg-[#EFF6FF] dark:bg-[#1E293B]/40"
-                    iconColor="text-[#2563EB] dark:text-[#60A5FA]"
-                    subtitle={
-                        <span>
-                            <strong className="text-[#334155] dark:text-[#CBD5E1]">+{newHiresCount}</strong> joined this month
-                        </span>
-                    }
-                    onClick={handleActiveClick}
-                />
-
-                {/* 2. Departments */}
-                <StatCard
-                    title="Departments"
-                    value={departmentsCount}
-                    icon={<span className="text-xl">🏢</span>}
-                    iconBg="bg-[#FAF5FF] dark:bg-[#1E293B]/40"
-                    iconColor="text-[#9333EA] dark:text-[#C084FC]"
-                    subtitle={<span>{designationsCount} designations</span>}
-                    onClick={handleDepartmentsClick}
-                />
-
-                {/* 3. Present */}
-                <StatCard
-                    title="Present (Today)"
-                    value={todaySummary?.todayPresent ?? rangeStats?.todayPresent ?? presentCount}
-                    icon={<span className="text-xl">👤</span>}
-                    iconBg="bg-[#ECFDF5] dark:bg-[#1E293B]/40"
-                    iconColor="text-[#10B981] dark:text-[#34D399]"
-                    trend={{
-                        text: attendanceStartDate !== attendanceEndDate && rangeStats?.uniqueRangePresent
-                            ? `${rangeStats.uniqueRangePresent} unique in range`
-                            : `${attendancePct}% attendance`,
-                        isPositive: true,
-                        colorClass: "text-[#10B981] font-bold"
-                    }}
-                    onClick={handlePresentClick}
-                />
-
-                {/* 4. Absent */}
-                <StatCard
-                    title="Absent (Today)"
-                    value={todaySummary?.todayAbsent ?? rangeStats?.todayAbsent ?? absentCount}
-                    icon={<span className="text-xl">📋</span>}
-                    iconBg="bg-[#FEF2F2] dark:bg-[#1E293B]/40"
-                    iconColor="text-[#EF4444] dark:text-[#F87171]"
-                    subtitle={
-                        <span>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    fetchEmployeesByType(
-                                        'weekly_off',
-                                        null,
-                                        'Weekly Off Employees',
-                                        `Date: ${formatDateDisplay(selectedDate || attendanceEndDate)} · Total Weekly Off: ${todaySummary?.todayWO ?? rangeStats?.todayWO ?? summary?.weeklyOff ?? 276} employees`
-                                    );
-                                }}
-                                className="hover:underline font-semibold text-[#64748B] dark:text-[#CBD5E1]"
-                            >
-                                {todaySummary?.todayWO ?? rangeStats?.todayWO ?? summary?.weeklyOff ?? 276} weekly off
-                            </button>
-                            {attendanceStartDate !== attendanceEndDate && rangeStats?.uniqueRangeAbsent ? (
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        fetchEmployeesByType(
-                                            'range_absent_unique',
-                                            null,
-                                            'Unique Absent Employees (Date Range)',
-                                            `Range: ${formatDateDisplay(attendanceStartDate)} to ${formatDateDisplay(attendanceEndDate)} · Unique Employees: ${rangeStats.uniqueRangeAbsent}`
-                                        );
-                                    }}
-                                    className="hover:underline text-xs text-[#EF4444] dark:text-[#F87171] ml-1.5"
-                                >
-                                    · ({rangeStats.uniqueRangeAbsent} in range)
-                                </button>
-                            ) : null}
-                        </span>
-                    }
-                    onClick={handleAbsentClick}
-                />
-
-                {/* 5. Late today */}
-                <StatCard
-                    title="Late today"
-                    value={lateCount}
-                    icon={<span className="text-xl">⏰</span>}
-                    iconBg="bg-[#FFFBEB] dark:bg-[#1E293B]/40"
-                    iconColor="text-[#D97706] dark:text-[#FBBF24]"
-                    trend={{
-                        text: `${latePct}% of present`,
-                        colorClass: "text-[#D97706] font-bold"
-                    }}
-                    onClick={handleLateClick}
-                />
-            </div>
-
             {/* Row 2: Attendance Trend (Day-wise attendance) + Departments Today */}
-            <div className="grid grid-cols-12 gap-4 mb-7">
-                {/* Day-wise attendance Stacked Chart (~62% width) */}
-                <div className="col-span-12 lg:col-span-7">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-7">
+                {/* Day-wise attendance Stacked Chart (~60% width) */}
+                <div className="col-span-1 lg:col-span-7">
                     <AttendanceChart
                         graphData={graphData}
                         currentMonthSummary={{
-                            label: attendanceStartDate === attendanceEndDate 
-                                ? formatDateDisplay(attendanceEndDate) 
+                            label: attendanceStartDate === attendanceEndDate
+                                ? formatDateDisplay(attendanceEndDate)
                                 : `${formatDateDisplay(attendanceStartDate)} - ${formatDateDisplay(attendanceEndDate)}`,
-                            present: presentCount,
+                            present: Number(rangeStats?.totalRangePresent ?? rangeStats?.uniqueRangePresent ?? (overallEmployees.present?.length || 0)),
                             onLeave: onLeaveCount,
-                            absent: absentCount,
-                            percentage: attendancePct
+                            absent: Number(rangeStats?.totalRangeAbsent ?? rangeStats?.uniqueRangeAbsent ?? (overallEmployees.absent?.length || 0)),
+                            percentage: (Number(rangeStats?.totalRangePresent || 0) + Number(rangeStats?.totalRangeAbsent || 0)) > 0
+                                ? (((Number(rangeStats?.totalRangePresent || 0)) / (Number(rangeStats?.totalRangePresent || 0) + Number(rangeStats?.totalRangeAbsent || 0))) * 100).toFixed(1)
+                                : attendancePct
                         }}
                         viewMode={globalView === "tables" ? "table" : "chart"}
                         rangeMonths={rangeMonths}
@@ -1162,8 +1061,8 @@ export default function CEODashboard() {
                     />
                 </div>
 
-                {/* Departments today Dual-Progress Bar List (~38% width) */}
-                <div className="col-span-12 lg:col-span-5">
+                {/* Departments today Dual-Progress Bar List (~40% width) */}
+                <div className="col-span-1 lg:col-span-5">
                     <DepartmentsTodayCard
                         deptStats={deptStats && deptStats.length > 0 ? deptStats : (attendanceStatus?.departmentData || [])}
                         totalPresent={presentCount}
@@ -1179,11 +1078,20 @@ export default function CEODashboard() {
             {/* ========================================================================= */}
             {/* SECTION 2: PAYROLL                                                        */}
             {/* ========================================================================= */}
-            <div className="flex items-center gap-3 my-5">
-                <span className="text-[15px] font-bold tracking-wider uppercase text-[#64748B] dark:text-[#94A3B8] whitespace-nowrap">
-                    PAYROLL · {salaryDisplayPeriod.full}
-                </span>
-                <div className="h-px bg-[#E2E8F0] dark:bg-[#1E293B] flex-1" />
+            <div className="flex items-center justify-between gap-3 my-5 flex-wrap">
+                <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+                    <span className="text-[15px] font-bold tracking-wider uppercase text-[#64748B] dark:text-[#94A3B8] whitespace-nowrap">
+                        PAYROLL · {salaryDisplayPeriod.full}
+                    </span>
+                    <div className="h-px bg-[#E2E8F0] dark:bg-[#1E293B] flex-1" />
+                </div>
+                {activeBranchArray.length > 0 && (
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-[#EEF2FF] dark:bg-[#312E81]/40 text-[#4338CA] dark:text-[#A5B4FC] border border-[#C7D2FE] dark:border-[#4338CA]">
+                        {activeBranchArray.length === 1
+                            ? (user?.branchName ? `${user.branchName} (${activeBranchArray[0]})` : `Branch ${activeBranchArray[0]}`)
+                            : `Login Branches (${activeBranchArray.length})`}
+                    </span>
+                )}
             </div>
             {/* Payroll Month & Year Selector (Month-wise Filter) */}
             <div className="flex flex-wrap items-end justify-between gap-3 my-4 bg-white dark:bg-[#1E293B] p-3.5 rounded-xl border border-[#E2E8F0]/80 dark:border-[#334155]/80 shadow-xs">
@@ -1273,11 +1181,10 @@ export default function CEODashboard() {
                                     setSalaryMonth(q.month);
                                     setSalaryYear(q.year);
                                 }}
-                                className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all ${
-                                    isSelected
-                                        ? "bg-[#4338CA] text-white shadow-xs"
-                                        : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
-                                }`}
+                                className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all ${isSelected
+                                    ? "bg-[#4338CA] text-white shadow-xs"
+                                    : "bg-[#F1F5F9] dark:bg-[#0F172A] text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white"
+                                    }`}
                             >
                                 {mLabel} {q.year}
                             </button>

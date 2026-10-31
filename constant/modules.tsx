@@ -726,6 +726,60 @@ export const treeData = [
 
         ],
       },
+      {
+        title: "Branch Process Control|",
+        key: "21.3",
+        url: "/autovyn/BranchProcessControl",
+        children: [
+          {
+            title: "Branch Process Control | ",
+            key: "21.3.1",
+            url: "/autovyn/BranchProcessControl",
+          }
+
+        ],
+      },
+      {
+        title: "Billing Monitor|",
+        key: "21.4",
+        url: "/autovyn/Billing_Monitor",
+        children: [
+          {
+            title: "Billing Monitor | ",
+            key: "21.4.1",
+            url: "/autovyn/Billing_Monitor",
+          }
+
+        ],
+      },
+    ]
+  },
+  
+  {
+    title: "RPA",
+    url: "/autovyn/admin",
+    ShortCut: "alt+u",
+    icon: (
+      <div className="h-10 w-10 flex items-center justify-center rounded-lg cursor-pointer hover:text-gray-800 hover:duration-300 hover:ease-linear ">
+        <Image src="/sidebaricon/Admin.png" alt="Autovyn" width={25} height={25} />
+      </div>
+    ),
+    key: "22",
+    children: [
+      {
+        title: "Attendance Report |",
+        key: "22.1",
+        url: "/autovyn/rpa",
+        children: [
+          {
+            title: "Attendance Report | ",
+            key: "22.1.1",
+            url: "/autovyn/rpa",
+          }
+
+        ],
+      },
+    
     ]
   },
 ];

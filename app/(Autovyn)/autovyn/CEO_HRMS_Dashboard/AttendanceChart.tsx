@@ -12,6 +12,7 @@ interface MonthAttendanceData {
     onLeave: number;
     absent: number;
     weeklyOff?: number;
+    late?: number;
     total: number;
 }
 
@@ -56,7 +57,8 @@ export default function AttendanceChart({
             const abs = Number(item.ABSENT ?? item.absent ?? 0);
             const leave = Number(item.ON_LEAVE ?? item.ONLEAVE ?? item.onLeave ?? item.LEAVE ?? 0);
             const weeklyOff = Number(item.WEEKLY_OFF ?? item.weeklyOff ?? 0);
-            const total = pres + leave + abs + weeklyOff;
+            const late = Number(item.LATE ?? item.late ?? 0);
+            const total = Number(item.TOTAL ?? (pres + leave + abs + weeklyOff));
             
             // Format date label (e.g. "2026-10-09" -> "09 Oct")
             let label = item.DATE_LABEL || item.date || item.month || 'Day';
@@ -76,7 +78,8 @@ export default function AttendanceChart({
                 onLeave: leave,
                 absent: abs,
                 weeklyOff: weeklyOff,
-                total: total || (pres + abs + leave)
+                late: late,
+                total: total
             };
         });
     } else if (data && data.length > 0) {
@@ -101,11 +104,11 @@ export default function AttendanceChart({
     const exportToExcel = async () => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Day-wise Attendance");
-        worksheet.addRow(["Date / Day", "Day of Week", "Present", "On Leave", "Weekly Off", "Absent", "Total Headcount", "Attendance %"]);
+        worksheet.addRow(["Date / Day", "Day of Week", "Present", "Late Arrival (Punched)", "On Leave", "Weekly Off", "Absent", "Total Headcount", "Attendance %"]);
         chartData.forEach(d => {
-            const activeHeadcount = d.present + d.onLeave + d.absent;
-            const pct = activeHeadcount > 0 ? ((d.present / activeHeadcount) * 100).toFixed(1) + "%" : "0%";
-            worksheet.addRow([d.month, d.dayName || "", d.present, d.onLeave, d.weeklyOff || 0, d.absent, d.total, pct]);
+            const workingHeadcount = d.present + d.onLeave + d.absent;
+            const pct = workingHeadcount > 0 ? ((d.present / workingHeadcount) * 100).toFixed(1) + "%" : "0%";
+            worksheet.addRow([d.month, d.dayName || "", d.present, d.late || 0, d.onLeave, d.weeklyOff || 0, d.absent, d.total, pct]);
         });
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -174,6 +177,8 @@ export default function AttendanceChart({
             style: { color: '#FFFFFF', fontSize: '14px' },
             formatter: function () {
                 let total = 0;
+                const pointIdx = this.points?.[0]?.point?.index ?? -1;
+                const lateVal = pointIdx >= 0 ? chartData[pointIdx]?.late : 0;
                 let html = `<div style="padding:8px; font-size:14px;">
                     <div style="font-weight:700; margin-bottom:6px; border-bottom:1px solid #334155; padding-bottom:4px;">${this.x}</div>`;
                 this.points?.forEach(p => {
@@ -183,6 +188,12 @@ export default function AttendanceChart({
                         <span style="font-weight:700;">${p.y}</span>
                     </div>`;
                 });
+                if (lateVal && lateVal > 0) {
+                    html += `<div style="display:flex; justify-content:space-between; gap:16px; margin-top:2px; margin-bottom:4px; color:#FBBF24;">
+                        <span style="font-weight:500;">⏰ Late arrival:</span>
+                        <span style="font-weight:700;">${lateVal}</span>
+                    </div>`;
+                }
                 html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #334155; display:flex; justify-content:space-between;">
                     <span style="color:#94A3B8;">Total:</span>
                     <span style="font-weight:700; color:#38BDF8;">${total}</span>
@@ -227,34 +238,34 @@ export default function AttendanceChart({
     };
 
     return (
-        <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-[#E2E8F0]/80 dark:border-[#1E293B] p-5 shadow-xs flex flex-col justify-between h-full">
+        <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-[#E2E8F0]/80 dark:border-[#1E293B] p-3.5 sm:p-5 shadow-xs flex flex-col justify-between h-full">
             {/* Header */}
             <div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <div className="flex items-center gap-2.5">
-                            <h2 className="text-lg font-bold text-[#0F172A] dark:text-white">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <h2 className="text-base sm:text-lg font-bold text-[#0F172A] dark:text-white">
                                 {chartTitle}
                             </h2>
                             {chartData.length > 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[13px] font-bold bg-[#ECFDF5] text-[#059669] dark:bg-[#059669]/20 dark:text-[#6EE7B7]">
+                                <span className="px-2 py-0.5 rounded-full text-xs sm:text-[13px] font-bold bg-[#ECFDF5] text-[#059669] dark:bg-[#059669]/20 dark:text-[#6EE7B7]">
                                     {chartData.length} Days
                                 </span>
                             )}
                         </div>
-                        <p className="text-[15px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+                        <p className="text-xs sm:text-[14px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
                             {chartSubtitle}
                             {isScrollable && viewMode === "chart" && (
-                                <span className="ml-2 text-[#4338CA] dark:text-[#818CF8] font-semibold text-xs">
-                                    ↔ Scroll horizontally to view all
+                                <span className="ml-2 text-[#4338CA] dark:text-[#818CF8] font-semibold text-xs inline-block">
+                                    ↔ Scroll to view all
                                 </span>
                             )}
                         </p>
                     </div>
 
                     {/* Chart / Table Toggle & Export */}
-                    <div className="flex items-center gap-2.5 self-start sm:self-auto">
-                        <div className="flex bg-[#F1F5F9] dark:bg-[#1E293B] p-1 rounded-lg border border-[#E2E8F0]/80 dark:border-[#334155]/80 text-[15px]">
+                    <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+                        <div className="flex bg-[#F1F5F9] dark:bg-[#1E293B] p-1 rounded-lg border border-[#E2E8F0]/80 dark:border-[#334155]/80 text-[13px] sm:text-[14px]">
                             <button
                                 onClick={() => setViewMode("chart")}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
@@ -291,7 +302,7 @@ export default function AttendanceChart({
 
                 {/* Legend */}
                 {viewMode === "chart" && (
-                    <div className="flex items-center justify-between gap-5 mt-3 text-[15px] font-medium text-[#475569] dark:text-[#94A3B8] flex-wrap">
+                    <div className="flex items-center justify-between gap-3 mt-3 text-xs sm:text-[14px] font-medium text-[#475569] dark:text-[#94A3B8] flex-wrap">
                         <div className="flex items-center gap-5 flex-wrap">
                             <span className="flex items-center gap-2">
                                 <span className="w-3 h-3 rounded-full bg-[#10B981]"></span>
@@ -308,6 +319,10 @@ export default function AttendanceChart({
                             <span className="flex items-center gap-2">
                                 <span className="w-3 h-3 rounded-full bg-[#EF4444]"></span>
                                 Absent
+                            </span>
+                            <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                                <span>⏰</span>
+                                Late arrival
                             </span>
                         </div>
 
@@ -339,6 +354,7 @@ export default function AttendanceChart({
                                 <tr>
                                     <th className="px-3.5 py-2.5">Date / Day</th>
                                     <th className="px-3.5 py-2.5 text-[#10B981]">Present</th>
+                                    <th className="px-3.5 py-2.5 text-[#F59E0B]">Late (Punched)</th>
                                     <th className="px-3.5 py-2.5 text-[#8B5CF6]">On Leave</th>
                                     <th className="px-3.5 py-2.5 text-[#94A3B8]">Weekly Off</th>
                                     <th className="px-3.5 py-2.5 text-[#EF4444]">Absent</th>
@@ -348,14 +364,15 @@ export default function AttendanceChart({
                             </thead>
                             <tbody className="divide-y divide-[#F1F5F9] dark:divide-[#1E293B]">
                                 {chartData.map((row, i) => {
-                                    const activeHeadcount = row.present + row.onLeave + row.absent;
-                                    const pct = activeHeadcount > 0 ? ((row.present / activeHeadcount) * 100).toFixed(1) : "0";
+                                    const workingHeadcount = row.present + row.onLeave + row.absent;
+                                    const pct = workingHeadcount > 0 ? ((row.present / workingHeadcount) * 100).toFixed(1) : "0";
                                     return (
                                         <tr key={i} className="hover:bg-[#F8FAFC]/50 dark:hover:bg-[#1E293B]/40">
                                             <td className="px-3.5 py-2.5 font-medium">
                                                 {row.month} {row.dayName ? <span className="text-xs text-[#94A3B8] ml-1">({row.dayName.slice(0, 3)})</span> : null}
                                             </td>
                                             <td className="px-3.5 py-2.5 text-[#10B981] font-semibold">{row.present}</td>
+                                            <td className="px-3.5 py-2.5 text-[#F59E0B] font-semibold">{row.late || 0}</td>
                                             <td className="px-3.5 py-2.5 text-[#8B5CF6]">{row.onLeave}</td>
                                             <td className="px-3.5 py-2.5 text-[#94A3B8]">{row.weeklyOff || 0}</td>
                                             <td className="px-3.5 py-2.5 text-[#EF4444]">{row.absent}</td>
@@ -371,8 +388,8 @@ export default function AttendanceChart({
             </div>
 
             {/* Bottom Summary Strip */}
-            <div className="mt-4 pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] flex flex-wrap items-center justify-between gap-3 text-[15px] font-medium">
-                <div className="flex items-center gap-3.5 text-[#475569] dark:text-[#94A3B8] flex-wrap">
+            <div className="mt-4 pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs sm:text-[14px] font-medium">
+                <div className="flex items-center gap-2.5 sm:gap-3.5 text-[#475569] dark:text-[#94A3B8] flex-wrap">
                     <span className="font-semibold text-[#1E293B] dark:text-[#E2E8F0]">
                         {currentMonthSummary?.label || (latest?.month ? `${latest.month} 2026` : "Attendance Overview")}
                     </span>
@@ -388,9 +405,15 @@ export default function AttendanceChart({
                         <span className="w-2 h-2 rounded-full bg-[#EF4444]"></span>
                         Absent <strong className="text-[#1E293B] dark:text-white ml-0.5">{latestAbsent}</strong>
                     </span>
+                    {latest?.late !== undefined && latest.late > 0 && (
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                            <span>⏰</span>
+                            Late <strong className="text-[#1E293B] dark:text-white ml-0.5">{latest.late}</strong>
+                        </span>
+                    )}
                 </div>
 
-                <div className="text-[#10B981] font-bold">
+                <div className="text-[#10B981] font-bold self-end sm:self-auto">
                     {attendancePct}% attendance
                 </div>
             </div>
