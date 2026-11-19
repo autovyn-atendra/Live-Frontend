@@ -31,8 +31,10 @@ import {
   Zap,
   FolderSearch,
   Eye,
+  EyeOff,
   Calendar,
-  Settings2
+  Settings2,
+  Key
 } from "lucide-react";
 
 interface StreamStepData {
@@ -58,10 +60,19 @@ export default function RpaVynfinancePage() {
   // Configuration States
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("$ecure@0273");
-  const [targetShortcut, setTargetShortcut] = useState("AUTOVYN-STARTUP_atendra");
-  const [targetModule, setTargetModule] = useState("Module Integration -> Pre-Sales -> ICM Register");
+  const [rdpUsername, setRdpUsername] = useState("atendra");
+  const [rdpPassword, setRdpPassword] = useState("user@123");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRdpPassword, setShowRdpPassword] = useState(false);
+  const [targetShortcut, setTargetShortcut] = useState("Suwalka Motors Start-up");
+  const [targetModule, setTargetModule] = useState("Right Sidebar -> Cost-Sheet (ICM) -> Outstanding (Dr.) -> PrintView (OK)");
   const [dateFrom, setDateFrom] = useState("01/10/26");
   const [dateUpto, setDateUpto] = useState("30/10/26");
+
+  const isSuwalkaOutstanding =
+    targetShortcut === "Suwalka Motors Start-up" ||
+    targetShortcut === "AUTOVYN-STARTUP1" ||
+    targetShortcut.toLowerCase().includes("suwalka");
 
   // Live Stream / Execution States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,6 +113,18 @@ export default function RpaVynfinancePage() {
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleSelectShortcut = (shortcut: string) => {
+    setTargetShortcut(shortcut);
+    const sc = shortcut.toLowerCase();
+    if (sc.includes("suwalka") || shortcut === "AUTOVYN-STARTUP1") {
+      setTargetModule("Right Sidebar -> Cost-Sheet (ICM) -> Outstanding (Dr.) -> PrintView (OK)");
+    } else if (sc.includes("rana") || shortcut === "AUTOVYN-STARTUP") {
+      setTargetModule("Module Integration -> Pre-Sales -> ICM Register -> E-Mail (Yes)");
+    } else {
+      setTargetModule("Rana: ICM Register (E-Mail) | Suwalka: Outstanding Dr. (OK)");
+    }
+  };
 
   // Elapsed Timer when running
   useEffect(() => {
@@ -144,23 +167,35 @@ export default function RpaVynfinancePage() {
     setCompleteData(null);
     setCurrentStep(1);
     const initialTitle =
-      action === "filter"
+      action === "login"
+        ? "Launching Shortcut & Accounts Module Login..."
+        : action === "outstanding"
+        ? "Secondary Server: Outstanding (Dr.) -> OK..."
+        : action === "filter"
         ? "Filling PrintView Filter & E-Mail..."
         : action === "multibranch"
         ? "Activating Multi Branch Environment..."
-        : "Targeting Desktop Shortcut...";
+        : isSuwalkaOutstanding
+        ? "Launching Suwalka Motors: Outstanding (Dr.)..."
+        : "Launching Rana Motors: ICM Register (E-Mail)...";
 
     const initialDetail =
-      action === "filter"
+      action === "login"
+        ? `Target: ${targetShortcut} | Opening RemoteApp -> [F1] Accounts Module -> Logging in as ${username}...`
+        : action === "outstanding"
+        ? `Right Sidebar -> Cost-Sheet (ICM) -> Outstanding (Dr.) -> Date Range -> OK...`
+        : action === "filter"
         ? `Entering Date: ${dateFrom} to ${dateUpto} & clicking E-Mail (Yes)...`
         : action === "multibranch"
         ? "Clicking Windows menu -> Set Multi Branch Environment (Ctrl+M)..."
-        : `Target: ${targetShortcut} (Desktop) | User: ${username}...`;
+        : isSuwalkaOutstanding
+        ? `Target: ${targetShortcut} | Right Sidebar -> Cost-Sheet (ICM) -> Outstanding (Dr.) -> Date Range: ${dateFrom} to ${dateUpto} -> OK...`
+        : `Target: ${targetShortcut} | Windows [Ctrl+M] -> Pre-Sales -> ICM Register -> Date Range: ${dateFrom} to ${dateUpto} -> E-Mail (Yes)...`;
 
     setStepTitle(initialTitle);
     setStepDetail(initialDetail);
     setLogs([
-      `[${new Date().toLocaleTimeString()}] [INFO] Starting AUTOVYN-STARTUP RPA (Mode: ${action}, Submit: ${submitBtn})...`
+      `[${new Date().toLocaleTimeString()}] [INFO] Starting AUTOVYN-STARTUP RPA (Target: ${targetShortcut}, Mode: ${action}, Submit: ${submitBtn})...`
     ]);
     setStreamSteps([]);
 
@@ -168,11 +203,17 @@ export default function RpaVynfinancePage() {
 
     const streamUrl = `${baseUrl}/api/rpa/vynfinance/live-stream?username=${encodeURIComponent(
       username
-    )}&password=${encodeURIComponent(password)}&dateFrom=${encodeURIComponent(
+    )}&password=${encodeURIComponent(password)}&rdpUsername=${encodeURIComponent(
+      rdpUsername
+    )}&rdpPassword=${encodeURIComponent(
+      rdpPassword
+    )}&dateFrom=${encodeURIComponent(
       dateFrom
     )}&dateUpto=${encodeURIComponent(dateUpto)}&submitButton=${encodeURIComponent(
       submitBtn
-    )}&action=${encodeURIComponent(action)}&compcode=${encodeURIComponent(defaultCompCode)}`;
+    )}&action=${encodeURIComponent(action)}&shortcut=${encodeURIComponent(
+      targetShortcut
+    )}&compcode=${encodeURIComponent(defaultCompCode)}`;
 
     const sse = new EventSource(streamUrl);
     eventSourceRef.current = sse;
@@ -187,9 +228,19 @@ export default function RpaVynfinancePage() {
           setIsCompleted(true);
           setCompleteData(data);
           if (data.success) {
-            setCurrentStep(6);
-            setStepTitle("ICM Register E-Mail Dispatched Successfully!");
-            setStepDetail(`PrintView Date Range: ${dateFrom} to ${dateUpto} submitted via E-Mail.`);
+            if (action === "login") {
+              setCurrentStep(3);
+              setStepTitle("Accounts Module Login Successful!");
+              setStepDetail(`Target '${targetShortcut}' successfully opened and logged in as '${username}'.`);
+            } else if (action === "outstanding" || targetShortcut === "AUTOVYN-STARTUP1") {
+              setCurrentStep(6);
+              setStepTitle("Outstanding (Dr.) Report Generated Successfully!");
+              setStepDetail(`PrintView Date Range: ${dateFrom} to ${dateUpto} submitted with OK.`);
+            } else {
+              setCurrentStep(6);
+              setStepTitle("ICM Register E-Mail Dispatched Successfully!");
+              setStepDetail(`PrintView Date Range: ${dateFrom} to ${dateUpto} submitted via E-Mail.`);
+            }
             setLogs((prev) => [
               ...prev,
               `[${new Date().toLocaleTimeString()}] [SUCCESS] Automation finished with 100% success.`
@@ -312,6 +363,13 @@ export default function RpaVynfinancePage() {
               AUTOVYN RPA
             </Link>
             <Link
+              href="/autovyn/rpa/vynfinance/servers"
+              className="px-3.5 py-1.5 text-xs font-medium rounded-lg text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#FFFFFF] transition flex items-center gap-1.5"
+            >
+              <Key className="w-3.5 h-3.5 text-[#2563EB]" />
+              Credentials Vault
+            </Link>
+            <Link
               href="/autovyn/rpa/ai-vision"
               className="px-3.5 py-1.5 text-xs font-medium rounded-lg text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#FFFFFF] transition"
             >
@@ -359,7 +417,11 @@ export default function RpaVynfinancePage() {
                 Application Target
               </p>
               <p className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
-                {targetShortcut}
+                {targetShortcut === "both"
+                  ? "⚡ Both (Sequential Queue)"
+                  : targetShortcut === "AUTOVYN-STARTUP1"
+                  ? "AUTOVYN-STARTUP1 (.30)"
+                  : "AUTOVYN-STARTUP (.35)"}
               </p>
             </div>
           </div>
@@ -383,27 +445,75 @@ export default function RpaVynfinancePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left 1 Col: Configuration Form */}
           <div className="bg-[#FFFFFF] dark:bg-[#0F172A] rounded-3xl border border-[#E2E8F0] dark:border-[#1E293B] p-6 shadow-sm space-y-5">
-            <div className="flex items-center gap-2 border-b border-[#E2E8F0] dark:border-[#1E293B] pb-4">
-              <Zap className="w-5 h-5 text-[#2563EB]" />
-              <h2 className="text-base font-bold text-[#0F172A] dark:text-[#FFFFFF]">
-                Automation Parameters
-              </h2>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-4">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-[#2563EB]" />
+                <h2 className="text-base font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                  Automation Parameters
+                </h2>
+              </div>
+              <Link
+                href="/autovyn/rpa/vynfinance/servers"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-[#EFF6FF] dark:bg-[#1E3A8A]/40 text-[#2563EB] dark:text-[#93C5FD] hover:bg-[#DBEAFE] transition"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Manage Passwords
+              </Link>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1.5">
-                  Desktop Shortcut Name
+                  Target Desktop Shortcut / Server
                 </label>
-                <div className="relative">
-                  <FolderSearch className="w-4 h-4 text-[#94A3B8] absolute left-3 top-3" />
-                  <input
-                    type="text"
+                <div className="relative mb-2">
+                  <FolderSearch className="w-4 h-4 text-[#94A3B8] absolute left-3 top-3 pointer-events-none" />
+                  <select
                     value={targetShortcut}
-                    onChange={(e) => setTargetShortcut(e.target.value)}
-                    placeholder="AUTOVYN-STARTUP_atendra"
+                    onChange={(e) => handleSelectShortcut(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#020617] text-[#0F172A] dark:text-[#FFFFFF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                  />
+                  >
+                    <option value="Suwalka Motors Start-up">Suwalka Motors Start-up (Right Sidebar -&gt; Outstanding Dr. -&gt; OK)</option>
+                    <option value="Rana motors Startup">Rana motors Startup (Pre-Sales -&gt; ICM Register -&gt; E-Mail)</option>
+                    <option value="both">⚡ Run Both Sequentially (Rana then Suwalka)</option>
+                  </select>
+                </div>
+
+                {/* Quick Selection Pills */}
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectShortcut("Suwalka Motors Start-up")}
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
+                      isSuwalkaOutstanding && targetShortcut !== "both"
+                        ? "bg-[#2563EB] text-white shadow-sm"
+                        : "bg-[#F1F5F9] dark:bg-[#1E293B] text-[#64748B] hover:text-[#0F172A] dark:hover:text-white"
+                    }`}
+                  >
+                    Suwalka Motors (Outstanding)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectShortcut("Rana motors Startup")}
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
+                      !isSuwalkaOutstanding && targetShortcut !== "both"
+                        ? "bg-[#2563EB] text-white shadow-sm"
+                        : "bg-[#F1F5F9] dark:bg-[#1E293B] text-[#64748B] hover:text-[#0F172A] dark:hover:text-white"
+                    }`}
+                  >
+                    Rana Motors (Mail)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectShortcut("both")}
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
+                      targetShortcut === "both"
+                        ? "bg-[#8B5CF6] text-white shadow-sm"
+                        : "bg-[#F1F5F9] dark:bg-[#1E293B] text-[#64748B] hover:text-[#0F172A] dark:hover:text-white"
+                    }`}
+                  >
+                    ⚡ Run Both
+                  </button>
                 </div>
               </div>
 
@@ -420,36 +530,86 @@ export default function RpaVynfinancePage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1.5">
-                    Login Username
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-[#94A3B8] absolute left-3 top-3" />
+              {/* RemoteApp & ERP Credentials Block */}
+              <div className="p-3.5 rounded-2xl bg-[#F8FAFC] dark:bg-[#020617] border border-[#CBD5E1] dark:border-[#334155] space-y-3">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB] block">
+                  Authentication Credentials
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
+                      RemoteApp User
+                    </label>
                     <input
                       type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="admin"
-                      className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#020617] text-[#0F172A] dark:text-[#FFFFFF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      value={rdpUsername}
+                      onChange={(e) => setRdpUsername(e.target.value)}
+                      placeholder="atendra"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
+                      RemoteApp Pass
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showRdpPassword ? "text" : "password"}
+                        value={rdpPassword}
+                        onChange={(e) => setRdpPassword(e.target.value)}
+                        placeholder="user@123"
+                        className="w-full pr-8 px-3 py-1.5 text-xs rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRdpPassword(!showRdpPassword)}
+                        className="absolute right-2 top-2 text-[#94A3B8] hover:text-[#0F172A]"
+                      >
+                        {showRdpPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1.5">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-[#94A3B8] absolute left-3 top-3" />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="11111"
-                      className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#020617] text-[#0F172A] dark:text-[#FFFFFF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                    />
+                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-[#E2E8F0] dark:border-[#1E293B]">
+                  <div>
+                    <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
+                      ERP Login Username
+                    </label>
+                    <div className="relative">
+                      <User className="w-3.5 h-3.5 text-[#94A3B8] absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="admin"
+                        className="w-full pl-8 pr-2 py-1.5 text-xs rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
+                      ERP Login Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-3.5 h-3.5 text-[#94A3B8] absolute left-2.5 top-2.5" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Password"
+                        className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border border-[#CBD5E1] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-[#0F172A] dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2 top-2 text-[#94A3B8] hover:text-[#0F172A]"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -489,33 +649,62 @@ export default function RpaVynfinancePage() {
               </div>
 
               <div className="pt-4 space-y-2.5">
+                {/* 1. Dedicated Login Only Test Button */}
+                <Button
+                  onClick={() => handleLaunchAutomation("login")}
+                  variant="outline"
+                  className="w-full border-2 border-[#2563EB] text-[#2563EB] hover:bg-[#EFF6FF] dark:hover:bg-[#1E3A8A]/30 dark:text-[#60A5FA] rounded-xl py-2.5 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                >
+                  <Key className="w-4 h-4" />
+                  {targetShortcut === "both"
+                    ? "Launch & Login BOTH Servers (Server 1 + Server 2)"
+                    : `Launch & Login: ${targetShortcut} (Test Login)`}
+                </Button>
+
+                {/* 2. Full 6-Step Automation Button */}
                 <Button
                   onClick={handleQuickTrigger}
                   className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-[#FFFFFF] rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#2563EB]/25"
                 >
                   <Play className="w-4 h-4 fill-current" />
-                  Launch Full Automation (Multi-Branch &amp; E-Mail)
+                  {targetShortcut === "both"
+                    ? "Launch Full Automation for BOTH Servers (Queue)"
+                    : `Launch Full Automation: ${targetShortcut}`}
                 </Button>
+
+                {/* 3. Sub-step buttons */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    onClick={() => handleLaunchAutomation("filter", "email")}
-                    variant="outline"
-                    className="border-2 border-[#059669] text-[#059669] hover:bg-[#D1FAE5] dark:hover:bg-[#064E3B] dark:text-[#34D399] rounded-xl py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Fill &amp; E-Mail (Yes)
-                  </Button>
+                  {isSuwalkaOutstanding ? (
+                    <Button
+                      onClick={() => handleLaunchAutomation("outstanding", "ok")}
+                      variant="outline"
+                      className="border-2 border-[#059669] text-[#059669] hover:bg-[#D1FAE5] dark:hover:bg-[#064E3B] dark:text-[#34D399] rounded-xl py-2 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Outstanding (Dr.) &gt; OK
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleLaunchAutomation("filter", "email")}
+                      variant="outline"
+                      className="border-2 border-[#059669] text-[#059669] hover:bg-[#D1FAE5] dark:hover:bg-[#064E3B] dark:text-[#34D399] rounded-xl py-2 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Fill &amp; E-Mail (Yes)
+                    </Button>
+                  )}
                   <Button
                     onClick={() => handleLaunchAutomation("multibranch")}
                     variant="outline"
-                    className="border-2 border-[#7C3AED] text-[#7C3AED] hover:bg-[#EDE9FE] dark:hover:bg-[#4C1D95]/30 dark:text-[#A78BFA] rounded-xl py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+                    className="border-2 border-[#7C3AED] text-[#7C3AED] hover:bg-[#EDE9FE] dark:hover:bg-[#4C1D95]/30 dark:text-[#A78BFA] rounded-xl py-2 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
                   >
-                    <Settings2 className="w-4 h-4" />
+                    <Settings2 className="w-3.5 h-3.5" />
                     Set Multi-Branch
                   </Button>
                 </div>
+
                 <p className="text-[11px] text-center text-[#94A3B8]">
-                  Automates Login -&gt; Windows [Ctrl+M] -&gt; ICM Register -&gt; E-Mail &amp; Auto Mail (Yes)
+                  Target: <strong>{targetShortcut}</strong> | User: <strong>{username}</strong>
                 </p>
               </div>
             </div>
@@ -550,11 +739,11 @@ export default function RpaVynfinancePage() {
                       Direct Desktop Launch &amp; Double-Click Shortcut
                     </h3>
                     <span className="text-[11px] font-mono text-[#2563EB] bg-[#EFF6FF] dark:bg-[#1E3A8A]/40 px-2 py-0.5 rounded-md font-semibold">
-                      AUTOVYN-STARTUP_atendra
+                      {targetShortcut}
                     </span>
                   </div>
                   <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
-                    Minimizes open windows to reveal Desktop, targets the desktop icon <strong>AUTOVYN-STARTUP_atendra</strong> at (262, 233), and executes a double-click to launch directly.
+                    Minimizes open windows to reveal Desktop, targets the desktop icon <strong>{targetShortcut}</strong>, and executes a double-click to launch directly.
                   </p>
                 </div>
               </div>
@@ -597,62 +786,125 @@ export default function RpaVynfinancePage() {
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
-                <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
-                  4
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
-                      Windows Menu -&gt; Set Multi Branch Environment
-                    </h3>
-                    <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] dark:bg-[#064E3B]/40 px-2 py-0.5 rounded-md">
-                      Windows &rarr; Ctrl+M
-                    </span>
+              {isSuwalkaOutstanding ? (
+                <>
+                  <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
+                      4
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                          Click 'Cost-Sheet (ICM)' in Right Sidebar
+                        </h3>
+                        <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] dark:bg-[#064E3B]/40 px-2 py-0.5 rounded-md">
+                          Sidebar Bottom
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                        Clicks the right bottom button <strong>Cost-Sheet (ICM)</strong> under Financial View at calibrated coordinate (1290, 616).
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
-                    Immediately after login, clicks <strong>Windows</strong> menu at (870, 53) and selects <strong>Set Multi Branch Environment (Ctrl+M)</strong> at (1003, 102).
-                  </p>
-                </div>
-              </div>
 
-              <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
-                <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
-                  5
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
-                      Module Integration -&gt; Pre-Sales -&gt; ICM Register
-                    </h3>
-                    <span className="text-[11px] font-semibold text-[#8B5CF6] bg-[#F5F3FF] dark:bg-[#4C1D95]/40 px-2 py-0.5 rounded-md font-mono">
-                      Menu Navigator
-                    </span>
+                  <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
+                      5
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                          Click 'Outstanding (Dr.)' Button
+                        </h3>
+                        <span className="text-[11px] font-semibold text-[#8B5CF6] bg-[#F5F3FF] dark:bg-[#4C1D95]/40 px-2 py-0.5 rounded-md font-mono">
+                          Above Financial View
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                        Clicks <strong>Outstanding (Dr.)</strong> directly above Financial View at (1290, 538) to trigger the PrintView (IOS-DR) dialog.
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
-                    Clicks <strong>Module Integration</strong> at (485, 53), targets <strong>Pre-Sales</strong> at (578, 224), and clicks <strong>ICM Register</strong> at (877, 512).
-                  </p>
-                </div>
-              </div>
 
-              <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
-                <div className="w-8 h-8 rounded-xl bg-[#10B981] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
-                  6
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
-                      PrintView Dialog: Date Range &amp; Click 'E-Mail'
-                    </h3>
-                    <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] dark:bg-[#064E3B]/40 px-2 py-0.5 rounded-md">
-                      E-Mail Dispatch
-                    </span>
+                  <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-[#10B981] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
+                      6
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                          PrintView (IOS-DR): Date Range &amp; Click 'Ok'
+                        </h3>
+                        <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] dark:bg-[#064E3B]/40 px-2 py-0.5 rounded-md">
+                          Generate Report
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                        Detects <strong>PrintView</strong> popup, fills Date From (<code>{dateFrom}</code>), Date Upto (<code>{dateUpto}</code>), and clicks <strong>Ok</strong> at (511, 455) to generate the Outstanding report.
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
-                    Detects <strong>PrintView</strong> popup, fills Date From (<code>{dateFrom}</code>), Date Upto (<code>{dateUpto}</code>), and clicks <strong>E-Mail</strong> at (611, 459) to dispatch report.
-                  </p>
-                </div>
-              </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
+                      4
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                          Windows Menu -&gt; Set Multi Branch Environment
+                        </h3>
+                        <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] dark:bg-[#064E3B]/40 px-2 py-0.5 rounded-md">
+                          Windows &rarr; Ctrl+M
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                        Immediately after login, clicks <strong>Windows</strong> menu at (870, 53) and selects <strong>Set Multi Branch Environment (Ctrl+M)</strong> at (1003, 102).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
+                      5
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                          Module Integration -&gt; Pre-Sales -&gt; ICM Register
+                        </h3>
+                        <span className="text-[11px] font-semibold text-[#8B5CF6] bg-[#F5F3FF] dark:bg-[#4C1D95]/40 px-2 py-0.5 rounded-md font-mono">
+                          Menu Navigator
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                        Clicks <strong>Module Integration</strong> at (485, 53), targets <strong>Pre-Sales</strong> at (578, 224), and clicks <strong>ICM Register</strong> at (877, 512).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC]/80 dark:bg-[#020617]/50 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-[#10B981] text-[#FFFFFF] flex items-center justify-center font-bold text-sm shrink-0">
+                      6
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#FFFFFF]">
+                          PrintView Dialog: Date Range &amp; Click 'E-Mail'
+                        </h3>
+                        <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] dark:bg-[#064E3B]/40 px-2 py-0.5 rounded-md">
+                          E-Mail Dispatch
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                        Detects <strong>PrintView</strong> popup, fills Date From (<code>{dateFrom}</code>), Date Upto (<code>{dateUpto}</code>), and clicks <strong>E-Mail</strong> at (611, 459) to dispatch report.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

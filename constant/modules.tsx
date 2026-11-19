@@ -779,6 +779,19 @@ export const treeData = [
 
         ],
       },
+       {
+        title: "Servers Management |",
+        key: "22.2",
+        url: "/autovyn/rpa/vynfinance/servers",
+        children: [
+          {
+            title: "Servers Management | ",
+            key: "22.2.1",
+            url: "/autovyn/rpa/vynfinance/servers",
+          }
+
+        ],
+      },
     
     ]
   },
