@@ -33,6 +33,10 @@ import {
   Eye,
   EyeOff,
   Plus,
+  Database,
+  Power,
+  RefreshCw,
+  Clock,
 } from "lucide-react";
 
 function showSideAlert(message: string, type: "success" | "error" | "warning" | "info") {
@@ -106,8 +110,17 @@ export default function RpaMasterHubPage() {
   const [showRdpPass, setShowRdpPass] = useState(false);
   const [showAppPass, setShowAppPass] = useState(false);
 
+  // Schedulers Active / Inactive states (persisted in dbo.RPA_Config)
+  const [schedulersConfig, setSchedulersConfig] = useState({
+    dmsActive: true,
+    emailActive: true,
+    attendanceActive: true,
+  });
+  const [isTogglingScheduler, setIsTogglingScheduler] = useState<string | null>(null);
+
   // Scheduler execution parameters state (starts empty)
   const [schedulerParams, setSchedulerParams] = useState({
+    dmsShortcut: "",
     emailShortcut: "",
     emailDateFrom: "",
     emailDateUpto: "",
@@ -146,8 +159,28 @@ export default function RpaMasterHubPage() {
     }
   };
 
+  // Fetch Schedulers Active/Inactive configuration from dbo.RPA_Config
+  const fetchSchedulersConfig = async () => {
+    try {
+      const res = await axios.get(`${baseUrl}/api/rpa/config`, {
+        headers: { compcode: compCode },
+      });
+      if (res.data?.success && res.data.configs) {
+        const configs = res.data.configs;
+        setSchedulersConfig({
+          dmsActive: configs.RPA_DMS_ACTIVE !== "false",
+          emailActive: configs.RPA_EMAIL_ACTIVE !== "false",
+          attendanceActive: configs.RPA_ATTENDANCE_ACTIVE !== "false",
+        });
+      }
+    } catch (err: any) {
+      console.warn("Error fetching RPA schedulers config:", err.message);
+    }
+  };
+
   useEffect(() => {
     fetchServers();
+    fetchSchedulersConfig();
   }, [compCode]);
 
   const resetForm = () => {
@@ -296,7 +329,103 @@ export default function RpaMasterHubPage() {
     }
   };
 
+  // Toggle Scheduler Active/Inactive state (persists into dbo.RPA_Config)
+  const handleToggleSchedulerActive = async (type: "dms" | "email" | "attendance") => {
+    const keyMap = {
+      dms: "RPA_DMS_ACTIVE",
+      email: "RPA_EMAIL_ACTIVE",
+      attendance: "RPA_ATTENDANCE_ACTIVE",
+    };
+    const titleMap = {
+      dms: "DMS Sync Schedular",
+      email: "VYNFINANCE Email Schedular",
+      attendance: "Attendance Download Schedular",
+    };
+    const key = keyMap[type];
+    const currentVal =
+      type === "dms"
+        ? schedulersConfig.dmsActive
+        : type === "email"
+        ? schedulersConfig.emailActive
+        : schedulersConfig.attendanceActive;
+    const newVal = !currentVal;
+
+    setIsTogglingScheduler(type);
+    try {
+      // Optimistic update
+      setSchedulersConfig((prev) => ({
+        ...prev,
+        [`${type}Active`]: newVal,
+      }));
+
+      const res = await axios.post(
+        `${baseUrl}/api/rpa/config`,
+        {
+          key,
+          value: newVal ? "true" : "false",
+          description: `${titleMap[type]} automation status`,
+        },
+        {
+          headers: { compcode: compCode },
+        }
+      );
+
+      if (res.data?.success) {
+        showSideAlert(
+          `${titleMap[type]} is now ${newVal ? "ACTIVE (Will Run on Schedule)" : "INACTIVE (Paused / Won't Run)"}`,
+          newVal ? "success" : "warning"
+        );
+      } else {
+        // Revert on failure
+        setSchedulersConfig((prev) => ({
+          ...prev,
+          [`${type}Active`]: currentVal,
+        }));
+        showSideAlert("Failed to update scheduler status", "error");
+      }
+    } catch (err: any) {
+      // Revert on failure
+      setSchedulersConfig((prev) => ({
+        ...prev,
+        [`${type}Active`]: currentVal,
+      }));
+      showSideAlert(err.response?.data?.error || err.message || "Failed to update scheduler", "error");
+    } finally {
+      setIsTogglingScheduler(null);
+    }
+  };
+
   // Execution Handlers
+  const handleRunDms = async (overrideShortcut?: string) => {
+    const targetShortcut = overrideShortcut || schedulerParams.dmsShortcut;
+    setIsLoading(true);
+    showSideAlert(
+      `Starting DMS Sync Automation ${targetShortcut ? `(${targetShortcut})` : "(All Active DMS Servers)"}...`,
+      "info"
+    );
+    try {
+      const res = await axios.get(`${baseUrl}/api/rpa/scheduler/run-dms`, {
+        params: {
+          compcode: compCode,
+          shortcut: targetShortcut || undefined,
+          force: true, // Manual run is forced
+        },
+      });
+      setLastResult(res.data);
+      if (res.data?.success) {
+        showSideAlert("DMS Sync Automation Executed Successfully!", "success");
+      } else {
+        showSideAlert(res.data?.message || "DMS execution finished with notice", "warning");
+      }
+      fetchServers();
+    } catch (err: any) {
+      showSideAlert(err.response?.data?.error || err.message, "error");
+      setLastResult({ success: false, error: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRunEmail = async (overrideShortcut?: string) => {
     const targetShortcut = overrideShortcut || schedulerParams.emailShortcut || formData.shortcut_name;
     if (!targetShortcut) {
@@ -402,11 +531,28 @@ export default function RpaMasterHubPage() {
     {
       Header: "Action",
       accessor: "submit_action",
-      Cell: ({ value }: any) => (
-        <span className="uppercase text-lg font-semibold text-[#2563EB] dark:text-[#60A5FA]">
-          {value || "EMAIL"}
-        </span>
-      ),
+      Cell: ({ value }: any) => {
+        const val = String(value || "email").toLowerCase();
+        if (val === "dms") {
+          return (
+            <span className="inline-block uppercase text-sm font-bold px-3 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+              DMS SYNC
+            </span>
+          );
+        }
+        if (val === "ok") {
+          return (
+            <span className="inline-block uppercase text-sm font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+              OK VIEW
+            </span>
+          );
+        }
+        return (
+          <span className="inline-block uppercase text-sm font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
+            EMAIL
+          </span>
+        );
+      },
     },
     {
       Header: "Status",
@@ -452,37 +598,50 @@ export default function RpaMasterHubPage() {
     {
       Header: "Controls",
       accessor: "id",
-      Cell: ({ row }: any) => (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 px-3.5 text-lg font-bold text-[#2563EB] hover:text-[#1D4ED8] hover:bg-[#EFF6FF] dark:hover:bg-[#172554]"
-            onClick={() => handleRunEmail(row.original.shortcut_name)}
-            title="Trigger this shortcut now"
-          >
-            <Play className="w-4 h-4 mr-1.5 fill-current" /> 
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 px-3.5 text-lg font-bold"
-            onClick={() => handleEdit(row.original)}
-            title="Edit configuration"
-          >
-            <Edit2 className="w-4 h-4 mr-1.5" /> 
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 px-3.5 text-lg font-bold text-[#DC2626] hover:text-[#B91C1C] hover:bg-[#FEF2F2] dark:hover:bg-[#450A0A]"
-            onClick={() => handleDelete(row.original.id)}
-            title="Delete configuration"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
+      Cell: ({ row }: any) => {
+        const action = String(row.original.submit_action || "email").toLowerCase();
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className={`h-9 px-3.5 text-lg font-bold ${
+                action === "dms"
+                  ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                  : "text-[#2563EB] hover:text-[#1D4ED8] hover:bg-[#EFF6FF] dark:hover:bg-[#172554]"
+              }`}
+              onClick={() => {
+                if (action === "dms") {
+                  handleRunDms(row.original.shortcut_name);
+                } else {
+                  handleRunEmail(row.original.shortcut_name);
+                }
+              }}
+              title={action === "dms" ? "Trigger DMS Sync now" : "Trigger Email Automation now"}
+            >
+              <Play className="w-4 h-4 mr-1.5 fill-current" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 px-3.5 text-lg font-bold"
+              onClick={() => handleEdit(row.original)}
+              title="Edit configuration"
+            >
+              <Edit2 className="w-4 h-4 mr-1.5" /> 
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 px-3.5 text-lg font-bold text-[#DC2626] hover:text-[#B91C1C] hover:bg-[#FEF2F2] dark:hover:bg-[#450A0A]"
+              onClick={() => handleDelete(row.original.id)}
+              title="Delete configuration"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -533,7 +692,7 @@ export default function RpaMasterHubPage() {
           </div>
         </div>
 
-        {/* Status Count Ribbon (Presets completely removed) */}
+        {/* Status Count Ribbon */}
         <div className="mt-0 rounded-b p-2 md:p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow flex flex-wrap items-center justify-between gap-4 font-bold text-lg">
           <div className="flex flex-wrap items-center gap-4">
             <div className="text-save flex items-center gap-1.5">
@@ -548,29 +707,185 @@ export default function RpaMasterHubPage() {
               <Server className="w-4 h-4 text-[#2563EB]" />
               <span>Total Servers :- {servers.length}</span>
             </div>
+
+            {/* Schedulers Live Status Badges */}
+            <div className="hidden xl:flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-800 text-sm font-semibold">
+              <span className="text-xs uppercase text-gray-500 tracking-wider">Cron Jobs:</span>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold border transition ${
+                  schedulersConfig.dmsActive
+                    ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800"
+                    : "bg-gray-100 text-gray-400 border-gray-200 dark:bg-gray-900 dark:text-gray-500"
+                }`}
+              >
+                DMS: {schedulersConfig.dmsActive ? "ACTIVE (ON)" : "PAUSED (OFF)"}
+              </span>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold border transition ${
+                  schedulersConfig.emailActive
+                    ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800"
+                    : "bg-gray-100 text-gray-400 border-gray-200 dark:bg-gray-900 dark:text-gray-500"
+                }`}
+              >
+                Email: {schedulersConfig.emailActive ? "ACTIVE (ON)" : "PAUSED (OFF)"}
+              </span>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold border transition ${
+                  schedulersConfig.attendanceActive
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800"
+                    : "bg-gray-100 text-gray-400 border-gray-200 dark:bg-gray-900 dark:text-gray-500"
+                }`}
+              >
+                Attendance: {schedulersConfig.attendanceActive ? "ACTIVE (ON)" : "PAUSED (OFF)"}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <Button
               size="lg"
               variant="outline"
-              className="h-10  flex items-center gap-1"
-              onClick={fetchServers}
+              className="h-10 flex items-center gap-1"
+              onClick={() => {
+                fetchServers();
+                fetchSchedulersConfig();
+              }}
             >
-              Refresh Table
+              <RefreshCw className="w-4 h-4 mr-1" /> Refresh Table
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ── 2. ON-DEMAND SCHEDULER CONTROLS (Task 1 & Task 2) ── */}
-      <div className="col-span-12 md:col-span-6">
-        {/* Task 1: Email Dispatch Box */}
+      {/* ── 2. ON-DEMAND SCHEDULER CONTROLS & ON/OFF SWITCHES (Task 1, Task 2 & Task 3) ── */}
+      {/* Task 1: DMS Sync Schedular Box */}
+      <div className="col-span-12 lg:col-span-4">
         <div className="rounded p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow h-full flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark text-[#2563EB] dark:text-[#60A5FA] text-lg">
-              <Mail className="" />
-              <SmallTitle text="Task 1: VYNFINANCE Email Schedular Run" />
+            <div className="flex items-center justify-between pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark">
+              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 text-lg">
+                <Database className="w-5 h-5" />
+                <SmallTitle text="Task 1: DMS Sync Schedular" />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleSchedulerActive("dms")}
+                disabled={isTogglingScheduler === "dms"}
+                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                  schedulersConfig.dmsActive
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700 hover:bg-emerald-200"
+                    : "bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800 hover:bg-rose-200"
+                }`}
+                title="Click to Toggle DMS Schedular ON/OFF"
+              >
+                <Power className={`w-3.5 h-3.5 ${schedulersConfig.dmsActive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} />
+                <span>{schedulersConfig.dmsActive ? "ACTIVE (ON)" : "INACTIVE (OFF)"}</span>
+              </button>
+            </div>
+
+            {/* Schedule Info Banner */}
+            <div className={`p-2.5 mb-3 rounded border text-xs flex items-center justify-between ${
+              schedulersConfig.dmsActive
+                ? "bg-purple-50/60 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/50 text-purple-900 dark:text-purple-200"
+                : "bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-800 text-gray-500"
+            }`}>
+              <div className="flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Cron: 12:05 PM, 08:30 AM</span>
+              </div>
+              <span className="font-semibold">
+                {schedulersConfig.dmsActive ? "● Running Daily" : "○ Paused"}
+              </span>
+            </div>
+
+            <div className="space-y-2 text-lg">
+              <SelectSearch
+                title="Target DMS Server"
+                name="dmsShortcut"
+                labelClass="text-lg"
+                placeholder="All DMS Servers"
+                selectedValue={schedulerParams.dmsShortcut}
+                handleInputChange={handleSchedulerChange}
+                options={[
+                  { value: "", label: "-- Run All Active DMS Servers --" },
+                  ...servers
+                    .filter((s) => (s.submit_action || "").toLowerCase() === "dms" || !s.submit_action)
+                    .map((s) => ({
+                      value: s.shortcut_name,
+                      label: `${s.shortcut_name} (${s.server_name})`,
+                    })),
+                ]}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic pt-1">
+                Launches DMS shortcut, starts server cmd, downloads Master Data via Chrome, and processes DMSYNC.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-4 flex flex-col gap-2">
+            <Button
+              variant="save"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold"
+              size="lg"
+              onClick={() => handleRunDms()}
+            >
+              <Play className="w-4 h-4 mr-1.5 fill-current" /> Run DMS Schedular Now
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleToggleSchedulerActive("dms")}
+              className={`w-full text-xs font-semibold ${
+                schedulersConfig.dmsActive
+                  ? "text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  : "text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              }`}
+            >
+              {schedulersConfig.dmsActive ? "Turn Off DMS Schedular" : "Turn On DMS Schedular"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Task 2: VYNFINANCE Email Schedular Box */}
+      <div className="col-span-12 lg:col-span-4">
+        <div className="rounded p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow h-full flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark">
+              <div className="flex items-center gap-2 text-[#2563EB] dark:text-[#60A5FA] text-lg">
+                <Mail className="w-5 h-5" />
+                <SmallTitle text="Task 2: VYNFINANCE Email Schedular" />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleSchedulerActive("email")}
+                disabled={isTogglingScheduler === "email"}
+                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                  schedulersConfig.emailActive
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700 hover:bg-emerald-200"
+                    : "bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800 hover:bg-rose-200"
+                }`}
+                title="Click to Toggle Email Schedular ON/OFF"
+              >
+                <Power className={`w-3.5 h-3.5 ${schedulersConfig.emailActive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} />
+                <span>{schedulersConfig.emailActive ? "ACTIVE (ON)" : "INACTIVE (OFF)"}</span>
+              </button>
+            </div>
+
+            {/* Schedule Info Banner */}
+            <div className={`p-2.5 mb-3 rounded border text-xs flex items-center justify-between ${
+              schedulersConfig.emailActive
+                ? "bg-blue-50/60 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50 text-blue-900 dark:text-blue-200"
+                : "bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-800 text-gray-500"
+            }`}>
+              <div className="flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Cron: 12:15 PM, 08:00 AM</span>
+              </div>
+              <span className="font-semibold">
+                {schedulersConfig.emailActive ? "● Running Daily" : "○ Paused"}
+              </span>
             </div>
 
             <div className="space-y-2 text-lg">
@@ -584,14 +899,17 @@ export default function RpaMasterHubPage() {
                 options={
                   servers.length > 0
                     ? [
-                      { value: "", label: "-- Select Target Shortcut / Server --" },
-                      ...servers.map((s) => ({ value: s.shortcut_name, label: `${s.shortcut_name} (${s.server_name})` })),
-                    ]
+                        { value: "", label: "-- Select Target Shortcut / Server --" },
+                        ...servers.map((s) => ({
+                          value: s.shortcut_name,
+                          label: `${s.shortcut_name} (${s.server_name})`,
+                        })),
+                      ]
                     : [
-                      { value: "", label: "-- Select Target Shortcut --" },
-                      { value: "Suwalka Motors Start-up", label: "Suwalka Motors Start-up" },
-                      { value: "Rana motors Startup", label: "Rana motors Startup" },
-                    ]
+                        { value: "", label: "-- Select Target Shortcut --" },
+                        { value: "Suwalka Motors Start-up", label: "Suwalka Motors Start-up" },
+                        { value: "Rana motors Startup", label: "Rana motors Startup" },
+                      ]
                 }
               />
 
@@ -618,24 +936,70 @@ export default function RpaMasterHubPage() {
             </div>
           </div>
 
-          <Button
-            variant="save"
-            className=" mt-4"
-            size='lg'
-            onClick={() => handleRunEmail()}
-          >
-            Run Email Schedular Now
-          </Button>
+          <div className="pt-4 flex flex-col gap-2">
+            <Button
+              variant="save"
+              className="w-full font-bold"
+              size="lg"
+              onClick={() => handleRunEmail()}
+            >
+              <Play className="w-4 h-4 mr-1.5 fill-current" /> Run Email Schedular Now
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleToggleSchedulerActive("email")}
+              className={`w-full text-xs font-semibold ${
+                schedulersConfig.emailActive
+                  ? "text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  : "text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              }`}
+            >
+              {schedulersConfig.emailActive ? "Turn Off Email Schedular" : "Turn On Email Schedular"}
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="col-span-12 md:col-span-6">
-        {/* Task 2: Attendance Report Download Box */}
+      {/* Task 3: Attendance Report Download Box */}
+      <div className="col-span-12 lg:col-span-4">
         <div className="rounded p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow h-full flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark text-[#059669] dark:text-[#34D399]">
-              <Download className="" />
-              <SmallTitle text="Task 2: Attendance Report Download Run" />
+            <div className="flex items-center justify-between pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark">
+              <div className="flex items-center gap-2 text-[#059669] dark:text-[#34D399] text-lg">
+                <Download className="w-5 h-5" />
+                <SmallTitle text="Task 3: Attendance Download" />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleSchedulerActive("attendance")}
+                disabled={isTogglingScheduler === "attendance"}
+                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                  schedulersConfig.attendanceActive
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700 hover:bg-emerald-200"
+                    : "bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800 hover:bg-rose-200"
+                }`}
+                title="Click to Toggle Attendance Schedular ON/OFF"
+              >
+                <Power className={`w-3.5 h-3.5 ${schedulersConfig.attendanceActive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} />
+                <span>{schedulersConfig.attendanceActive ? "ACTIVE (ON)" : "INACTIVE (OFF)"}</span>
+              </button>
+            </div>
+
+            {/* Schedule Info Banner */}
+            <div className={`p-2.5 mb-3 rounded border text-xs flex items-center justify-between ${
+              schedulersConfig.attendanceActive
+                ? "bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-200"
+                : "bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-800 text-gray-500"
+            }`}>
+              <div className="flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Cron: 12:15 PM, 08:00 AM</span>
+              </div>
+              <span className="font-semibold">
+                {schedulersConfig.attendanceActive ? "● Running Daily" : "○ Paused"}
+              </span>
             </div>
 
             <div className="space-y-2 text-xs">
@@ -657,17 +1021,35 @@ export default function RpaMasterHubPage() {
                   handleInputChange={handleSchedulerChange}
                 />
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic pt-1">
+                Downloads monthly attendance logs and biometric records for ERP processing.
+              </p>
             </div>
           </div>
 
-          <Button
-            variant="save"
-            size='lg'
-            className="w-full mt-4"
-            onClick={handleRunAttendance}
-          >
-            Download Report Now
-          </Button>
+          <div className="pt-4 flex flex-col gap-2">
+            <Button
+              variant="save"
+              size="lg"
+              className="w-full bg-[#059669] hover:bg-[#047857] text-white font-bold"
+              onClick={handleRunAttendance}
+            >
+              <Download className="w-4 h-4 mr-1.5" /> Download Report Now
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleToggleSchedulerActive("attendance")}
+              className={`w-full text-xs font-semibold ${
+                schedulersConfig.attendanceActive
+                  ? "text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  : "text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              }`}
+            >
+              {schedulersConfig.attendanceActive ? "Turn Off Attendance Schedular" : "Turn On Attendance Schedular"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -786,7 +1168,8 @@ export default function RpaMasterHubPage() {
                   selectedValue={formData.submit_action}
                   handleInputChange={handleInputChange}
                   options={[
-                    { value: "email", label: "Click 'Email' Button (Auto Dispatch)" },
+                    { value: "dms", label: "DMS Sync (Batch + Chrome getMasterData + DMSYNC)" },
+                    { value: "email", label: "Click 'Email' Button (VYNFINANCE Auto Dispatch)" },
                     { value: "ok", label: "Click 'OK' Button (PrintView / Export)" },
                   ]}
                 />
