@@ -164,13 +164,24 @@ export default function RpaMasterHubPage() {
     try {
       const res = await axios.get(`${baseUrl}/api/rpa/config`, {
         headers: { compcode: compCode },
+        params: { compcode: compCode },
       });
       if (res.data?.success && res.data.configs) {
         const configs = res.data.configs;
+        const configMap: Record<string, string> = {};
+        if (Array.isArray(configs)) {
+          configs.forEach((item: any) => {
+            if (item.Config_Key) {
+              configMap[item.Config_Key] = String(item.Config_Value);
+            }
+          });
+        } else if (typeof configs === "object") {
+          Object.assign(configMap, configs);
+        }
         setSchedulersConfig({
-          dmsActive: configs.RPA_DMS_ACTIVE !== "false",
-          emailActive: configs.RPA_EMAIL_ACTIVE !== "false",
-          attendanceActive: configs.RPA_ATTENDANCE_ACTIVE !== "false",
+          dmsActive: configMap.RPA_DMS_ACTIVE !== "false",
+          emailActive: configMap.RPA_EMAIL_ACTIVE !== "false",
+          attendanceActive: configMap.RPA_ATTENDANCE_ACTIVE !== "false",
         });
       }
     } catch (err: any) {
@@ -427,20 +438,20 @@ export default function RpaMasterHubPage() {
   };
 
   const handleRunEmail = async (overrideShortcut?: string) => {
-    const targetShortcut = overrideShortcut || schedulerParams.emailShortcut || formData.shortcut_name;
-    if (!targetShortcut) {
-      showSideAlert("Please select or enter a shortcut name to run.", "warning");
-      return;
-    }
+    const targetShortcut = overrideShortcut || schedulerParams.emailShortcut || "";
     setIsLoading(true);
-    showSideAlert(`Starting VYNFINANCE Email Automation for: ${targetShortcut}...`, "info");
+    showSideAlert(
+      `Starting VYNFINANCE Email Automation ${targetShortcut ? `for: ${targetShortcut}` : "(All Active Email Servers)"}...`,
+      "info"
+    );
     try {
       const res = await axios.get(`${baseUrl}/api/rpa/scheduler/run-email`, {
         params: {
           compcode: compCode,
-          shortcut: targetShortcut,
-          dateFrom: schedulerParams.emailDateFrom,
-          dateUpto: schedulerParams.emailDateUpto,
+          shortcut: targetShortcut || undefined,
+          dateFrom: schedulerParams.emailDateFrom || undefined,
+          dateUpto: schedulerParams.emailDateUpto || undefined,
+          force: true,
         },
       });
       setLastResult(res.data);
@@ -757,298 +768,280 @@ export default function RpaMasterHubPage() {
         </div>
       </div>
 
-      {/* ── 2. ON-DEMAND SCHEDULER CONTROLS & ON/OFF SWITCHES (Task 1, Task 2 & Task 3) ── */}
-      {/* Task 1: DMS Sync Schedular Box */}
-      <div className="col-span-12 lg:col-span-4">
-        <div className="rounded p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow h-full flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark">
-              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 text-lg">
-                <Database className="w-5 h-5" />
-                <SmallTitle text="Task 1: DMS Sync Schedular" />
-              </div>
-              <button
-                type="button"
-                onClick={() => handleToggleSchedulerActive("dms")}
-                disabled={isTogglingScheduler === "dms"}
-                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-                  schedulersConfig.dmsActive
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700 hover:bg-emerald-200"
-                    : "bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800 hover:bg-rose-200"
-                }`}
-                title="Click to Toggle DMS Schedular ON/OFF"
-              >
-                <Power className={`w-3.5 h-3.5 ${schedulersConfig.dmsActive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} />
-                <span>{schedulersConfig.dmsActive ? "ACTIVE (ON)" : "INACTIVE (OFF)"}</span>
-              </button>
-            </div>
-
-            {/* Schedule Info Banner */}
-            <div className={`p-2.5 mb-3 rounded border text-xs flex items-center justify-between ${
-              schedulersConfig.dmsActive
-                ? "bg-purple-50/60 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/50 text-purple-900 dark:text-purple-200"
-                : "bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-800 text-gray-500"
-            }`}>
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-3.5 h-3.5" />
-                <span>Cron: 12:05 PM, 08:30 AM</span>
-              </div>
-              <span className="font-semibold">
-                {schedulersConfig.dmsActive ? "● Running Daily" : "○ Paused"}
-              </span>
-            </div>
-
-            <div className="space-y-2 text-lg">
-              <SelectSearch
-                title="Target DMS Server"
-                name="dmsShortcut"
-                labelClass="text-lg"
-                placeholder="All DMS Servers"
-                selectedValue={schedulerParams.dmsShortcut}
-                handleInputChange={handleSchedulerChange}
-                options={[
-                  { value: "", label: "-- Run All Active DMS Servers --" },
-                  ...servers
-                    .filter((s) => (s.submit_action || "").toLowerCase() === "dms" || !s.submit_action)
-                    .map((s) => ({
-                      value: s.shortcut_name,
-                      label: `${s.shortcut_name} (${s.server_name})`,
-                    })),
-                ]}
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 italic pt-1">
-                Launches DMS shortcut, starts server cmd, downloads Master Data via Chrome, and processes DMSYNC.
-              </p>
-            </div>
+      {/* ── 2. AUTOMATION SCHEDULERS MASTER TABLE (Row-level Active/Inactive Provisions) ── */}
+      <div className="col-span-12">
+        <div className="rounded-t p-3 bg-white dark:bg-black border border-b-0 border-borderColor dark:border-borderColor-dark flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-amber-500" />
+            <MediumTitle text="RPA Automated Schedulers Master Registry" />
+            <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded font-bold">
+              Total 3 Schedulers
+            </span>
           </div>
 
-          <div className="pt-4 flex flex-col gap-2">
-            <Button
-              variant="save"
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold"
-              size="lg"
-              onClick={() => handleRunDms()}
-            >
-              <Play className="w-4 h-4 mr-1.5 fill-current" /> Run DMS Schedular Now
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleToggleSchedulerActive("dms")}
-              className={`w-full text-xs font-semibold ${
-                schedulersConfig.dmsActive
-                  ? "text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                  : "text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              }`}
-            >
-              {schedulersConfig.dmsActive ? "Turn Off DMS Schedular" : "Turn On DMS Schedular"}
-            </Button>
+          {/* Quick Date Range Filter for On-Demand Runs */}
+          <div className="flex items-center gap-2 flex-wrap text-sm">
+            <span className="text-xs text-gray-500 font-semibold">Test Run Date Range:</span>
+            <input
+              type="date"
+              value={schedulerParams.emailDateFrom}
+              onChange={(e) => handleSchedulerChange("emailDateFrom", e.target.value)}
+              className="h-8 text-xs px-2 border rounded bg-white dark:bg-black border-borderColor dark:border-borderColor-dark"
+              title="Date From for manual runs"
+            />
+            <span className="text-xs text-gray-400">to</span>
+            <input
+              type="date"
+              value={schedulerParams.emailDateUpto}
+              onChange={(e) => handleSchedulerChange("emailDateUpto", e.target.value)}
+              className="h-8 text-xs px-2 border rounded bg-white dark:bg-black border-borderColor dark:border-borderColor-dark"
+              title="Date Upto for manual runs"
+            />
           </div>
         </div>
-      </div>
 
-      {/* Task 2: VYNFINANCE Email Schedular Box */}
-      <div className="col-span-12 lg:col-span-4">
-        <div className="rounded p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow h-full flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark">
-              <div className="flex items-center gap-2 text-[#2563EB] dark:text-[#60A5FA] text-lg">
-                <Mail className="w-5 h-5" />
-                <SmallTitle text="Task 2: VYNFINANCE Email Schedular" />
-              </div>
-              <button
-                type="button"
-                onClick={() => handleToggleSchedulerActive("email")}
-                disabled={isTogglingScheduler === "email"}
-                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-                  schedulersConfig.emailActive
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700 hover:bg-emerald-200"
-                    : "bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800 hover:bg-rose-200"
-                }`}
-                title="Click to Toggle Email Schedular ON/OFF"
-              >
-                <Power className={`w-3.5 h-3.5 ${schedulersConfig.emailActive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} />
-                <span>{schedulersConfig.emailActive ? "ACTIVE (ON)" : "INACTIVE (OFF)"}</span>
-              </button>
-            </div>
+        <div className="rounded-b overflow-hidden bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-header dark:bg-black text-white dark:text-[#37a9dd] text-sm md:text-base font-bold border-b border-borderColor dark:border-borderColor-dark">
+                  <th className="p-3 text-center w-12">#</th>
+                  <th className="p-3">Scheduler / Task Name</th>
+                  <th className="p-3">Automation Flow Details</th>
+                  <th className="p-3">Daily Cron Schedule</th>
+                  <th className="p-3">Target Scope</th>
+                  <th className="p-3 text-center">Scheduler Status</th>
+                  <th className="p-3 text-center">Active / Inactive Control</th>
+                  <th className="p-3 text-center">Manual Trigger</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borderColor dark:divide-borderColor-dark text-sm md:text-base">
+                {/* ROW 1: DMS Sync Schedular */}
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
+                  <td className="p-3 text-center font-bold text-gray-500">1</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                        <Database className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-base text-gray-900 dark:text-white">
+                          DMS Sync Schedular
+                        </div>
+                        <div className="text-xs text-purple-600 dark:text-purple-400 font-semibold uppercase">
+                          Action: DMS (Batch + Chrome + DMSYNC)
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-3 text-xs md:text-sm text-gray-600 dark:text-gray-300 max-w-xs">
+                    Full Desktop &rarr; Launch DMS cmd &rarr; Wait 120s &rarr; Open Chrome getMasterData &rarr; Click Fin Data Scheduler &rarr; Run DMSYNC
+                  </td>
+                  <td className="p-3 font-mono text-sm">
+                    <div className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 font-semibold">
+                      <Clock className="w-4 h-4" />
+                      <span>12:05 PM, 08:30 AM</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400 block">Runs daily automatically</span>
+                  </td>
+                  <td className="p-3">
+                    <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                      Active DMS Servers ({servers.filter(s => (s.submit_action || '').toLowerCase() === 'dms' && s.is_active).length})
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                        schedulersConfig.dmsActive
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${schedulersConfig.dmsActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                      {schedulersConfig.dmsActive ? "ACTIVE" : "INACTIVE"}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isTogglingScheduler === "dms"}
+                      onClick={() => handleToggleSchedulerActive("dms")}
+                      className={`h-9 px-4 text-sm font-bold rounded-full flex items-center justify-center gap-2 mx-auto transition shadow-sm ${
+                        schedulersConfig.dmsActive
+                          ? "bg-[#DCFCE7] text-[#166534] dark:bg-[#052E16]/80 dark:text-[#86EFAC] border-[#86EFAC] hover:bg-[#BBF7D0]"
+                          : "bg-[#FEE2E2] text-[#991B1B] dark:bg-[#450A0A]/80 dark:text-[#FCA5A5] border-[#FCA5A5] hover:bg-[#FECACA]"
+                      }`}
+                      title={schedulersConfig.dmsActive ? "Click to Deactivate DMS Schedular" : "Click to Activate DMS Schedular"}
+                    >
+                      <Power className={`w-4 h-4 ${schedulersConfig.dmsActive ? "text-emerald-600" : "text-rose-600"}`} />
+                      <span>{schedulersConfig.dmsActive ? "Active (ON)" : "Inactive (OFF)"}</span>
+                    </Button>
+                  </td>
+                  <td className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="save"
+                      onClick={() => handleRunDms()}
+                      className="h-9 px-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm flex items-center gap-1.5 mx-auto shadow"
+                      title="Run DMS Schedular right now"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" /> Run Now
+                    </Button>
+                  </td>
+                </tr>
 
-            {/* Schedule Info Banner */}
-            <div className={`p-2.5 mb-3 rounded border text-xs flex items-center justify-between ${
-              schedulersConfig.emailActive
-                ? "bg-blue-50/60 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50 text-blue-900 dark:text-blue-200"
-                : "bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-800 text-gray-500"
-            }`}>
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-3.5 h-3.5" />
-                <span>Cron: 12:15 PM, 08:00 AM</span>
-              </div>
-              <span className="font-semibold">
-                {schedulersConfig.emailActive ? "● Running Daily" : "○ Paused"}
-              </span>
-            </div>
+                {/* ROW 2: VYNFINANCE Email Schedular */}
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
+                  <td className="p-3 text-center font-bold text-gray-500">2</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-base text-gray-900 dark:text-white">
+                          VYNFINANCE Email Schedular
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase">
+                          Action: Email (RemoteApp + Reports)
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-3 text-xs md:text-sm text-gray-600 dark:text-gray-300 max-w-xs">
+                    RemoteApp &rarr; Login PC &rarr; Export 5 Vehicle Reports &rarr; Merge into Master Workbook &rarr; Dispatch Email
+                  </td>
+                  <td className="p-3 font-mono text-sm">
+                    <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 font-semibold">
+                      <Clock className="w-4 h-4" />
+                      <span>12:15 PM, 08:00 AM</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400 block">Runs daily automatically</span>
+                  </td>
+                  <td className="p-3">
+                    <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      Active Email Servers ({servers.filter(s => (s.submit_action || '').toLowerCase() === 'email' && s.is_active).length})
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                        schedulersConfig.emailActive
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${schedulersConfig.emailActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                      {schedulersConfig.emailActive ? "ACTIVE" : "INACTIVE"}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isTogglingScheduler === "email"}
+                      onClick={() => handleToggleSchedulerActive("email")}
+                      className={`h-9 px-4 text-sm font-bold rounded-full flex items-center justify-center gap-2 mx-auto transition shadow-sm ${
+                        schedulersConfig.emailActive
+                          ? "bg-[#DCFCE7] text-[#166534] dark:bg-[#052E16]/80 dark:text-[#86EFAC] border-[#86EFAC] hover:bg-[#BBF7D0]"
+                          : "bg-[#FEE2E2] text-[#991B1B] dark:bg-[#450A0A]/80 dark:text-[#FCA5A5] border-[#FCA5A5] hover:bg-[#FECACA]"
+                      }`}
+                      title={schedulersConfig.emailActive ? "Click to Deactivate Email Schedular" : "Click to Activate Email Schedular"}
+                    >
+                      <Power className={`w-4 h-4 ${schedulersConfig.emailActive ? "text-emerald-600" : "text-rose-600"}`} />
+                      <span>{schedulersConfig.emailActive ? "Active (ON)" : "Inactive (OFF)"}</span>
+                    </Button>
+                  </td>
+                  <td className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="save"
+                      onClick={() => handleRunEmail()}
+                      className="h-9 px-3.5 font-bold text-sm flex items-center gap-1.5 mx-auto shadow"
+                      title="Run Email Schedular right now"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" /> Run Now
+                    </Button>
+                  </td>
+                </tr>
 
-            <div className="space-y-2 text-lg">
-              <SelectSearch
-                title="Target Shortcut"
-                name="emailShortcut"
-                labelClass="text-lg"
-                placeholder="Select Target Shortcut"
-                selectedValue={schedulerParams.emailShortcut}
-                handleInputChange={handleSchedulerChange}
-                options={
-                  servers.length > 0
-                    ? [
-                        { value: "", label: "-- Select Target Shortcut / Server --" },
-                        ...servers.map((s) => ({
-                          value: s.shortcut_name,
-                          label: `${s.shortcut_name} (${s.server_name})`,
-                        })),
-                      ]
-                    : [
-                        { value: "", label: "-- Select Target Shortcut --" },
-                        { value: "Suwalka Motors Start-up", label: "Suwalka Motors Start-up" },
-                        { value: "Rana motors Startup", label: "Rana motors Startup" },
-                      ]
-                }
-              />
-
-              <div className="grid grid-cols-2 gap-2">
-                <Ainput
-                  title="Date From"
-                  type="date"
-                  name="emailDateFrom"
-                  labelClass="text-lg"
-                  value={schedulerParams.emailDateFrom}
-                  handleInputChange={handleSchedulerChange}
-                  placeholder="01/MM/YY"
-                />
-                <Ainput
-                  title="Date Upto"
-                  type="date"
-                  labelClass="text-lg"
-                  name="emailDateUpto"
-                  value={schedulerParams.emailDateUpto}
-                  handleInputChange={handleSchedulerChange}
-                  placeholder="DD/MM/YY"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 flex flex-col gap-2">
-            <Button
-              variant="save"
-              className="w-full font-bold"
-              size="lg"
-              onClick={() => handleRunEmail()}
-            >
-              <Play className="w-4 h-4 mr-1.5 fill-current" /> Run Email Schedular Now
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleToggleSchedulerActive("email")}
-              className={`w-full text-xs font-semibold ${
-                schedulersConfig.emailActive
-                  ? "text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                  : "text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              }`}
-            >
-              {schedulersConfig.emailActive ? "Turn Off Email Schedular" : "Turn On Email Schedular"}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Task 3: Attendance Report Download Box */}
-      <div className="col-span-12 lg:col-span-4">
-        <div className="rounded p-4 bg-white dark:bg-black border border-borderColor dark:border-borderColor-dark shadow h-full flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-2 mb-3 border-b border-borderColor dark:border-borderColor-dark">
-              <div className="flex items-center gap-2 text-[#059669] dark:text-[#34D399] text-lg">
-                <Download className="w-5 h-5" />
-                <SmallTitle text="Task 3: Attendance Download" />
-              </div>
-              <button
-                type="button"
-                onClick={() => handleToggleSchedulerActive("attendance")}
-                disabled={isTogglingScheduler === "attendance"}
-                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-                  schedulersConfig.attendanceActive
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700 hover:bg-emerald-200"
-                    : "bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800 hover:bg-rose-200"
-                }`}
-                title="Click to Toggle Attendance Schedular ON/OFF"
-              >
-                <Power className={`w-3.5 h-3.5 ${schedulersConfig.attendanceActive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} />
-                <span>{schedulersConfig.attendanceActive ? "ACTIVE (ON)" : "INACTIVE (OFF)"}</span>
-              </button>
-            </div>
-
-            {/* Schedule Info Banner */}
-            <div className={`p-2.5 mb-3 rounded border text-xs flex items-center justify-between ${
-              schedulersConfig.attendanceActive
-                ? "bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-200"
-                : "bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-800 text-gray-500"
-            }`}>
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-3.5 h-3.5" />
-                <span>Cron: 12:15 PM, 08:00 AM</span>
-              </div>
-              <span className="font-semibold">
-                {schedulersConfig.attendanceActive ? "● Running Daily" : "○ Paused"}
-              </span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <Ainput
-                  title="Date From"
-                  labelClass="text-lg"
-                  type="date"
-                  name="attDateFrom"
-                  value={schedulerParams.attDateFrom}
-                  handleInputChange={handleSchedulerChange}
-                />
-                <Ainput
-                  title="Date To"
-                  labelClass="text-lg"
-                  type="date"
-                  name="attDateTo"
-                  value={schedulerParams.attDateTo}
-                  handleInputChange={handleSchedulerChange}
-                />
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 italic pt-1">
-                Downloads monthly attendance logs and biometric records for ERP processing.
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-4 flex flex-col gap-2">
-            <Button
-              variant="save"
-              size="lg"
-              className="w-full bg-[#059669] hover:bg-[#047857] text-white font-bold"
-              onClick={handleRunAttendance}
-            >
-              <Download className="w-4 h-4 mr-1.5" /> Download Report Now
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleToggleSchedulerActive("attendance")}
-              className={`w-full text-xs font-semibold ${
-                schedulersConfig.attendanceActive
-                  ? "text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                  : "text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              }`}
-            >
-              {schedulersConfig.attendanceActive ? "Turn Off Attendance Schedular" : "Turn On Attendance Schedular"}
-            </Button>
+                {/* ROW 3: Attendance Report Download */}
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
+                  <td className="p-3 text-center font-bold text-gray-500">3</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        <Download className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-base text-gray-900 dark:text-white">
+                          Attendance Report Download
+                        </div>
+                        <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase">
+                          Action: Attendance (ERP Payroll)
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-3 text-xs md:text-sm text-gray-600 dark:text-gray-300 max-w-xs">
+                    Automated ERP Payroll login &rarr; Fetch biometrics & daily attendance logs &rarr; Save to server archive
+                  </td>
+                  <td className="p-3 font-mono text-sm">
+                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
+                      <Clock className="w-4 h-4" />
+                      <span>12:15 PM, 08:00 AM</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400 block">Runs daily automatically</span>
+                  </td>
+                  <td className="p-3">
+                    <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      All Connected Dealerships
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                        schedulersConfig.attendanceActive
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${schedulersConfig.attendanceActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                      {schedulersConfig.attendanceActive ? "ACTIVE" : "INACTIVE"}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isTogglingScheduler === "attendance"}
+                      onClick={() => handleToggleSchedulerActive("attendance")}
+                      className={`h-9 px-4 text-sm font-bold rounded-full flex items-center justify-center gap-2 mx-auto transition shadow-sm ${
+                        schedulersConfig.attendanceActive
+                          ? "bg-[#DCFCE7] text-[#166534] dark:bg-[#052E16]/80 dark:text-[#86EFAC] border-[#86EFAC] hover:bg-[#BBF7D0]"
+                          : "bg-[#FEE2E2] text-[#991B1B] dark:bg-[#450A0A]/80 dark:text-[#FCA5A5] border-[#FCA5A5] hover:bg-[#FECACA]"
+                      }`}
+                      title={schedulersConfig.attendanceActive ? "Click to Deactivate Attendance Schedular" : "Click to Activate Attendance Schedular"}
+                    >
+                      <Power className={`w-4 h-4 ${schedulersConfig.attendanceActive ? "text-emerald-600" : "text-rose-600"}`} />
+                      <span>{schedulersConfig.attendanceActive ? "Active (ON)" : "Inactive (OFF)"}</span>
+                    </Button>
+                  </td>
+                  <td className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="save"
+                      onClick={handleRunAttendance}
+                      className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center gap-1.5 mx-auto shadow"
+                      title="Download Attendance Report right now"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Run Now
+                    </Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
