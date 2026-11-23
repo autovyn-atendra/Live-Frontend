@@ -790,23 +790,8 @@ export default function VynfinanceServersVaultPage() {
                 </div>
               </div>
 
-              {/* Submit Action & Execution Priority */}
+              {/* Execution Order & Active Status */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
-                    Submit Action / Automation Type
-                  </label>
-                  <select
-                    value={submitAction}
-                    onChange={(e) => setSubmitAction(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#020617] text-[#0F172A] dark:text-white"
-                  >
-                    <option value="dms">DMS Sync (Batch + Chrome + DMSYNC)</option>
-                    <option value="email">Click 'Email' Button (VYNFINANCE)</option>
-                    <option value="ok">Click 'OK' Button (PrintView / Export)</option>
-                  </select>
-                </div>
-
                 <div>
                   <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
                     Execution Priority (Order)
@@ -820,24 +805,23 @@ export default function VynfinanceServersVaultPage() {
                     className="w-full px-3 py-2 text-sm rounded-xl border border-[#CBD5E1] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#020617] text-[#0F172A] dark:text-white"
                   />
                 </div>
-              </div>
 
-              {/* Daily Schedular Status */}
-              <div>
-                <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
-                  Server Schedular Status
-                </label>
-                <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="checkbox"
-                    id="isActiveToggle"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="w-4 h-4 text-[#2563EB] rounded cursor-pointer"
-                  />
-                  <label htmlFor="isActiveToggle" className="text-xs font-medium cursor-pointer">
-                    {isActive ? "Active (Included in Automation Queue)" : "Paused (Skip Execution)"}
+                <div>
+                  <label className="text-xs font-semibold text-[#475569] dark:text-[#94A3B8] block mb-1">
+                    Daily Schedular Status
                   </label>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      id="isActiveToggle"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                      className="w-4 h-4 text-[#2563EB] rounded cursor-pointer"
+                    />
+                    <label htmlFor="isActiveToggle" className="text-xs font-medium cursor-pointer">
+                      {isActive ? "Active (Included in 8 AM Queue)" : "Paused (Skip)"}
+                    </label>
+                  </div>
                 </div>
               </div>
 

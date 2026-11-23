@@ -767,12 +767,12 @@ export const treeData = [
     key: "22",
     children: [
       {
-        title: "Attendance Report |",
+        title: "Servers Management |",
         key: "22.1",
         url: "/autovyn/rpa",
         children: [
           {
-            title: "Attendance Report | ",
+            title: "Servers Management | ",
             key: "22.1.1",
             url: "/autovyn/rpa",
           }
@@ -780,14 +780,14 @@ export const treeData = [
         ],
       },
        {
-        title: "Servers Management |",
+        title: "Attendance Report |",
         key: "22.2",
-        url: "/autovyn/rpa/vynfinance/servers",
+        url: "/autovyn/rpa/attendance",
         children: [
           {
-            title: "Servers Management | ",
+            title: "Attendance Report | ",
             key: "22.2.1",
-            url: "/autovyn/rpa/vynfinance/servers",
+            url: "/autovyn/rpa/attendance",
           }
 
         ],
